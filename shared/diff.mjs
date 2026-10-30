@@ -48,7 +48,18 @@ export function diffLevels(prev, next) {
   }
   moved.sort((a, b) => a.next - b.next);
 
-  return { same, moved, added, removed, summary: summarize(P, N, { moved, added, removed }) };
+  return { same, moved, added, removed, summary: summarize(P, N, { moved, added, removed }), short: shortSummary(P, N, { moved, added, removed }) };
+}
+
+/** Compact form for toasts: "+1 coin, +1 enemy, -1 spike, ~1 goal" (empty string when nothing changed). */
+function shortSummary(P, N, { moved, added, removed }) {
+  const name = (o) => (o.label && /^step \(/i.test(o.label)) ? "step" : String(o.type || "thing").replace("_", " ");
+  const tally = (indexes, src, sign) => {
+    const c = {};
+    for (const i of indexes) { const k = name(src[i]); c[k] = (c[k] || 0) + 1; }
+    return Object.entries(c).map(([k, v]) => `${sign}${v} ${k}${v > 1 ? "s" : ""}`);
+  };
+  return [...tally(added, N, "+"), ...tally(removed, P, "-"), ...tally(moved.map((m) => m.next), N, "~")].join(", ");
 }
 
 function summarize(P, N, { moved, added, removed }) {

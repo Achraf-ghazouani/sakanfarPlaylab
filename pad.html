@@ -9,14 +9,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js"></script>
 <script src="shared/phonelink.js"></script>
+<script src="shared/paper.js"></script>
 <style>
-  :root { --bg:#fbfaff; --lav:#efeaff; --lav-2:#e2d9ff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --player:#22c55e; }
+  :root { --bg:#fbfaff; --lav:#efeaff; --lav-2:#e2d9ff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --player:#22c55e; --green:#22c55e; }
   * { box-sizing:border-box; }
   html, body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--ink); font-family:system-ui, -apple-system, "Segoe UI", sans-serif; touch-action:none; overscroll-behavior:none; -webkit-user-select:none; user-select:none; }
   body { background-image: radial-gradient(600px 300px at 0% 0%, #ebe3ff 0%, transparent 65%), radial-gradient(500px 300px at 100% 100%, #ffe6f4 0%, transparent 60%); }
-  .top { position:fixed; top:0; left:0; right:0; height:48px; display:flex; align-items:center; gap:10px; padding:0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left)); z-index:3; }
-  .brand { font-family:"Fredoka", system-ui, sans-serif; font-weight:700; font-size:17px; color:var(--purple-deep); white-space:nowrap; }
-  .pill { display:inline-flex; align-items:center; gap:7px; background:#fff; border:2px solid var(--lav-2); border-radius:999px; padding:5px 11px; font-size:13px; font-weight:600; color:var(--purple-deep); white-space:nowrap; }
+  .top { position:fixed; top:0; left:0; right:0; height:48px; display:flex; align-items:center; gap:8px; padding:0 max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left)); z-index:3; }
+  .brand { font-family:"Fredoka", system-ui, sans-serif; font-weight:700; font-size:16px; color:var(--purple-deep); white-space:nowrap; }
+  .pill { display:inline-flex; align-items:center; gap:7px; background:#fff; border:2px solid var(--lav-2); border-radius:999px; padding:5px 10px; font-size:12px; font-weight:600; color:var(--purple-deep); white-space:nowrap; }
   .pill .dot { width:9px; height:9px; border-radius:50%; background:#f59e0b; }
   .pill.connected .dot { background:#22c55e; }
   .pill.reconnecting .dot, .pill.connecting .dot { background:#f59e0b; animation:blink 1s infinite; }
@@ -25,10 +26,10 @@
   .player { background:var(--player); color:#fff; border-color:transparent; }
   .player i { width:12px; height:12px; border-radius:3px; background:#fff; opacity:.9; display:inline-block; }
   .spacer { flex:1; }
-  button.small { border:2px solid var(--lav-2); background:#fff; border-radius:999px; padding:6px 12px; font-size:13px; font-weight:600; color:var(--purple-deep); }
+  button.small { border:2px solid var(--lav-2); background:#fff; border-radius:999px; padding:6px 12px; font-size:13px; font-weight:700; color:var(--purple-deep); white-space:nowrap; }
   button.small.primary { background:var(--purple); color:#fff; border-color:var(--purple); }
+  button.small.go { background:var(--green); color:#fff; border-color:var(--green); font-family:"Fredoka", system-ui, sans-serif; font-size:15px; padding:6px 16px; }
 
-  /* modes */
   .mode { display:none; }
   body.mode-pad #pad, body.mode-cam #cam { display:block; }
 
@@ -46,9 +47,16 @@
   /* camera */
   #cam { position:fixed; inset:48px 0 0 0; background:#1b1535; }
   #camCanvas { width:100%; height:100%; object-fit:contain; display:block; background:#1b1535; }
-  #camStatus { position:absolute; left:50%; bottom:max(14px, env(safe-area-inset-bottom)); transform:translateX(-50%); background:rgba(255,255,255,.92); color:var(--purple-deep); font-weight:700; font-size:14px; padding:8px 14px; border-radius:999px; white-space:nowrap; max-width:92vw; overflow:hidden; text-overflow:ellipsis; }
+  #camStatus { position:absolute; left:50%; bottom:max(14px, env(safe-area-inset-bottom)); transform:translateX(-50%); background:rgba(255,255,255,.92); color:var(--purple-deep); font-weight:700; font-size:14px; padding:8px 14px; border-radius:999px; white-space:nowrap; max-width:92vw; overflow:hidden; text-overflow:ellipsis; transition:background .2s; }
   #camStatus.error { color:#b91c1c; white-space:normal; text-align:center; border-radius:14px; }
-  #camStatus.live::before { content:""; display:inline-block; width:9px; height:9px; border-radius:50%; background:#ef4444; margin-right:7px; animation:blink 1.2s infinite; }
+  #camStatus.busy::before { content:""; display:inline-block; width:10px; height:10px; border:2px solid #ddd6fe; border-top-color:var(--purple); border-radius:50%; margin-right:8px; vertical-align:-1px; animation:spin .8s linear infinite; }
+  #camStatus.live::before { content:""; display:inline-block; width:9px; height:9px; border-radius:50%; background:#22c55e; margin-right:7px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  #captureBtn { position:absolute; right:max(14px, env(safe-area-inset-right)); bottom:max(14px, env(safe-area-inset-bottom)); width:64px; height:64px; border-radius:50%; background:#fff; border:4px solid var(--lav-2); box-shadow:0 8px 20px rgba(0,0,0,.35); }
+  #captureBtn::after { content:""; position:absolute; inset:8px; border-radius:50%; background:var(--purple); }
+  #captureBtn:active::after { background:var(--purple-deep); }
+  #flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .25s; }
+  #flash.on { opacity:.8; transition:none; }
 
   #rotate { display:none; position:fixed; inset:0; z-index:5; background:#4c1d95; color:#fff; align-items:center; justify-content:center; text-align:center; font-size:22px; font-weight:800; }
   #rotate .icon { font-size:60px; display:block; animation:tilt 1.6s ease-in-out infinite; }
@@ -63,10 +71,11 @@
 </head>
 <body class="mode-pad">
 <div class="top">
-  <span class="brand">PlayLab Pad</span>
+  <span class="brand">PlayLab</span>
   <span class="pill connecting" id="status"><span class="dot"></span><span id="statusText">connecting...</span></span>
   <span class="pill player" id="playerChip" style="display:none"><i></i><span id="playerName">Player 1</span></span>
   <span class="spacer"></span>
+  <button class="small go" id="playBtn" style="display:none">PLAY!</button>
   <button class="small" id="modeBtn" style="display:none">Controller</button>
   <button class="small" id="fsBtn">Full screen</button>
 </div>
@@ -74,7 +83,9 @@
 <div id="cam" class="mode">
   <canvas id="camCanvas"></canvas>
   <video id="camVideo" playsinline muted autoplay hidden></video>
+  <div id="flash"></div>
   <div id="camStatus">Starting camera...</div>
+  <button id="captureBtn" title="Capture now" aria-label="Capture now"></button>
 </div>
 
 <div id="pad" class="mode">
@@ -108,7 +119,6 @@ function setStatus(status, detail) {
   window.__padStatus = status;
   window.__padTransport = client?.transport;
 }
-
 function buzz(pattern) { try { navigator.vibrate?.(pattern); } catch {} }
 const EVENT_BUZZ = { jump: 15, coin: 30, hit: [60, 40, 90], goal: [80, 50, 80, 50, 200], level: [30, 30, 30] };
 
@@ -123,7 +133,7 @@ async function join(code) {
   if (code.length !== 4) { $("join").classList.add("show"); return; }
   $("join").classList.remove("show");
   $("roomCode").textContent = code;
-  history.replaceState(null, "", "?room=" + code);
+  history.replaceState(null, "", "?room=" + code + (params.get("fakepaper") ? "&fakepaper=1" : ""));
   const relay = await configReady;
   const opts = { relay, forceRelay: params.get("relay") === "1", peerHost: params.get("peerhost") || undefined };
   client = new PhoneLink.Client(code, {
@@ -136,7 +146,7 @@ async function join(code) {
       $("hint").innerHTML = `<b>You are player ${w.slot}</b>${w.name} on the big screen`;
       $("modeBtn").style.display = "";
       window.__padWelcome = w;
-      setMode(w.mode === "camera" ? "camera" : "pad", false);
+      if (w.mode === "camera") setMode("camera", false); else if (mode !== "camera") setMode("pad", false);
     },
     onEvent: (name) => { window.__padLastEvent = name; window.__padLastEventAt = performance.now(); (window.__padEvents ||= []).push(name); if (EVENT_BUZZ[name]) buzz(EVENT_BUZZ[name]); },
   }, opts);
@@ -145,59 +155,221 @@ async function join(code) {
 }
 
 // ---------------------------------------------------------------------------
-// Modes: "camera" (stream the paper to the big screen) and "pad" (controller)
+// Modes: "camera" (scan the paper live for the big screen) and "pad" (controller)
 // ---------------------------------------------------------------------------
 function setMode(next, tell = true) {
   mode = next;
   document.body.classList.toggle("mode-cam", mode === "camera");
   document.body.classList.toggle("mode-pad", mode === "pad");
-  $("modeBtn").textContent = mode === "camera" ? "Controller" : "Camera";
+  $("modeBtn").textContent = mode === "camera" ? "Controller" : "Back to camera";
   $("modeBtn").classList.toggle("primary", mode === "camera");
+  $("playBtn").style.display = mode === "camera" && Cam.level ? "" : "none";
   window.__padMode = mode;
   if (tell) client?.sendMode(mode);
   if (mode === "camera") startCamera(); else stopCamera();
 }
 $("modeBtn").addEventListener("click", () => setMode(mode === "camera" ? "pad" : "camera"));
+$("playBtn").addEventListener("click", () => { buzz(20); setMode("pad"); });
 
-let camStream = null, camRaf = 0, camOut = null;
-function camStatus(text, cls) { const el = $("camStatus"); el.textContent = text; el.className = cls || ""; }
+// ---------------------------------------------------------------------------
+// Camera pipeline: detect the sheet -> hold still -> capture -> flatten -> ink to the PC + scan
+// ---------------------------------------------------------------------------
+const Cam = {
+  source: null, w: 0, h: 0, raf: 0, stream: null, out: null,
+  quad: null, lastQuad: null, steadySince: 0, lastDetect: 0, lastChangeCheck: 0,
+  lastMask: null, changed: true, capturing: false, lastCaptureAt: 0,
+  seq: 0, scanning: false, pending: null, level: null,
+};
+const small = document.createElement("canvas"); small.width = 160; small.height = 120;
+const sctx = small.getContext("2d", { willReadFrequently: true });
+const mid = document.createElement("canvas"); const mctx = mid.getContext("2d", { willReadFrequently: true });
+const full = document.createElement("canvas"); const fctx = full.getContext("2d", { willReadFrequently: true });
+let lastStatus = "", statusHoldUntil = 0;
+/** Routine messages (from the detect loop) are skipped while a result message is on hold. */
+function camStatus(text, cls, holdMs = 0) {
+  const now = performance.now();
+  if (!holdMs && now < statusHoldUntil) return;
+  if (holdMs) statusHoldUntil = now + holdMs;
+  if (text === lastStatus && (cls || "") === $("camStatus").className) return;
+  lastStatus = text;
+  const el = $("camStatus"); el.textContent = text; el.className = cls || "";
+  window.__camStatus = text;
+}
+
 async function startCamera() {
-  if (camStream) return;
-  if (!navigator.mediaDevices?.getUserMedia) {
-    camStatus(location.protocol === "http:" ? "The camera needs HTTPS. Open the https:// address (or the vercel.app site) on your phone." : "This browser has no camera access.", "error");
-    return;
-  }
-  camStatus("Starting camera...");
-  try {
-    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
-  } catch (err) {
-    camStatus(`Camera blocked (${err.name}). Allow camera access for this site and reload.`, "error");
-    return;
-  }
-  const v = $("camVideo"), c = $("camCanvas"), ctx = c.getContext("2d");
-  v.srcObject = camStream;
-  try { await v.play(); } catch {}
-  const draw = () => {
-    if (v.videoWidth) {
-      const scale = Math.min(1, 960 / v.videoWidth);           // the preview/stream runs at <= 960px wide
-      const w = Math.round(v.videoWidth * scale), h = Math.round(v.videoHeight * scale);
-      if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
-      ctx.drawImage(v, 0, 0, w, h);
-      window.__camFrames = (window.__camFrames || 0) + 1;
+  if (Cam.source) return;
+  camStatus("Starting camera...", "busy");
+  if (params.get("fakepaper") === "1") { Cam.source = makeFakePaper(); Cam.w = Cam.source.width; Cam.h = Cam.source.height; }
+  else {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      camStatus(location.protocol === "http:" ? "The camera needs HTTPS. Open the https:// address (or the vercel.app site) on your phone." : "This browser has no camera access.", "error");
+      return;
     }
-    camRaf = requestAnimationFrame(draw);
+    try {
+      Cam.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    } catch (err) { camStatus(`Camera blocked (${err.name}). Allow camera access for this site and reload.`, "error"); return; }
+    const v = $("camVideo"); v.srcObject = Cam.stream;
+    try { await v.play(); } catch {}
+    await new Promise((r) => { if (v.videoWidth) r(); else v.addEventListener("loadedmetadata", r, { once: true }); });
+    Cam.source = v; Cam.w = v.videoWidth; Cam.h = v.videoHeight;
+  }
+  const c = $("camCanvas"), ctx = c.getContext("2d");
+  const scale = Math.min(1, 960 / Cam.w);
+  c.width = Math.round(Cam.w * scale); c.height = Math.round(Cam.h * scale);
+  const draw = () => {
+    if (Cam.source.videoWidth === 0 && !Cam.source.getContext) { Cam.raf = requestAnimationFrame(draw); return; }
+    if (Cam.source.tick) Cam.source.tick();
+    ctx.drawImage(Cam.source, 0, 0, c.width, c.height);
+    detectStep(performance.now());
+    if (Cam.quad) {
+      ctx.save(); ctx.lineWidth = 5; ctx.strokeStyle = Cam.changed ? "#22c55e" : "#a78bfa"; ctx.lineJoin = "round"; ctx.setLineDash(Cam.changed ? [] : [14, 10]);
+      ctx.beginPath(); Cam.quad.forEach(([x, y], i) => ctx[i ? "lineTo" : "moveTo"](x * scale, y * scale)); ctx.closePath(); ctx.stroke(); ctx.restore();
+      if (Cam.progress > 0 && Cam.progress < 1) { ctx.save(); ctx.lineWidth = 6; ctx.strokeStyle = "#22c55e"; ctx.beginPath(); ctx.arc(c.width / 2, 40, 18, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Cam.progress); ctx.stroke(); ctx.restore(); }
+    }
+    window.__camFrames = (window.__camFrames || 0) + 1;
+    Cam.raf = requestAnimationFrame(draw);
   };
   draw();
-  camOut = c.captureStream(24);
-  if (client && !client.canStreamVideo) { camStatus("Connected through the relay: controls work, but live video needs a direct connection (same Wi-Fi).", "error"); return; }
-  client?.startVideo(camOut);
-  camStatus("Live: the big screen sees your camera", "live");
+  Cam.out = c.captureStream(24);
+  if (client && !client.canStreamVideo) camStatus("Connected through the relay: controls work, but live video needs a direct connection (same Wi-Fi).", "error");
+  else { client?.startVideo(Cam.out); camStatus("Point the camera at your drawing", "live"); }
 }
 function stopCamera() {
-  cancelAnimationFrame(camRaf);
+  cancelAnimationFrame(Cam.raf);
   client?.stopVideo();
-  if (camStream) { for (const t of camStream.getTracks()) t.stop(); camStream = null; }
-  camOut = null;
+  if (Cam.stream) { for (const t of Cam.stream.getTracks()) t.stop(); Cam.stream = null; }
+  Cam.source = null; Cam.out = null; Cam.quad = null; Cam.lastQuad = null; Cam.progress = 0;
+}
+
+function detectStep(now) {
+  if (now - Cam.lastDetect < 100) return;
+  Cam.lastDetect = now;
+  sctx.drawImage(Cam.source, 0, 0, 160, 120);
+  const det = Paper.detectPaper(sctx.getImageData(0, 0, 160, 120));
+  const raw = det ? det.quad.map(([x, y]) => [x * Cam.w / 160, y * Cam.h / 120]) : null;
+  if (!(raw && Cam.lastQuad && Paper.quadDistance(raw, Cam.lastQuad) < 0.012 * Cam.w)) { Cam.steadySince = now; Cam.quadHist = []; }
+  Cam.lastQuad = raw;
+  // Detection runs on a 160x120 frame (8 px steps); average the last few quads while steady to remove that jitter.
+  let quad = raw;
+  if (raw) { (Cam.quadHist ||= []).push(raw); if (Cam.quadHist.length > 4) Cam.quadHist.shift(); const n = Cam.quadHist.length; quad = raw.map((_, i) => [Cam.quadHist.reduce((s, q) => s + q[i][0], 0) / n, Cam.quadHist.reduce((s, q) => s + q[i][1], 0) / n]); }
+  Cam.quad = quad; Cam.progress = 0;
+  window.__camQuad = quad;
+  if (!quad) { if (!Cam.capturing && !Cam.scanning) camStatus("Point the camera at the paper", "live"); return; }
+  const steadyFor = now - Cam.steadySince;
+  // After a capture, watch the ink for changes (every 700 ms while roughly steady). Two hits in a row
+  // (ignoring one-pixel edge jitter) count as "the drawing changed".
+  if (Cam.lastMask && steadyFor > 300 && now - Cam.lastChangeCheck > 700 && !Cam.capturing) {
+    Cam.lastChangeCheck = now;
+    const d = Paper.bestDiff(Cam.lastMask, quickMask(quad), 200, 150, 1, 2);
+    window.__camDiff = d;
+    Cam.changeHits = d > 0.002 ? (Cam.changeHits || 0) + 1 : 0;
+    if (Cam.changeHits >= 2) Cam.changed = true;
+  }
+  const need = Cam.lastMask ? 1500 : 1000;
+  if (Cam.changed) {
+    Cam.progress = Math.min(1, steadyFor / need);
+    if (steadyFor >= need && !Cam.capturing && now - Cam.lastCaptureAt > 2500) capture("auto");
+    else if (!Cam.scanning) camStatus(steadyFor > 150 ? "Hold still..." : (Cam.lastMask ? "Drawing changed, hold still" : "Paper found"), "live");
+  } else if (!Cam.scanning) camStatus("Watching for changes. Keep drawing!", "live");
+}
+/** Small flattened ink mask of the current frame (for change detection). */
+function quickMask(quad) {
+  const s = Math.min(1, 640 / Cam.w);
+  mid.width = Math.round(Cam.w * s); mid.height = Math.round(Cam.h * s);
+  mctx.drawImage(Cam.source, 0, 0, mid.width, mid.height);
+  const img = mctx.getImageData(0, 0, mid.width, mid.height);
+  const flat = Paper.boostContrast(Paper.warp(img, quad.map(([x, y]) => [x * s, y * s]), 200, 150));
+  return Paper.inkMask(flat).mask;
+}
+$("captureBtn").addEventListener("click", () => { if (Cam.quad && !Cam.capturing) capture("manual"); });
+
+function capture(kind) {
+  if (!Cam.quad || !Cam.source) return;
+  Cam.capturing = true;
+  const quad = Cam.quad;
+  try {
+    const scale = Math.min(1, 1600 / Cam.w);
+    full.width = Math.round(Cam.w * scale); full.height = Math.round(Cam.h * scale);
+    fctx.drawImage(Cam.source, 0, 0, full.width, full.height);
+    const src = fctx.getImageData(0, 0, full.width, full.height);
+    const flat = Paper.boostContrast(Paper.warp(src, quad.map(([x, y]) => [x * scale, y * scale]), 1200, 900));
+    const flatCanvas = document.createElement("canvas"); flatCanvas.width = 1200; flatCanvas.height = 900;
+    flatCanvas.getContext("2d").putImageData(new ImageData(flat.data, 1200, 900), 0, 0);
+    const jpeg = flatCanvas.toDataURL("image/jpeg", 0.85);
+    const tc = document.createElement("canvas"); tc.width = 480; tc.height = 360; tc.getContext("2d").drawImage(flatCanvas, 0, 0, 480, 360);
+    const thumb = tc.toDataURL("image/jpeg", 0.7);
+    // ink mask for the instant layer on the PC, and the change-detection reference (same path as quickMask)
+    const IW = 600, IH = 450;
+    const inkImg = Paper.inkMask(Paper.downsample(flat, IW, IH));
+    Cam.lastMask = quickMask(quad);
+    Cam.changed = false; Cam.changeHits = 0; Cam.progress = 0;
+    const ic = document.createElement("canvas"); ic.width = IW; ic.height = IH;
+    ic.getContext("2d").putImageData(new ImageData(Paper.maskToRGBA(inkImg.mask, IW, IH), IW, IH), 0, 0);
+    const png = ic.toDataURL("image/png");
+    Cam.seq++; Cam.lastCaptureAt = performance.now();
+    window.__camCaptures = (window.__camCaptures || 0) + 1;
+    $("flash").classList.add("on"); setTimeout(() => $("flash").classList.remove("on"), 60);
+    buzz(20);
+    client?.sendLarge({ t: "ink", seq: Cam.seq, w: IW, h: IH, png, count: inkImg.count, kind });
+    camStatus("Captured! Reading your drawing...", "busy", 1500);
+    queueScan({ jpeg, thumb, seq: Cam.seq });
+  } catch (err) {
+    camStatus("Capture failed: " + err.message, "error");
+  }
+  Cam.capturing = false;
+}
+
+function queueScan(job) { if (Cam.scanning) { Cam.pending = job; return; } runScan(job); }
+const strip = (l) => ({ theme: l.theme, aspect: l.aspect, objects: l.objects.map(({ type, label, x, y, w, h }) => ({ type, label, x, y, w, h })) });
+async function runScan(job) {
+  Cam.scanning = true;
+  window.__camScans = (window.__camScans || 0) + 1;
+  try {
+    const previous = Cam.level ? strip(Cam.level) : undefined;
+    const r = await fetch("api/scan", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: job.jpeg, previous, provider: previous ? "baseten" : "meta" }),
+      signal: AbortSignal.timeout(95_000),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.level) throw new Error(data.error || `Server error ${r.status}`);
+    Cam.level = data.level;
+    window.__camLevel = data.level;
+    client?.sendLarge({ t: "level", seq: job.seq, level: data.level, thumb: job.thumb, meta: { provider: data.meta?.provider, ms: data.meta?.ms, playtest: data.meta?.playtest } });
+    const d = data.level.diff;
+    camStatus(d && d.short ? `Level updated: ${d.short}` : d ? "No changes spotted" : `${data.level.objects.length} objects found! Building on the big screen...`, "live", 4500);
+    if (mode === "camera") $("playBtn").style.display = "";
+    buzz([20, 30, 20]);
+  } catch (err) {
+    camStatus("Scan failed: " + (err.name === "TimeoutError" ? "the AI took too long" : err.message), "error", 6000);
+  }
+  Cam.scanning = false;
+  if (Cam.pending) { const j = Cam.pending; Cam.pending = null; runScan(j); }
+}
+
+/** Test/demo source (?fakepaper=1): a canvas that looks like a desk with a sheet and a drawing; hand shake settles after 2 s. */
+function makeFakePaper() {
+  const c = document.createElement("canvas"); c.width = 1280; c.height = 960;
+  const ctx = c.getContext("2d"); const t0 = performance.now();
+  c.tick = () => {
+    const t = (performance.now() - t0) / 1000;
+    const shake = t < 2 ? 40 : 0.6;
+    const jx = Math.sin(t * 9) * shake, jy = Math.cos(t * 7) * shake;
+    ctx.fillStyle = "#3a3a44"; ctx.fillRect(0, 0, 1280, 960);
+    for (let i = 0; i < 300; i++) { ctx.fillStyle = i % 2 ? "#44444f" : "#30303a"; ctx.fillRect((i * 97) % 1280, (i * 61) % 960, 6, 6); }
+    ctx.save(); ctx.translate(640 + jx, 480 + jy); ctx.rotate(0.06);
+    ctx.fillStyle = "#f3f0e6"; ctx.fillRect(-440, -330, 880, 660);
+    ctx.strokeStyle = "#1b1535"; ctx.lineWidth = 9; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath(); ctx.moveTo(-380, 220); ctx.lineTo(380, 225); ctx.stroke();                       // ground
+    ctx.beginPath(); ctx.arc(-300, 120, 22, 0, Math.PI * 2); ctx.moveTo(-300, 142); ctx.lineTo(-300, 200); ctx.moveTo(-300, 200); ctx.lineTo(-325, 222); ctx.moveTo(-300, 200); ctx.lineTo(-275, 222); ctx.moveTo(-300, 160); ctx.lineTo(-330, 185); ctx.moveTo(-300, 160); ctx.lineTo(-270, 185); ctx.stroke();  // stick figure
+    ctx.strokeRect(-60, 160, 100, 62); ctx.strokeRect(120, 90, 90, 132);                                // boxes
+    ctx.beginPath(); ctx.moveTo(300, 222); ctx.lineTo(300, 40); ctx.lineTo(370, 70); ctx.lineTo(300, 100); ctx.stroke();   // flag
+    ctx.beginPath(); ctx.moveTo(-200, 20); ctx.lineTo(0, 20); ctx.stroke();                              // ledge
+    if (window.__fakeAddStroke) { ctx.beginPath(); ctx.arc(-100, -40, 18, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(-40, -40, 18, 0, Math.PI * 2); ctx.stroke(); }   // two coins drawn later
+    ctx.restore();
+  };
+  c.tick();
+  return c;
 }
 
 // Buttons: each tracks its own pointers so two thumbs work at once.

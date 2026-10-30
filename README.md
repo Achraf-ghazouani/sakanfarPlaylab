@@ -25,8 +25,21 @@ controllers (players 2-4). Status is shown on both screens, and the stage falls 
 Phone cameras only work on HTTPS. The live site is HTTPS; on your LAN run `npm run dev:https` (self-signed certificate
 made with the openssl bundled with Git for Windows, accept the warning once on the phone).
 
-Coming next in this flow: paper detection with auto-capture and flattening, the instant ink layer with AI pop-in build,
-live re-scans while drawing, and the Play mode hand-off.
+**Live build while you draw** (`shared/paper.js`, no OpenCV):
+- The phone finds the sheet in every frame (brightest region, corner extraction on a 160x120 downscale), draws a green
+  outline into the stream, and when the sheet has been still for about a second it captures, flattens the sheet with a
+  4-point homography to 1200x900, boosts the contrast and extracts the dark pen strokes. A manual shutter button exists too.
+- Instantly, the ink mask goes to the PC over the data channel and draws itself on notebook paper. The flattened photo
+  goes to `/api/scan`; when the level arrives, the objects pop in one by one with sound, the playtest agent's fixes show
+  in a toast, and the game starts underneath with the phone camera in a picture-in-picture corner.
+- Keep drawing: the phone compares the flattened ink with the last capture (tolerant to small shifts), and when the
+  drawing changed and is steady again for 1.5 s it re-scans, sending the previous level as context and asking for the
+  Baseten model to save Meta credits. New objects pop into the running level, the player keeps their spot, and a toast
+  says "+2 coins". Only one scan runs at a time; a newer capture replaces a waiting one.
+- **PLAY!** on the phone switches it to the controller; **Back to camera** keeps editing while the game runs. Other phones
+  that scan the same code join as controllers.
+
+Testing without a drawing: `pad.html?room=CODE&fakepaper=1` uses a code-drawn sheet as the camera.
 
 ## Play with your phone (phone as controller)
 

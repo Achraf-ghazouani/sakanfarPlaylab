@@ -134,6 +134,16 @@ window.PhoneLink = (() => {
     onData(p, msg) {
       p.lastSeen = Date.now();
       if (!msg || typeof msg !== "object") return;
+      if (msg.t === "chunk") {   // large message split by Client.sendLarge(): reassemble, then handle as one
+        const box = (p.chunks ||= {});
+        const c = (box[msg.id] ||= { n: msg.n, parts: [], got: 0, at: Date.now() });
+        if (!c.parts[msg.i]) { c.parts[msg.i] = msg.part; c.got++; }
+        for (const k of Object.keys(box)) if (Date.now() - box[k].at > 60000) delete box[k];
+        if (c.got < c.n) return;
+        delete box[msg.id];
+        let whole; try { whole = JSON.parse(c.parts.join("")); } catch { return; }
+        return this.onData(p, whole);
+      }
       if (msg.t === "input") { p.input = { l: msg.l ? 1 : 0, r: msg.r ? 1 : 0 }; this.h.onInput?.(p, p.input); }
       else if (msg.t === "jump") this.h.onJump?.(p, !!msg.down);
       else if (msg.t === "ping") { if (p.conn.open) p.conn.send({ t: "pong" }); }
@@ -298,6 +308,15 @@ window.PhoneLink = (() => {
     sendJump(down) { if (this.conn?.open) this.conn.send({ t: "jump", down: !!down }); }
     sendMode(mode) { if (this.conn?.open) this.conn.send({ t: "mode", mode }); }
     send(msg) { if (this.conn?.open) this.conn.send(msg); }
+    /** Send a big message (ink PNG, level + thumbnail) in 40 KB chunks so every browser and the relay accept it. */
+    sendLarge(msg) {
+      if (!this.conn?.open) return false;
+      const text = JSON.stringify(msg), SIZE = 40000;
+      if (text.length <= SIZE) { this.conn.send(msg); return true; }
+      const id = Math.random().toString(36).slice(2, 10), n = Math.ceil(text.length / SIZE);
+      for (let i = 0; i < n; i++) this.conn.send({ t: "chunk", id, i, n, part: text.slice(i * SIZE, (i + 1) * SIZE) });
+      return true;
+    }
     get connected() { return !!this.conn?.open; }
     setStatus(status, detail) { this.status = status; this.h.onStatus?.(status, detail); }
     stop() {

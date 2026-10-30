@@ -36,9 +36,12 @@ export default async function handler(req, res) {
     previous = normalizeLevel(body.previous, { aspect: body.previous.aspect });
   }
 
+  // Optional provider choice (live re-scans use Baseten to save Meta credits); unknown values are ignored.
+  const wantProvider = ["meta", "baseten"].includes(String(body.provider || "").toLowerCase()) ? body.provider.toLowerCase() : undefined;
+
   let scanned;
   try {
-    scanned = await scanLevelFromImage({ base64, mime, aspect, previous });
+    scanned = await scanLevelFromImage({ base64, mime, aspect, previous, provider: wantProvider });
   } catch (err) {
     console.error("scan failed:", err.message);
     const status = err.status === 401 || err.status === 403 ? 500 : 502;   // never leak auth details, just say the AI failed

@@ -80,6 +80,19 @@
   .st-skip { margin-top:16px; background:transparent; color:#6b6480; text-decoration:underline; font-size:13px; }
   #stage[data-state="camera"] .st-qr, #stage[data-state="camera"] .st-code, #stage[data-state="camera"] .st-url, #stage[data-state="camera"] .st-sub, #stage[data-state="camera"] .st-title { display:none; }
   #stage[data-state="camera"] .st-video { display:block; }
+  /* build stage: the ink draws itself on paper, then the objects pop in */
+  .st-build { display:none; margin:0 auto; width:min(92vw, 1000px); aspect-ratio:4/3; max-height:72vh; border-radius:20px; overflow:hidden; box-shadow:0 20px 50px rgba(27,21,53,.25); background:#fffdf8; }
+  .st-build canvas { width:100%; height:100%; display:block; }
+  #stage[data-state="build"] .st-qr, #stage[data-state="build"] .st-code, #stage[data-state="build"] .st-url, #stage[data-state="build"] .st-sub, #stage[data-state="build"] .st-title, #stage[data-state="build"] .st-video { display:none; }
+  #stage[data-state="build"] .st-build { display:block; }
+  #stage { transition:opacity .6s; }
+  #stage.fade { opacity:0; pointer-events:none; }
+  /* live camera picture-in-picture while the game runs */
+  #pip { position:fixed; left:12px; bottom:12px; width:min(30vw, 300px); aspect-ratio:4/3; border-radius:14px; overflow:hidden; background:#1b1535; box-shadow:0 10px 30px rgba(0,0,0,.4); border:3px solid #fff; z-index:3; display:none; }
+  #pip.show { display:block; }
+  #pip video { width:100%; height:100%; object-fit:cover; display:block; }
+  #pip span { position:absolute; top:8px; left:8px; background:rgba(255,255,255,.9); color:#5b21b6; font-size:12px; font-weight:700; padding:4px 9px; border-radius:999px; }
+  body.touch #pip { display:none !important; }
 
   /* live edit: re-scan overlay */
   #rescan { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(27,21,53,.55); z-index:5; }
@@ -170,9 +183,11 @@
   <div class="st-code" id="stCode">----</div>
   <div class="st-url" id="stUrl"></div>
   <div class="st-video" id="stVideoBox"><video id="stageVideo" autoplay playsinline muted></video><span class="st-live">Live from your phone</span></div>
+  <div class="st-build" id="stBuild"><canvas id="buildCanvas" width="1200" height="900"></canvas></div>
   <div class="st-status connecting" id="stStatusBox"><span class="dot"></span><span id="stStatus">starting the room...</span></div>
   <button class="st-skip" id="stSkip">Skip: play a level with the keyboard instead</button>
 </div></div>
+<div id="pip"><video id="pipVideo" autoplay playsinline muted></video><span>Live from your phone</span></div>
 <div id="phonePanel"><div class="pp">
   <button class="pp-close" id="phoneClose" title="Close">&times;</button>
   <h3>Play with your phone</h3>
@@ -824,7 +839,11 @@ function setPhoneStatus(status, detail) {
 // --- stage (big screen) ---
 let stageNote = null;
 function stage(state) { const st = $("stage"); st.dataset.state = state; st.classList.add("show"); }
-function hideStage() { $("stage").classList.remove("show"); }
+function hideStage() {
+  $("stage").classList.remove("show");
+  const v = $("stageVideo");                       // release the big video surface; the PiP has its own element
+  if (v.srcObject) { try { v.pause(); } catch {} v.srcObject = null; }
+}
 function stageStatus(text, cls) { $("stStatus").textContent = text; $("stStatusBox").className = "st-status " + (cls || ""); }
 function showStageVideo(p, stream) {
   cameraPlayer = p;
@@ -838,6 +857,114 @@ function clearStageVideo(text) {
   $("stageVideo").srcObject = null;
   if (isScreen) { stage("qr"); stageNote = { text, until: Date.now() + 8000 }; stageStatus(text, "waiting"); }
 }
+function showPip(stream) { const v = $("pipVideo"); if (v.srcObject !== stream) { v.srcObject = stream; v.play?.().catch(() => {}); } $("pip").classList.add("show"); }
+function hidePip() { $("pip").classList.remove("show"); }
+
+// --- build stage: the phone sends the ink first (instant), then the AI level (seconds later) ---
+const Build = { ink: null, seq: 0, revealStart: 0, revealDur: 1600, raf: 0, revealed: true, pending: null, running: false };
+const PAPER_W = 1200, PAPER_H = 900;      // the phone flattens the sheet to 1200x900; the AI grid maps onto it
+const bctx = () => $("buildCanvas").getContext("2d");
+function paperBg(ctx) {
+  ctx.fillStyle = "#fffdf8"; ctx.fillRect(0, 0, PAPER_W, PAPER_H);
+  ctx.strokeStyle = "#e4ddf7"; ctx.lineWidth = 2;
+  for (let y = 60; y < PAPER_H; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(PAPER_W, y); ctx.stroke(); }
+}
+async function onInk(p, msg) {
+  if (cameraPlayer && p !== cameraPlayer) return;
+  const img = new Image(); img.src = msg.png;
+  try { await img.decode(); } catch { return; }
+  Build.ink = img; Build.seq = msg.seq; window.__buildInkSeq = msg.seq;
+  if (currentLevel) return;                         // re-scan while playing: the game updates in place when the level arrives
+  stage("build"); stageStatus("reading your drawing...", "connected");
+  Build.revealed = false; Build.revealStart = performance.now();
+  cancelAnimationFrame(Build.raf);
+  const ctx = bctx();
+  const step = () => {
+    const t = Math.min(1, (performance.now() - Build.revealStart) / Build.revealDur);
+    paperBg(ctx);
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, t * PAPER_W, PAPER_H); ctx.clip(); ctx.drawImage(Build.ink, 0, 0, PAPER_W, PAPER_H); ctx.restore();
+    if (t < 1) {
+      ctx.fillStyle = "#7c3aed"; ctx.fillRect(t * PAPER_W - 2, 0, 4, PAPER_H);
+      ctx.beginPath(); ctx.arc(t * PAPER_W, PAPER_H / 2 + Math.sin(t * 28) * 220, 11, 0, Math.PI * 2); ctx.fill();
+      Build.raf = requestAnimationFrame(step);
+    } else { Build.revealed = true; if (Build.pending) runBuild(); }
+  };
+  step();
+}
+function onPhoneLevel(p, msg) {
+  if (!msg.level || !Array.isArray(msg.level.objects)) return;
+  window.__phoneLevelSeq = msg.seq;
+  if (currentLevel) {                                // live edit: update the running game in place, keep the player
+    const s = playScene();
+    pendingSpawn = s?.player && s.state === "play" ? { x: s.player.x / s.ax, y: s.player.body.bottom } : null;
+    try { if (msg.thumb) localStorage.setItem("playlab.photo", msg.thumb); } catch {}
+    startLevel(msg.level, "your drawing", msg.thumb || null);
+    selectStorageOption();
+    const d = msg.level.diff;
+    const fixes = msg.level.fixes?.length ? ` &middot; agent: ${msg.level.fixes.map(esc).join(", ")}` : "";
+    showToast(`<b>&#9998; Redrawn:</b> ${esc(d?.short || d?.summary || "level updated")}${fixes}`, 8000);
+    host?.event("level");
+    return;
+  }
+  Build.pending = { level: msg.level, thumb: msg.thumb };
+  if (Build.revealed) runBuild();
+}
+const BUILD_RANK = { platform: 0, moving_platform: 1, spike: 2, coin: 3, enemy: 4, decoration: 5, start: 6, goal: 7 };
+const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+function drawBuildObj(ctx, o, s) {
+  const x = o.x * PAPER_W / 1000, y = o.y * PAPER_H / 1000, w = o.w * PAPER_W / 1000, h = o.h * PAPER_H / 1000;
+  const cx = x + w / 2, cy = y + h / 2;
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s); ctx.translate(-cx, -cy);
+  const col = { start: "#22c55e", goal: "#facc15", platform: "#8b5a2b", moving_platform: "#60a5fa", coin: "#fbbf24", enemy: "#ef4444", spike: "#9ca3af", decoration: "#a78bfa" }[o.type] || "#fff";
+  ctx.fillStyle = col; ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 3;
+  if (o.type === "coin") { ctx.beginPath(); ctx.arc(cx, cy, Math.min(w, h) / 2, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+  else if (o.type === "spike") { ctx.beginPath(); ctx.moveTo(x, y + h); ctx.lineTo(cx, y); ctx.lineTo(x + w, y + h); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  else if (o.type === "goal") { ctx.fillStyle = "#6b7280"; ctx.fillRect(x + w * 0.2, y, 6, h); ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x + w * 0.2 + 6, y); ctx.lineTo(x + w, y + h * 0.2); ctx.lineTo(x + w * 0.2 + 6, y + h * 0.4); ctx.closePath(); ctx.fill(); }
+  else if (o.type === "decoration") { ctx.globalAlpha = 0.25; ctx.fillRect(x, y, w, h); ctx.globalAlpha = 1; }
+  else {
+    ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
+    if (o.type === "start" || o.type === "enemy") { ctx.fillStyle = "#fff"; ctx.fillRect(x + w * 0.25, y + h * 0.18, w * 0.16, h * 0.1); ctx.fillRect(x + w * 0.6, y + h * 0.18, w * 0.16, h * 0.1); }
+  }
+  ctx.restore();
+}
+async function runBuild() {
+  if (Build.running || !Build.pending) return;
+  Build.running = true;
+  const { level, thumb } = Build.pending; Build.pending = null;
+  stage("build"); stageStatus(`${level.objects.length} things found. Building...`, "connected");
+  const ctx = bctx();
+  const order = [...level.objects.keys()].sort((a, b) => (BUILD_RANK[level.objects[a].type] ?? 8) - (BUILD_RANK[level.objects[b].type] ?? 8));
+  const drawn = [];
+  for (const i of order) {
+    const o = level.objects[i], t0 = performance.now();
+    await new Promise((res) => {
+      const anim = () => {
+        const t = Math.min(1, (performance.now() - t0) / 170);
+        paperBg(ctx);
+        if (Build.ink) { ctx.globalAlpha = 0.35; ctx.drawImage(Build.ink, 0, 0, PAPER_W, PAPER_H); ctx.globalAlpha = 1; }
+        for (const j of drawn) drawBuildObj(ctx, level.objects[j], 1);
+        drawBuildObj(ctx, o, 0.3 + 0.7 * easeOut(t));
+        if (t < 1) requestAnimationFrame(anim); else res();
+      };
+      anim();
+    });
+    drawn.push(i);
+    SFX.tone({ freq: 420 + (drawn.length % 8) * 60, type: "square", dur: 0.06, vol: 0.35 });
+    await new Promise((r) => setTimeout(r, 80));
+  }
+  SFX.win();
+  try { if (thumb) localStorage.setItem("playlab.photo", thumb); } catch {}
+  startLevel(level, "your drawing", thumb || null);
+  selectStorageOption();
+  stageStatus("level ready. Tap PLAY on the phone, or keep drawing!", "connected");
+  await new Promise((r) => setTimeout(r, 700));
+  $("stage").classList.add("fade");
+  setTimeout(() => { hideStage(); $("stage").classList.remove("fade"); }, 650);
+  if (cameraPlayer?.stream) showPip(cameraPlayer.stream);
+  host?.event("level");
+  Build.running = false;
+  window.__buildDone = (window.__buildDone || 0) + 1;
+}
 function refreshPlayers() {
   const n = host ? host.count : 0;
   $("phoneChipText").textContent = `${n}/${PhoneLink.MAX_PLAYERS}`;
@@ -847,9 +974,16 @@ function refreshPlayers() {
   const via = relayed ? ` · ${relayed} via relay` : "";
   $("phonePlayers").innerHTML = `${n}/${PhoneLink.MAX_PLAYERS} player${n === 1 ? "" : "s"} connected${via} ${dots}`;
 }
+let hostWaits = 0;
 function startHost() {
   if (host) return;
-  if (!window.PhoneLink || !window.Peer || !window.qrcode) { $("phoneStatus").textContent = "phone link scripts did not load (check your connection)"; return; }
+  if (!window.PhoneLink || !window.Peer || !window.qrcode) {
+    // The link scripts are deferred: wait for them (up to ~15 s) instead of giving up.
+    if (hostWaits++ < 50) { setTimeout(startHost, 300); return; }
+    $("phoneStatus").textContent = "phone link scripts did not load (check your connection)";
+    if (isScreen) stageStatus("could not load the phone link scripts. Check the connection and reload.", "error");
+    return;
+  }
   host = new PhoneLink.Host({
     onCode: (code) => {
       sessionStorage.setItem("playlab.room", code);
@@ -870,17 +1004,28 @@ function startHost() {
       refreshPlayers();
       if (!isScreen || p.mode !== "camera") showToast(`<b>&#128241; Phone connected</b> as player ${p.slot} (${p.name}${p.transport === "relay" ? ", via relay" : ""})`, 4000);
     },
-    onStream: (p, stream) => { if (!cameraPlayer || p === cameraPlayer) showStageVideo(p, stream); },
-    onStreamEnd: (p) => { if (p === cameraPlayer) clearStageVideo("camera stopped. Switch the phone back to camera, or scan again."); },
+    onStream: (p, stream) => {
+      if (cameraPlayer && p !== cameraPlayer) return;
+      cameraPlayer = p;
+      if (currentLevel) showPip(stream); else showStageVideo(p, stream);
+    },
+    onStreamEnd: (p) => { if (p === cameraPlayer) { hidePip(); if (!currentLevel) clearStageVideo("camera stopped. Switch the phone back to camera, or scan again."); } },
     onMode: (p, mode) => {
-      if (mode === "pad" && p === cameraPlayer) { cameraPlayer = null; clearStageVideo(`${p.name} phone is now a controller. Scan with another phone to use its camera.`); }
-      else if (mode === "camera" && !cameraPlayer) { cameraPlayer = p; stageStatus("phone switching to camera...", "connected"); }
+      if (mode === "pad" && p === cameraPlayer) {
+        hidePip();
+        if (currentLevel) hideStage();                                   // PLAY! on the phone: the game is on
+        else { cameraPlayer = null; clearStageVideo(`${p.name} phone is now a controller. Scan with another phone to use its camera.`); }
+      } else if (mode === "camera") {
+        if (!cameraPlayer) cameraPlayer = p;
+        if (p === cameraPlayer) { if (p.stream) { if (currentLevel) showPip(p.stream); else showStageVideo(p, p.stream); } else stageStatus("phone switching to camera...", "connected"); }
+      }
       refreshPlayers();
     },
     onLeave: (p) => {
-      if (p === cameraPlayer) { cameraPlayer = null; clearStageVideo("phone disconnected. Scan the code again."); }
+      if (p === cameraPlayer) { cameraPlayer = null; hidePip(); if (!currentLevel) clearStageVideo("phone disconnected. Scan the code again."); }
       refreshPlayers(); remote.left = remote.right = false; playScene()?.releaseJump();
     },
+    onMessage: (p, msg) => { if (msg.t === "ink") onInk(p, msg); else if (msg.t === "level") onPhoneLevel(p, msg); },
     onInput: (p, input) => { remote.left = !!input.l; remote.right = !!input.r; },
     onJump: (p, down) => { const s = playScene(); if (s) (down ? s.pressJump() : s.releaseJump()); },
   });
@@ -894,12 +1039,18 @@ const stored = () => { try { const s = localStorage.getItem("playlab.level"); re
 const storedPhoto = () => { try { return localStorage.getItem("playlab.photo") || null; } catch { return null; } };
 const STORAGE_OPTION = "__storage";
 
+function selectStorageOption() {
+  const sel = $("levelSelect");
+  if (![...sel.options].some((o) => o.value === STORAGE_OPTION)) {
+    const o = document.createElement("option"); o.value = STORAGE_OPTION; o.textContent = "✎ your drawing"; sel.prepend(o);
+  }
+  sel.value = STORAGE_OPTION;
+}
 function startStoredLevel() {
   const lvl = stored();
   if (!lvl) { showMsg("No scanned level yet", "go back and take a photo"); return; }
   startLevel(lvl, "your drawing", storedPhoto());
-  const sel = $("levelSelect");
-  if ([...sel.options].some((o) => o.value === STORAGE_OPTION)) sel.value = STORAGE_OPTION;
+  selectStorageOption();
 }
 
 async function loadLevelUrl(url) {
@@ -982,9 +1133,7 @@ async function init() {
   if (params.get("room")) sessionStorage.setItem("playlab.room", params.get("room").toUpperCase());
   // Reopen the same room after a reload (the phone keeps reconnecting to it). The link scripts are deferred,
   // so wait for them if the document is still loading.
-  if ((isScreen || sessionStorage.getItem("playlab.room")) && !isTouch) {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", startHost); else startHost();
-  }
+  if ((isScreen || sessionStorage.getItem("playlab.room")) && !isTouch) startHost();   // retries until the deferred scripts are in
   window.addEventListener("pagehide", () => { try { host?.destroy(); } catch {} });   // free the room id quickly
   $("muteBtn").addEventListener("click", (e) => { e.target.blur(); SFX.setMuted(!SFX.muted); });
   try { SFX.setMuted(localStorage.getItem("playlab.muted") === "1"); } catch {}

@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6d28d9">
+<title>Sakanfar PlayLab</title>
+<style>
+  :root {
+    --purple: #6d28d9; --purple-dark: #4c1d95; --purple-light: #a78bfa; --pink: #f472b6;
+    --paper: #fffdf7; --ink: #1e1b2e; --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink);
+    background: radial-gradient(1200px 600px at 20% -10%, #c4b5fd 0%, transparent 60%),
+                radial-gradient(900px 500px at 110% 20%, #fbcfe8 0%, transparent 55%),
+                linear-gradient(180deg, #7c3aed 0%, #4c1d95 100%);
+    background-attachment: fixed;
+    padding: max(20px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .wrap { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 16px; }
+
+  header { text-align: center; color: #fff; padding: 8px 0 4px; }
+  header h1 { margin: 0; font-size: clamp(30px, 8vw, 44px); letter-spacing: -0.02em; text-shadow: 0 2px 0 rgba(0,0,0,.25); }
+  header h1 span { color: #fde68a; }
+  header p { margin: 8px 0 0; font-size: 18px; opacity: .95; }
+
+  .card { background: var(--paper); border-radius: 22px; padding: 20px; box-shadow: 0 16px 40px rgba(30, 10, 80, .35); }
+
+  .doodle { display: block; width: 100%; height: auto; border-radius: 14px; margin-bottom: 14px;
+            background: repeating-linear-gradient(180deg, #fffdf7 0 31px, #dbeafe 31px 32px); border: 2px dashed #c4b5fd; }
+
+  .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+         border: 0; border-radius: 16px; padding: 18px 20px; font-size: 20px; font-weight: 800; cursor: pointer;
+         transition: transform .08s ease, box-shadow .08s ease; -webkit-tap-highlight-color: transparent; }
+  .btn:active { transform: translateY(2px) scale(.99); }
+  .btn-primary { background: linear-gradient(180deg, #8b5cf6, #6d28d9); color: #fff; box-shadow: 0 6px 0 #4c1d95, 0 10px 24px rgba(76, 29, 149, .4); }
+  .btn-primary:active { box-shadow: 0 3px 0 #4c1d95; }
+  .btn-secondary { background: #ede9fe; color: var(--purple-dark); margin-top: 10px; font-size: 17px; padding: 14px; }
+  .btn-ghost { background: transparent; color: #fff; text-decoration: underline; font-size: 15px; font-weight: 600; padding: 10px; }
+  .btn svg { width: 28px; height: 28px; flex: none; }
+  input[type=file] { display: none; }
+
+  .tips { font-size: 14px; color: var(--muted); margin: 14px 0 0; line-height: 1.5; }
+  .tips b { color: var(--purple-dark); }
+  .tips .pill { display: inline-block; background: #ede9fe; color: var(--purple-dark); border-radius: 999px; padding: 2px 9px; margin: 2px 2px 2px 0; font-weight: 600; white-space: nowrap; }
+
+  /* scanning state */
+  #scan { display: none; }
+  #scan.show { display: block; }
+  .shot { position: relative; border-radius: 14px; overflow: hidden; background: #111; aspect-ratio: 4 / 3; }
+  .shot img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .shot .beam { position: absolute; left: 0; right: 0; height: 26%; top: -30%;
+                background: linear-gradient(180deg, rgba(167,139,250,0) 0%, rgba(167,139,250,.55) 50%, rgba(244,114,182,0) 100%);
+                border-bottom: 3px solid #f0abfc; box-shadow: 0 0 24px #c084fc; animation: sweep 1.6s ease-in-out infinite; }
+  .shot .grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px); background-size: 10% 10%; pointer-events: none; }
+  @keyframes sweep { 0% { top: -30%; } 100% { top: 104%; } }
+  .status { display: flex; align-items: center; gap: 12px; margin-top: 14px; font-size: 18px; font-weight: 700; color: var(--purple-dark); min-height: 30px; }
+  .spinner { width: 22px; height: 22px; border: 3px solid #ddd6fe; border-top-color: var(--purple); border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .status.error { color: #b91c1c; }
+  .status.error .spinner { display: none; }
+  .sub { font-size: 14px; color: var(--muted); margin-top: 6px; }
+  #retry { display: none; }
+  #retry.show { display: flex; }
+
+  footer { text-align: center; color: rgba(255,255,255,.85); font-size: 13px; padding-top: 4px; }
+  footer a { color: #fff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Sakanfar <span>PlayLab</span></h1>
+    <p>Draw a level on paper. Snap it. Play it.</p>
+  </header>
+
+  <div class="card" id="home">
+    <svg class="doodle" viewBox="0 0 400 180" aria-hidden="true">
+      <g fill="none" stroke="#1e1b2e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 150 Q120 146 200 150 T380 150"/>
+        <path d="M130 95 h70 M130 95 v12 h70 v-12"/>
+        <path d="M60 150 v-30 M60 120 l-12 15 M60 120 l12 15 M60 128 l-14 -6 M60 128 l14 -6"/>
+        <circle cx="60" cy="112" r="7"/>
+        <path d="M240 150 v-25 h25 v25"/>
+        <path d="M330 150 v-70 M330 80 l40 12 l-40 12"/>
+        <circle cx="160" cy="75" r="6"/><circle cx="180" cy="75" r="6"/>
+        <path d="M270 150 l10 -18 l10 18 l10 -18 l10 18"/>
+        <path d="M300 60 q-14 -8 -8 -20 q8 -14 24 -8 q16 -12 30 2 q16 0 10 16 q6 12 -10 12 z"/>
+      </g>
+      <g fill="none" stroke="#6d28d9" stroke-width="3" stroke-dasharray="6 5">
+        <rect x="46" y="100" width="28" height="52" rx="3"/>
+        <rect x="320" y="72" width="54" height="80" rx="3"/>
+        <rect x="150" y="66" width="40" height="18" rx="3"/>
+        <rect x="288" y="36" width="58" height="34" rx="3"/>
+      </g>
+      <g font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#6d28d9">
+        <text x="30" y="96">start</text><text x="322" y="68">goal</text><text x="151" y="62">coins</text><text x="284" y="32">moving platform</text>
+      </g>
+    </svg>
+
+    <label class="btn btn-primary" for="cameraInput">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      Take a photo of your level
+    </label>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment">
+
+    <label class="btn btn-secondary" for="galleryInput">Choose a photo from the gallery</label>
+    <input type="file" id="galleryInput" accept="image/*">
+
+    <p class="tips">
+      <b>How to draw:</b> a ground line, a stick figure where you start and a flag at the end. Then anything goes:
+      <span class="pill">cactus = enemy</span><span class="pill">cloud = moving platform</span><span class="pill">circles = coins</span><span class="pill">triangles = spikes</span>
+    </p>
+  </div>
+
+  <div class="card" id="scan">
+    <div class="shot">
+      <img id="preview" alt="your drawing">
+      <div class="grid"></div>
+      <div class="beam" id="beam"></div>
+    </div>
+    <div class="status" id="status"><div class="spinner"></div><span id="statusText">Reading your drawing...</span></div>
+    <div class="sub" id="statusSub">The AI usually needs about 10 seconds.</div>
+    <button class="btn btn-secondary" id="retry">Try another photo</button>
+  </div>
+
+  <div style="text-align:center">
+    <a class="btn btn-ghost" id="lastLink" href="game.html?source=storage" style="display:none">Play my last level again</a>
+    <a class="btn btn-ghost" href="game.html?level=levels/sample.json">Or play the sample level</a>
+  </div>
+
+  <footer>Meta hackathon 2026 · powered by Muse Spark · <a href="viewer.html">debug viewer</a></footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const MAX_SIDE = 1600;          // upload size (long edge, px)
+const THUMB_SIDE = 480;         // kept in localStorage for the in-game "original drawing" corner
+const MESSAGES = ["Reading your drawing...", "Finding the ground...", "Building platforms...", "Spotting enemies...", "Counting coins...", "Placing the flag...", "Almost there..."];
+
+try { if (localStorage.getItem("playlab.level")) $("lastLink").style.display = "flex"; } catch {}
+
+$("cameraInput").addEventListener("change", (e) => handleFile(e.target.files[0]));
+$("galleryInput").addEventListener("change", (e) => handleFile(e.target.files[0]));
+$("retry").addEventListener("click", () => { $("scan").classList.remove("show"); $("home").style.display = ""; $("cameraInput").value = ""; $("galleryInput").value = ""; });
+
+let msgTimer = null;
+function setStatus(text, sub, isError) {
+  $("statusText").textContent = text;
+  $("statusSub").textContent = sub || "";
+  $("status").classList.toggle("error", !!isError);
+  $("beam").style.display = isError ? "none" : "";
+  $("retry").classList.toggle("show", !!isError);
+}
+function startMessages() {
+  let i = 0;
+  clearInterval(msgTimer);
+  msgTimer = setInterval(() => { i = (i + 1) % MESSAGES.length; $("statusText").textContent = MESSAGES[i]; }, 1500);
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  $("home").style.display = "none";
+  $("scan").classList.add("show");
+  setStatus(MESSAGES[0], "The AI usually needs about 10 seconds.");
+  startMessages();
+  window.scrollTo(0, 0);
+
+  let img;
+  try { img = await loadImage(file); }
+  catch { clearInterval(msgTimer); setStatus("Could not read that image.", "Try taking a photo instead of picking a file.", true); return; }
+
+  const upload = toJpeg(img, MAX_SIDE, 0.85);
+  const thumb = toJpeg(img, THUMB_SIDE, 0.7);
+  $("preview").src = thumb;
+  try { localStorage.setItem("playlab.photo", thumb); } catch {}
+
+  try {
+    const r = await fetch("api/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: upload }),
+      signal: AbortSignal.timeout(95_000),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.level) throw new Error(data.error || `Server error ${r.status}`);
+
+    clearInterval(msgTimer);
+    setStatus("Level ready!", `${data.level.theme} · ${data.level.objects.length} things found`);
+    localStorage.setItem("playlab.level", JSON.stringify(data.level));
+    localStorage.setItem("playlab.levelName", "your drawing");
+    setTimeout(() => { location.href = "game.html?source=storage"; }, 500);
+  } catch (err) {
+    clearInterval(msgTimer);
+    const msg = err.name === "TimeoutError" ? "The AI took too long." : err.message;
+    setStatus(msg, "Good light, the whole page in frame, and a clear ground line help a lot.", true);
+  }
+}
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("decode")); };
+    img.src = url;   // browsers apply EXIF rotation to <img> by default, so the canvas below is upright
+  });
+}
+
+function toJpeg(img, maxSide, quality) {
+  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.round(img.naturalWidth * scale), h = Math.round(img.naturalHeight * scale);
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);   // PNG transparency -> white paper
+  ctx.drawImage(img, 0, 0, w, h);
+  return c.toDataURL("image/jpeg", quality);
+}
+</script>
+</body>
+</html>

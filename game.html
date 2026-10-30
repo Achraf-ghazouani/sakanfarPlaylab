@@ -6,7 +6,7 @@
 <title>PlayLab Game</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js"></script>
 <style>
-  html, body { margin:0; height:100%; overflow:hidden; background:#111; font-family: system-ui, sans-serif; color:#eee; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#111; font-family: system-ui, sans-serif; color:#eee; touch-action:none; overscroll-behavior:none; }
   #hud { position:fixed; top:0; left:0; right:0; height:44px; box-sizing:border-box; display:flex; gap:12px; align-items:center; padding:0 12px; background:rgba(0,0,0,.6); font-size:14px; z-index:2; }
   #hud label { display:flex; gap:6px; align-items:center; white-space:nowrap; }
   #hud select { max-width:260px; }
@@ -19,20 +19,64 @@
   #msg div { background:rgba(0,0,0,.78); color:#fff; padding:22px 34px; border-radius:14px; text-align:center; font-size:30px; font-weight:700; cursor:pointer; }
   #msg small { display:block; font-size:15px; font-weight:400; margin-top:8px; color:#ccc; }
   #hint { position:fixed; bottom:8px; left:12px; font-size:12px; color:rgba(0,0,0,.55); z-index:2; pointer-events:none; }
-  button { font-size:13px; padding:4px 10px; border-radius:6px; border:0; background:#2b6cff; color:#fff; cursor:pointer; }
+  button, a.btn { font-size:13px; padding:4px 10px; border-radius:6px; border:0; background:#2b6cff; color:#fff; cursor:pointer; text-decoration:none; white-space:nowrap; }
+  a.btn#newBtn { background:#7c3aed; font-weight:700; }
+
+  /* original drawing thumbnail (tap to enlarge) */
+  #thumb { display:none; position:fixed; top:52px; right:10px; width:96px; border:3px solid #fff; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,.35); z-index:2; cursor:pointer; transition:width .15s; background:#fff; }
+  #thumb.show { display:block; }
+  #thumb.big { width:min(80vw, 640px); max-height:70vh; object-fit:contain; right:50%; transform:translateX(50%); }
+
+  /* touch controls: shown on touch devices (body.touch) */
+  #touch { display:none; position:fixed; left:0; right:0; top:44px; bottom:0; z-index:2; pointer-events:none; }
+  .tbtn { position:absolute; bottom:max(14px, env(safe-area-inset-bottom)); width:84px; height:84px; border-radius:50%;
+          background:rgba(109,40,217,.35); border:3px solid rgba(255,255,255,.75); color:#fff; font-size:34px;
+          display:flex; align-items:center; justify-content:center; pointer-events:auto; touch-action:none;
+          user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; }
+  .tbtn.pressed { background:rgba(109,40,217,.8); transform:scale(.94); }
+  #tLeft { left:max(14px, env(safe-area-inset-left)); }
+  #tRight { left:calc(max(14px, env(safe-area-inset-left)) + 100px); }
+  #tJump { right:max(14px, env(safe-area-inset-right)); width:104px; height:104px; }
+  body.touch #touch { display:block; }
+  body.touch #hint, body.touch .desktop { display:none !important; }
+  body.touch #hud { gap:8px; padding:0 8px; }
+  body.touch #hud select { max-width:150px; }
+
+  /* portrait phones: ask to rotate */
+  #rotate { display:none; position:fixed; inset:0; z-index:6; background:#4c1d95; color:#fff; align-items:center; justify-content:center; text-align:center; font-size:24px; font-weight:800; line-height:1.4; }
+  #rotate .icon { font-size:64px; display:block; animation:tilt 1.6s ease-in-out infinite; }
+  @keyframes tilt { 0%, 100% { transform:rotate(0); } 50% { transform:rotate(90deg); } }
+  @media (orientation: portrait) { body.touch #rotate { display:flex; } }
+
+  /* small screens: compact HUD */
+  @media (max-width: 760px) {
+    #hud { gap:8px; padding:0 8px; font-size:13px; }
+    .desktop { display:none !important; }
+    #hud select { max-width:150px; font-size:13px; }
+    #msg div { font-size:22px; padding:16px 22px; }
+    #thumb { width:72px; }
+  }
 </style>
 </head>
 <body>
 <div id="hud">
-  <label>Level <select id="levelSelect"></select></label>
-  <label>or file <input type="file" id="levelFile" accept=".json,application/json"></label>
-  <button id="restartBtn">Restart (R)</button>
+  <a class="btn" id="newBtn" href="index.html" title="Scan another drawing">&#10010; New level</a>
+  <label><span class="desktop">Level</span><select id="levelSelect"></select></label>
+  <label class="desktop">or file <input type="file" id="levelFile" accept=".json,application/json"></label>
+  <button id="restartBtn" title="Restart (R)">&#8635; Restart</button>
   <button id="muteBtn" title="Sound on/off (M)">&#128266;</button>
-  <a href="viewer.html" target="_blank">viewer</a>
-  <span id="theme"></span>
+  <a href="viewer.html" target="_blank" class="desktop">viewer</a>
+  <span id="theme" class="desktop"></span>
   <span id="score">Coins 0/0</span>
 </div>
 <div id="game"></div>
+<img id="thumb" alt="original drawing" title="Your drawing (tap to enlarge)">
+<div id="touch">
+  <div class="tbtn" id="tLeft">&#9664;</div>
+  <div class="tbtn" id="tRight">&#9654;</div>
+  <div class="tbtn" id="tJump">&#9650;</div>
+</div>
+<div id="rotate"><div><span class="icon">&#128241;</span>Rotate your phone<br><small style="font-weight:400;font-size:16px">the level is wider than it is tall</small></div></div>
 <div id="msg"><div id="msgText"></div></div>
 <div id="hint">Move: arrows / A D &nbsp;·&nbsp; Jump: space / up / W (hold for higher) &nbsp;·&nbsp; Stomp enemies from above &nbsp;·&nbsp; R restarts &nbsp;·&nbsp; M sound</div>
 
@@ -56,6 +100,10 @@ const COYOTE_MS = 120;        // you can still jump this long after walking off 
 const JUMP_BUFFER_MS = 130;   // a jump pressed this long before landing still fires
 const JUMP_CUT = 0.45;        // releasing jump early multiplies upward speed by this
 const CAMERA_ZOOM = 1.25;     // 1 = whole level on screen; more = closer, camera follows
+const PHONE_VIEW_H = 520;     // on touch devices show at most this many world units vertically (bigger player)
+
+// Touch control state (set by the on-screen buttons, read by the scene)
+const touch = { left: false, right: false };
 
 // Background palette picked from the AI theme text.
 const PALETTES = [
@@ -341,7 +389,9 @@ class PlayScene extends Phaser.Scene {
     if (!vw || !vh || !this.W) return;
     const fit = Math.min(vw / this.W, vh / this.H);
     const cam = this.cameras.main;
-    cam.setZoom(fit * CAMERA_ZOOM);
+    let zoom = fit * CAMERA_ZOOM;
+    if (document.body.classList.contains("touch")) zoom = Math.max(zoom, vh / PHONE_VIEW_H);
+    cam.setZoom(zoom);
     // Bounds: the level itself, or, when the view is bigger than the level on an axis,
     // a box centered on the level so it sits in the middle instead of top-left.
     const dw = vw / cam.zoom, dh = vh / cam.zoom;
@@ -355,6 +405,10 @@ class PlayScene extends Phaser.Scene {
     this.skin.setScale(sx, sy);
     this.tweens.add({ targets: this.skin, scaleX: 1, scaleY: 1, duration: 180, ease: "Quad.Out" });
   }
+
+  // Touch buttons call these (same path as the keyboard).
+  pressJump() { if (this.state === "play") { this.jumpPressedAt = this.time.now; this.jumpHeld = true; } }
+  releaseJump() { this.jumpHeld = false; this.cutJump(); }
 
   // Variable jump height: letting go early shortens the jump.
   cutJump() {
@@ -378,8 +432,8 @@ class PlayScene extends Phaser.Scene {
 
     const b = this.player.body;
     const now = this.time.now;
-    const left = this.cursors.left.isDown || this.keys.A.isDown;
-    const right = this.cursors.right.isDown || this.keys.D.isDown;
+    const left = this.cursors.left.isDown || this.keys.A.isDown || touch.left;
+    const right = this.cursors.right.isDown || this.keys.D.isDown || touch.right;
     const onGround = b.blocked.down || b.touching.down;
 
     if (left && !right) { b.setVelocityX(-RUN_SPEED * this.ax); this.facing = -1; }
@@ -498,10 +552,21 @@ function hideMsg() { $("msg").classList.remove("show"); }
 function updateScore(scene) { $("score").textContent = `Coins ${scene.coins}/${scene.totalCoins}`; }
 function restartScene() { if (game) game.scene.getScene("play").scene.restart(); }
 
-function startLevel(level, name) {
+// Show the paper the level came from: the thumbnail saved by index.html, or photos/<name>.jpg for repo levels.
+function showThumb(src) {
+  const t = $("thumb");
+  t.classList.remove("show", "big");
+  if (!src) { t.removeAttribute("src"); return; }
+  t.onload = () => t.classList.add("show");
+  t.onerror = () => t.classList.remove("show");
+  t.src = src;
+}
+
+function startLevel(level, name, thumbSrc) {
   if (!level || !Array.isArray(level.objects)) { showMsg("Invalid level JSON", "expected { theme, objects: [...] }"); return; }
   currentLevel = level;
   $("theme").textContent = (name ? name + " · " : "") + (level.theme || "");
+  showThumb(thumbSrc);
   try { localStorage.setItem("playlab.level", JSON.stringify(level)); } catch {}
   if (!game) {
     const parent = $("game");
@@ -520,12 +585,25 @@ function startLevel(level, name) {
   }
 }
 
+const stored = () => { try { const s = localStorage.getItem("playlab.level"); return s ? JSON.parse(s) : null; } catch { return null; } };
+const storedPhoto = () => { try { return localStorage.getItem("playlab.photo") || null; } catch { return null; } };
+const STORAGE_OPTION = "__storage";
+
+function startStoredLevel() {
+  const lvl = stored();
+  if (!lvl) { showMsg("No scanned level yet", "go back and take a photo"); return; }
+  startLevel(lvl, "your drawing", storedPhoto());
+  const sel = $("levelSelect");
+  if ([...sel.options].some((o) => o.value === STORAGE_OPTION)) sel.value = STORAGE_OPTION;
+}
+
 async function loadLevelUrl(url) {
+  if (url === STORAGE_OPTION) return startStoredLevel();
   try {
     const r = await fetch(url, { cache: "no-store" });
     if (!r.ok) throw new Error(r.status + " " + r.statusText);
     const name = url.split("/").pop().replace(/\.json$/, "");
-    startLevel(await r.json(), name);
+    startLevel(await r.json(), name, url.startsWith("levels/") ? `photos/${name}.jpg` : null);
     const sel = $("levelSelect");
     if ([...sel.options].some((o) => o.value === url)) sel.value = url;
   } catch (err) {
@@ -536,6 +614,11 @@ async function loadLevelUrl(url) {
 async function populateIndex() {
   const sel = $("levelSelect");
   sel.innerHTML = "";
+  if (stored()) {
+    const o = document.createElement("option");
+    o.value = STORAGE_OPTION; o.textContent = "✎ your drawing";
+    sel.appendChild(o);
+  }
   try {
     const r = await fetch("levels/index.json", { cache: "no-store" });
     if (!r.ok) throw new Error(r.status);
@@ -548,6 +631,7 @@ async function populateIndex() {
     }
     if (!levels.length) throw new Error("empty");
   } catch {
+    if (sel.options.length) return;
     const o = document.createElement("option");
     o.textContent = "(no levels/index.json, use the file picker)";
     o.disabled = true; o.selected = true;
@@ -555,8 +639,26 @@ async function populateIndex() {
   }
 }
 
+// On-screen buttons. Each tracks its own pointers so two thumbs work at once.
+function bindTouchButton(id, onDown, onUp) {
+  const el = $(id);
+  const active = new Set();
+  el.addEventListener("pointerdown", (e) => { e.preventDefault(); active.add(e.pointerId); el.classList.add("pressed"); SFX.ensure(); onDown(); });
+  const release = (e) => { if (!active.delete(e.pointerId)) return; if (!active.size) { el.classList.remove("pressed"); onUp(); } };
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) el.addEventListener(ev, release);
+  for (const ev of ["pointerup", "pointercancel"]) window.addEventListener(ev, release);
+  el.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+const playScene = () => (game ? game.scene.getScene("play") : null);
+
 async function init() {
   const params = new URLSearchParams(location.search);
+  const isTouch = params.get("touch") === "1" || (window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  if (isTouch) document.body.classList.add("touch");
+  bindTouchButton("tLeft", () => { touch.left = true; }, () => { touch.left = false; });
+  bindTouchButton("tRight", () => { touch.right = true; }, () => { touch.right = false; });
+  bindTouchButton("tJump", () => playScene()?.pressJump(), () => playScene()?.releaseJump());
+  $("thumb").addEventListener("click", (e) => e.target.classList.toggle("big"));
   await populateIndex();
 
   $("levelSelect").addEventListener("change", (e) => { e.target.blur(); loadLevelUrl(e.target.value); });
@@ -574,14 +676,11 @@ async function init() {
   window.addEventListener("pointerdown", () => SFX.ensure());
   $("msg").addEventListener("click", () => { if (game) { const s = game.scene.getScene("play"); if (s.state !== "play") s.scene.restart(); } });
 
-  const stored = () => { try { const s = localStorage.getItem("playlab.level"); return s ? JSON.parse(s) : null; } catch { return null; } };
-
-  if (params.get("source") === "storage" && stored()) return startLevel(stored(), "from viewer");
+  if (params.get("source") === "storage" && stored()) return startStoredLevel();
   if (params.get("level")) return loadLevelUrl(params.get("level"));
   const sel = $("levelSelect");
   if (sel.value) return loadLevelUrl(sel.value);
-  if (stored()) return startLevel(stored(), "last level");
-  showMsg("No levels found", "run node scan.mjs on a photo, or pick a JSON file above");
+  showMsg("No levels found", "go back and take a photo of a drawing");
 }
 
 init();

@@ -4,12 +4,14 @@
 //   node scan.mjs photos/level1.jpg                 -> levels/level1.json
 //   node scan.mjs photos/level1.jpg --out x.json    -> custom output path
 //   node scan.mjs --mock                            -> levels/mock.json, no API call
+//   node scan.mjs --index                           -> only rebuild levels/index.json
 //
 // Reads MODEL_API_KEY (and optional MODEL_API_URL, MODEL_NAME) from .env.
+// Every run also rewrites levels/index.json, which game.html uses for its dropdown.
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { scanLevelFromImage, normalizeLevel, mimeFromName, DEFAULT_API_URL, DEFAULT_MODEL } from "./lib/scan-level.mjs";
+import { scanLevelFromImage, normalizeLevel, mimeFromName, imageSize, DEFAULT_API_URL, DEFAULT_MODEL } from "./lib/scan-level.mjs";
 
 try { process.loadEnvFile(".env"); } catch { /* no .env yet; handled below */ }
 
@@ -19,8 +21,13 @@ const mock = args.includes("--mock");
 const outFlag = flag("--out");
 const imagePath = args.find((a) => !a.startsWith("--") && a !== outFlag);
 
+if (args.includes("--index")) {
+  await writeIndex();
+  process.exit(0);
+}
+
 if (!mock && !imagePath) {
-  console.error("Usage: node scan.mjs <photo.jpg> [--out levels/name.json]   or   node scan.mjs --mock");
+  console.error("Usage: node scan.mjs <photo.jpg> [--out levels/name.json]   or   node scan.mjs --mock   or   node scan.mjs --index");
   process.exit(1);
 }
 
@@ -51,10 +58,19 @@ async function main() {
     const mb = bytes.length / 1e6;
     if (mb > 4) console.warn(`Warning: ${mb.toFixed(1)} MB image. If the API rejects it, resize to ~1500px wide first.`);
 
-    console.log(`Scanning ${imagePath} (${mb.toFixed(2)} MB) with ${model} ...`);
+    // Photo aspect ratio keeps the level from being squashed into a square in the game.
+    const dims = imageSize(bytes);
+    let aspect;
+    if (dims) {
+      const rotated = dims.orientation >= 5;
+      aspect = rotated ? dims.height / dims.width : dims.width / dims.height;
+      if (rotated) console.warn("Warning: this photo has EXIF rotation. If the boxes look misaligned in viewer.html, re-save the photo upright.");
+    }
+
+    console.log(`Scanning ${imagePath} (${mb.toFixed(2)} MB${dims ? `, ${dims.width}x${dims.height}` : ""}) with ${model} ...`);
     const t0 = Date.now();
     try {
-      ({ level, raw, usage } = await scanLevelFromImage({ base64: bytes.toString("base64"), mime: mimeFromName(imagePath), apiKey, apiUrl, model }));
+      ({ level, raw, usage } = await scanLevelFromImage({ base64: bytes.toString("base64"), mime: mimeFromName(imagePath), apiKey, apiUrl, model, aspect }));
     } catch (err) {
       if (err.raw) {
         const rawPath = outPath.replace(/\.json$/, "") + ".raw.txt";
@@ -83,8 +99,27 @@ async function main() {
   for (const o of level.objects) {
     console.log(`  ${o.type.padEnd(16)} ${o.label.padEnd(20)} x=${String(o.x).padStart(4)} y=${String(o.y).padStart(4)} w=${String(o.w).padStart(4)} h=${String(o.h).padStart(4)}`);
   }
-  console.log(`\nSaved ${outPath}`);
-  console.log("Next: open viewer.html, pick the photo + this JSON to check the boxes.");
+  console.log(`\nSaved ${outPath}${level.aspect ? ` (aspect ${level.aspect})` : ""}`);
+  await writeIndex();
+  console.log("Next: node serve.mjs, then open http://localhost:3000/game.html to play it, or viewer.html to check the boxes.");
+}
+
+/** levels/index.json lists every level for the dropdown in game.html (newest first). */
+async function writeIndex() {
+  const dir = "levels";
+  await fs.mkdir(dir, { recursive: true });
+  const files = (await fs.readdir(dir)).filter((f) => f.endsWith(".json") && f !== "index.json");
+  const entries = [];
+  for (const f of files) {
+    try {
+      const [text, st] = await Promise.all([fs.readFile(path.join(dir, f), "utf8"), fs.stat(path.join(dir, f))]);
+      const lvl = JSON.parse(text);
+      entries.push({ file: f, theme: lvl.theme ?? "", objects: Array.isArray(lvl.objects) ? lvl.objects.length : 0, mtime: st.mtimeMs });
+    } catch { /* skip unreadable files */ }
+  }
+  entries.sort((a, b) => b.mtime - a.mtime);
+  await fs.writeFile(path.join(dir, "index.json"), JSON.stringify({ levels: entries.map(({ mtime, ...e }) => e) }, null, 2));
+  console.log(`Updated levels/index.json (${entries.length} level${entries.length === 1 ? "" : "s"})`);
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });

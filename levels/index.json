@@ -1,0 +1,14 @@
+{
+  "levels": [
+    {
+      "file": "level1.json",
+      "theme": "simple notebook sketch",
+      "objects": 6
+    },
+    {
+      "file": "sample.json",
+      "theme": "sample meadow (hand-made)",
+      "objects": 18
+    }
+  ]
+}

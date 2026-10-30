@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>PlayLab Game</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js"></script>
+<style>
+  html, body { margin:0; height:100%; overflow:hidden; background:#111; font-family: system-ui, sans-serif; color:#eee; }
+  #hud { position:fixed; top:0; left:0; right:0; height:44px; box-sizing:border-box; display:flex; gap:12px; align-items:center; padding:0 12px; background:rgba(0,0,0,.6); font-size:14px; z-index:2; }
+  #hud label { display:flex; gap:6px; align-items:center; white-space:nowrap; }
+  #hud select { max-width:260px; }
+  #hud a { color:#9cf; }
+  #theme { color:#bbb; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #score { margin-left:auto; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  #game { position:fixed; top:44px; left:0; right:0; bottom:0; }
+  #msg { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:3; }
+  #msg.show { display:flex; }
+  #msg div { background:rgba(0,0,0,.78); color:#fff; padding:22px 34px; border-radius:14px; text-align:center; font-size:30px; font-weight:700; cursor:pointer; }
+  #msg small { display:block; font-size:15px; font-weight:400; margin-top:8px; color:#ccc; }
+  #hint { position:fixed; bottom:8px; left:12px; font-size:12px; color:rgba(0,0,0,.55); z-index:2; pointer-events:none; }
+  button { font-size:13px; padding:4px 10px; border-radius:6px; border:0; background:#2b6cff; color:#fff; cursor:pointer; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <label>Level <select id="levelSelect"></select></label>
+  <label>or file <input type="file" id="levelFile" accept=".json,application/json"></label>
+  <button id="restartBtn">Restart (R)</button>
+  <a href="viewer.html" target="_blank">viewer</a>
+  <span id="theme"></span>
+  <span id="score">Coins 0/0</span>
+</div>
+<div id="game"></div>
+<div id="msg"><div id="msgText"></div></div>
+<div id="hint">Move: arrows / A D &nbsp;·&nbsp; Jump: space / up / W &nbsp;·&nbsp; Stomp enemies from above &nbsp;·&nbsp; R restarts</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+// World units = the level grid (1000 tall; width = 1000 * photo aspect ratio).
+const COLORS = {
+  start: 0x4ade80, goal: 0xfacc15, platform: 0x8b5a2b, moving_platform: 0x60a5fa,
+  coin: 0xfbbf24, enemy: 0xef4444, spike: 0x9ca3af, decoration: 0xa78bfa, player: 0x22c55e,
+};
+const PLAYER_W = 36, PLAYER_H = 54;
+const RUN_SPEED = 330;      // horizontal units/s (scaled by aspect)
+const JUMP_VEL = 1100;      // with GRAVITY 2400 -> ~250 units jump height
+const GRAVITY = 2400;
+const ENEMY_SPEED = 70;
+const MOVER_SPEED = 90, MOVER_RANGE = 150;
+
+// Background palette picked from the AI theme text.
+const PALETTES = [
+  { re: /notebook|paper|sketch|pencil|ink|doodle|drawing|hand/, sky: 0xd6d0c2, paper: 0xfbf8ef, lines: 0xc9d4e2 },
+  { re: /desert|sand|cactus|canyon|dune/, sky: 0xf0b86e, paper: 0xfde7bd },
+  { re: /night|space|moon|star|dark|galaxy/, sky: 0x0f172a, paper: 0x1e293b },
+  { re: /snow|ice|winter|frozen/, sky: 0xaedcff, paper: 0xf1f8ff },
+  { re: /lava|fire|volcano|magma/, sky: 0x3b0a0a, paper: 0x5a1a1a },
+  { re: /forest|jungle|meadow|grass|garden|tree/, sky: 0x86c98a, paper: 0xdcf4cb },
+];
+const DEFAULT_PAL = { sky: 0x7fc8ec, paper: 0xc6e9f8 };
+
+const $ = (id) => document.getElementById(id);
+const hex = (n) => "#" + n.toString(16).padStart(6, "0");
+let currentLevel = null;   // level JSON currently loaded
+let game = null;
+
+// ---------------------------------------------------------------------------
+// Helpers: find the platform under a point so things can stand on it
+// ---------------------------------------------------------------------------
+function groundUnder(solids, x, feetY, tol) {
+  let best = null;
+  for (const s of solids) {
+    if (x < s.left - 5 || x > s.right + 5) continue;
+    const d = Math.abs(s.top - feetY);
+    if (d <= tol && (!best || d < best.d)) best = { ...s, d };
+  }
+  return best;
+}
+function snapToGround(solids, x, feetY, tol) {
+  const g = groundUnder(solids, x, feetY, tol);
+  return g ? g.top : feetY;
+}
+
+// ---------------------------------------------------------------------------
+// The scene
+// ---------------------------------------------------------------------------
+class PlayScene extends Phaser.Scene {
+  constructor() { super("play"); }
+
+  create() {
+    const L = currentLevel;
+    if (!L) { showMsg("No level loaded", "Pick one in the top bar"); return; }
+
+    this.ax = Number.isFinite(L.aspect) && L.aspect > 0.4 && L.aspect < 3 ? L.aspect : 1;
+    this.W = Math.round(1000 * this.ax);
+    this.H = 1000;
+    this.state = "play";
+    this.coins = 0; this.totalCoins = 0; this.facing = 1;
+
+    // Background
+    const pal = PALETTES.find((p) => p.re.test((L.theme || "").toLowerCase())) || DEFAULT_PAL;
+    this.cameras.main.setBackgroundColor(pal.sky);
+    document.body.style.background = hex(pal.sky);
+    this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, pal.paper).setDepth(-10);
+    if (pal.lines) {
+      const g = this.add.graphics().setDepth(-9);
+      g.lineStyle(1, pal.lines, 0.7);
+      for (let y = 50; y < this.H; y += 50) g.lineBetween(0, y, this.W, y);
+    }
+
+    // Physics world: walls left/right/top, open at the bottom so you can fall off.
+    this.physics.world.setBounds(0, 0, this.W, this.H);
+    this.physics.world.setBoundsCollision(true, true, true, false);
+
+    this.platforms = this.physics.add.staticGroup();
+    this.movers = this.physics.add.group();
+    this.coinGroup = this.physics.add.staticGroup();
+    this.enemies = this.physics.add.group();
+    this.hazards = this.physics.add.staticGroup();
+    this.goalZone = null;
+    let startBox = null;
+    const solids = [];
+
+    const toWorld = (o) => {
+      const X = o.x * this.ax, Wd = o.w * this.ax;
+      return { X, Y: o.y, Wd, Ht: o.h, cx: X + Wd / 2, cy: o.y + o.h / 2 };
+    };
+
+    // Pass 1: solid platforms, so everything else can snap onto them.
+    for (const o of L.objects) {
+      if (o.type !== "platform") continue;
+      const { X, Y, Wd, Ht, cx, cy } = toWorld(o);
+      const r = this.add.rectangle(cx, cy, Wd, Ht, COLORS.platform).setStrokeStyle(3, 0x4a2f12);
+      this.platforms.add(r);
+      solids.push({ left: X, right: X + Wd, top: Y, bottom: Y + Ht });
+    }
+
+    // Pass 2: everything else.
+    for (const o of L.objects) {
+      const { X, Y, Wd, Ht, cx, cy } = toWorld(o);
+      switch (o.type) {
+        case "platform": break;
+
+        case "moving_platform": {
+          const r = this.add.rectangle(cx, cy, Wd, Ht, COLORS.moving_platform).setStrokeStyle(3, 0x1d4ed8);
+          this.movers.add(r);
+          r.body.setImmovable(true);
+          r.body.allowGravity = false;
+          r.body.friction.x = 0;              // riders are carried manually in update()
+          r.setData("lastX", r.body.x);
+          const range = Math.min(MOVER_RANGE * this.ax, cx - Wd / 2, this.W - cx - Wd / 2);
+          r.setData("minX", cx - range); r.setData("maxX", cx + range);
+          if (range > 10) r.body.setVelocityX(MOVER_SPEED * this.ax);
+          break;
+        }
+
+        case "coin": {
+          const rad = Math.max(8, (Math.min(Wd, Ht) / 2) * 0.8);
+          const c = this.add.circle(cx, cy, rad, COLORS.coin).setStrokeStyle(3, 0xb45309);
+          this.coinGroup.add(c);
+          this.totalCoins++;
+          break;
+        }
+
+        case "enemy": {
+          const ew = Math.max(24, Math.min(Wd, 70)), eh = Math.max(24, Math.min(Ht, 70));
+          const feet = snapToGround(solids, cx, Y + Ht, 80);
+          const e = this.add.rectangle(cx, feet - eh / 2 - 1, ew, eh, COLORS.enemy).setStrokeStyle(3, 0x7f1d1d).setDepth(4);
+          this.enemies.add(e);
+          e.body.setCollideWorldBounds(true);
+          const ground = groundUnder(solids, cx, feet, 5);
+          const pad = ew / 2 + 2;
+          const patrol = ground
+            ? { left: ground.left + pad, right: ground.right - pad }
+            : { left: cx - 120 * this.ax, right: cx + 120 * this.ax };
+          e.setData("patrol", patrol);
+          e.setData("dir", -1);
+          e.setData("eyes", this.makeEyes(6));
+          break;
+        }
+
+        case "spike": {
+          const g = this.add.graphics();
+          g.fillStyle(COLORS.spike); g.lineStyle(2, 0x4b5563);
+          const teeth = Math.max(1, Math.round(Wd / Math.max(12, Ht * 0.9)));
+          const tw = Wd / teeth;
+          for (let i = 0; i < teeth; i++) {
+            const x0 = X + i * tw;
+            g.fillTriangle(x0, Y + Ht, x0 + tw / 2, Y, x0 + tw, Y + Ht);
+            g.strokeTriangle(x0, Y + Ht, x0 + tw / 2, Y, x0 + tw, Y + Ht);
+          }
+          const z = this.add.zone(cx, Y + Ht * 0.7, Wd * 0.9, Ht * 0.6);
+          this.hazards.add(z);
+          break;
+        }
+
+        case "goal": {
+          const g = this.add.graphics();
+          const poleX = X + Wd * 0.25;
+          g.fillStyle(0x6b7280); g.fillRect(poleX - 3, Y, 6, Ht);
+          g.fillStyle(COLORS.goal); g.fillTriangle(poleX + 3, Y, X + Wd, Y + Ht * 0.2, poleX + 3, Y + Ht * 0.4);
+          g.lineStyle(2, 0x92400e); g.strokeTriangle(poleX + 3, Y, X + Wd, Y + Ht * 0.2, poleX + 3, Y + Ht * 0.4);
+          const z = this.add.zone(cx, cy, Wd, Ht);
+          this.physics.add.existing(z, true);
+          this.goalZone = z;
+          break;
+        }
+
+        case "start": {
+          startBox = { X, Y, Wd, Ht, cx };
+          this.add.rectangle(cx, cy, Wd, Ht).setStrokeStyle(2, COLORS.start, 0.5).setDepth(-5);
+          break;
+        }
+
+        default: { // decoration
+          this.add.rectangle(cx, cy, Wd, Ht, COLORS.decoration, 0.12).setStrokeStyle(2, COLORS.decoration, 0.5).setDepth(-5);
+          this.add.text(cx, cy, o.label || "", { fontFamily: "system-ui, sans-serif", fontSize: "20px", color: "#7c3aed" })
+            .setOrigin(0.5).setAlpha(0.8).setDepth(-5);
+        }
+      }
+    }
+
+    // Player
+    let px = 60, feetY = this.H - 40;
+    if (startBox) {
+      px = startBox.cx;
+      feetY = snapToGround(solids, px, startBox.Y + startBox.Ht, 80);
+    } else if (solids.length) {
+      const g = solids.reduce((a, b) => (b.left < a.left ? b : a));
+      px = g.left + 40; feetY = g.top;
+    }
+    this.player = this.add.rectangle(px, feetY - PLAYER_H / 2 - 1, PLAYER_W, PLAYER_H, COLORS.player)
+      .setStrokeStyle(3, 0x14532d).setDepth(5);
+    this.physics.add.existing(this.player);
+    this.player.body.setCollideWorldBounds(true);
+    this.playerEyes = this.makeEyes(7);
+
+    // Collisions
+    this.physics.add.collider(this.player, this.platforms);
+    this.physics.add.collider(this.player, this.movers);
+    this.physics.add.collider(this.enemies, this.platforms);
+    this.physics.add.collider(this.enemies, this.movers);
+    this.physics.add.overlap(this.player, this.coinGroup, (p, c) => this.collectCoin(c));
+    this.physics.add.overlap(this.player, this.enemies, (p, e) => this.hitEnemy(e));
+    this.physics.add.overlap(this.player, this.hazards, () => this.die("spikes"));
+    if (this.goalZone) this.physics.add.overlap(this.player, this.goalZone, () => this.win());
+
+    // Input
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.keys = this.input.keyboard.addKeys("W,A,S,D,SPACE");
+    this.input.keyboard.on("keydown-R", () => this.scene.restart());
+
+    // Camera
+    this.layout();
+    this.scale.on("resize", this.layout, this);
+    this.events.once("shutdown", () => this.scale.off("resize", this.layout, this));
+
+    updateScore(this);
+    hideMsg();
+  }
+
+  // Fit the whole level on screen.
+  layout() {
+    const vw = this.scale.width, vh = this.scale.height;
+    if (!vw || !vh || !this.W) return;
+    const cam = this.cameras.main;
+    cam.setZoom(Math.min(vw / this.W, vh / this.H));
+    cam.centerOn(this.W / 2, this.H / 2);
+  }
+
+  makeEyes(size) {
+    const mk = (s, c) => this.add.rectangle(0, 0, s, s, c).setDepth(7);
+    return [mk(size, 0xffffff), mk(size, 0xffffff), mk(size * 0.5, 0x111111), mk(size * 0.5, 0x111111)];
+  }
+  placeEyes(eyes, x, y, facing, gap) {
+    eyes[0].setPosition(x + facing * 3 - gap, y);
+    eyes[1].setPosition(x + facing * 3 + gap, y);
+    eyes[2].setPosition(x + facing * 4.5 - gap, y);
+    eyes[3].setPosition(x + facing * 4.5 + gap, y);
+  }
+
+  update() {
+    if (this.state !== "play") return;
+
+    const b = this.player.body;
+    const left = this.cursors.left.isDown || this.keys.A.isDown;
+    const right = this.cursors.right.isDown || this.keys.D.isDown;
+    const onGround = b.blocked.down || b.touching.down;
+
+    if (left && !right) { b.setVelocityX(-RUN_SPEED * this.ax); this.facing = -1; }
+    else if (right && !left) { b.setVelocityX(RUN_SPEED * this.ax); this.facing = 1; }
+    else b.setVelocityX(0);
+
+    const jump = Phaser.Input.Keyboard.JustDown(this.cursors.up)
+      || Phaser.Input.Keyboard.JustDown(this.keys.W)
+      || Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
+    if (jump && onGround) b.setVelocityY(-JUMP_VEL);
+
+    this.placeEyes(this.playerEyes, this.player.x, this.player.y - PLAYER_H / 2 + 14, this.facing, 7);
+
+    // Enemies patrol their platform.
+    for (const e of this.enemies.getChildren()) {
+      if (!e.active || !e.body.enable) continue;
+      const p = e.getData("patrol");
+      let dir = e.getData("dir");
+      if (p.right - p.left < 10) { e.body.setVelocityX(0); }
+      else {
+        if ((dir > 0 && (e.x >= p.right || e.body.blocked.right)) || (dir < 0 && (e.x <= p.left || e.body.blocked.left))) {
+          dir = -dir; e.setData("dir", dir);
+        }
+        e.body.setVelocityX(dir * ENEMY_SPEED * this.ax);
+      }
+      this.placeEyes(e.getData("eyes"), e.x, e.y - e.height / 2 + 10, dir, 6);
+    }
+
+    // Moving platforms: bounce between their bounds and carry whoever stands on them.
+    const riders = [this.player, ...this.enemies.getChildren()];
+    for (const m of this.movers.getChildren()) {
+      const mb = m.body;
+      const dx = mb.x - m.getData("lastX");
+      m.setData("lastX", mb.x);
+      if (dx !== 0) {
+        for (const r of riders) {
+          const rb = r.body;
+          if (!r.active || !rb.enable || !rb.touching.down) continue;
+          if (Math.abs(rb.bottom - mb.top) <= 3 && rb.right > mb.left && rb.left < mb.right) rb.x += dx;
+        }
+      }
+      if (mb.velocity.x > 0 && m.x >= m.getData("maxX")) mb.setVelocityX(-MOVER_SPEED * this.ax);
+      else if (mb.velocity.x < 0 && m.x <= m.getData("minX")) mb.setVelocityX(MOVER_SPEED * this.ax);
+    }
+
+    if (this.player.y - PLAYER_H / 2 > this.H + 60) this.die("fell");
+  }
+
+  collectCoin(c) {
+    if (this.state !== "play") return;
+    c.destroy();
+    this.coins++;
+    updateScore(this);
+  }
+
+  hitEnemy(e) {
+    if (this.state !== "play" || !e.active || !e.body.enable) return;
+    const pb = this.player.body, eb = e.body;
+    const stomp = pb.velocity.y > 0 && pb.bottom <= eb.top + 18;
+    if (!stomp) { this.die("enemy"); return; }
+    // Squash it and bounce.
+    eb.enable = false;
+    for (const g of e.getData("eyes")) g.destroy();
+    this.tweens.add({ targets: e, scaleY: 0.15, y: eb.bottom - 4, duration: 120, onComplete: () => e.destroy() });
+    pb.setVelocityY(-JUMP_VEL * 0.6);
+  }
+
+  die(reason) {
+    if (this.state !== "play") return;
+    this.state = "dead";
+    this.player.setFillStyle(0xef4444);
+    this.physics.pause();
+    showMsg(reason === "fell" ? "Fell off!" : "Ouch!", "restarting...");
+    this.time.delayedCall(800, () => this.scene.restart());
+  }
+
+  win() {
+    if (this.state !== "play") return;
+    this.state = "won";
+    this.player.body.setVelocity(0, 0);
+    this.physics.pause();
+    showMsg("Level complete!", `Coins ${this.coins}/${this.totalCoins} · press R or tap to play again`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DOM: HUD, messages, level picking
+// ---------------------------------------------------------------------------
+function showMsg(title, sub) { $("msgText").innerHTML = title + (sub ? `<small>${sub}</small>` : ""); $("msg").classList.add("show"); }
+function hideMsg() { $("msg").classList.remove("show"); }
+function updateScore(scene) { $("score").textContent = `Coins ${scene.coins}/${scene.totalCoins}`; }
+function restartScene() { if (game) game.scene.getScene("play").scene.restart(); }
+
+function startLevel(level, name) {
+  if (!level || !Array.isArray(level.objects)) { showMsg("Invalid level JSON", "expected { theme, objects: [...] }"); return; }
+  currentLevel = level;
+  $("theme").textContent = (name ? name + " · " : "") + (level.theme || "");
+  try { localStorage.setItem("playlab.level", JSON.stringify(level)); } catch {}
+  if (!game) {
+    const parent = $("game");
+    game = new Phaser.Game({
+      type: Phaser.AUTO,
+      parent: "game",
+      width: parent.clientWidth || 800,
+      height: parent.clientHeight || 600,
+      backgroundColor: "#7fc8ec",
+      scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.NO_CENTER },
+      physics: { default: "arcade", arcade: { gravity: { y: GRAVITY }, debug: false } },
+      scene: [PlayScene],
+    });
+  } else {
+    restartScene();
+  }
+}
+
+async function loadLevelUrl(url) {
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status + " " + r.statusText);
+    const name = url.split("/").pop().replace(/\.json$/, "");
+    startLevel(await r.json(), name);
+    const sel = $("levelSelect");
+    if ([...sel.options].some((o) => o.value === url)) sel.value = url;
+  } catch (err) {
+    showMsg("Could not load level", `${url}: ${err.message}`);
+  }
+}
+
+async function populateIndex() {
+  const sel = $("levelSelect");
+  sel.innerHTML = "";
+  try {
+    const r = await fetch("levels/index.json", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    const { levels } = await r.json();
+    for (const l of levels) {
+      const o = document.createElement("option");
+      o.value = "levels/" + l.file;
+      o.textContent = `${l.file.replace(/\.json$/, "")} · ${l.theme || ""} (${l.objects})`;
+      sel.appendChild(o);
+    }
+    if (!levels.length) throw new Error("empty");
+  } catch {
+    const o = document.createElement("option");
+    o.textContent = "(no levels/index.json, use the file picker)";
+    o.disabled = true; o.selected = true;
+    sel.appendChild(o);
+  }
+}
+
+async function init() {
+  const params = new URLSearchParams(location.search);
+  await populateIndex();
+
+  $("levelSelect").addEventListener("change", (e) => { e.target.blur(); loadLevelUrl(e.target.value); });
+  $("levelFile").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    e.target.blur();
+    try { startLevel(JSON.parse(await f.text()), f.name.replace(/\.json$/, "")); }
+    catch (err) { showMsg("Invalid JSON file", err.message); }
+  });
+  $("restartBtn").addEventListener("click", (e) => { e.target.blur(); restartScene(); });
+  $("msg").addEventListener("click", () => { if (game) { const s = game.scene.getScene("play"); if (s.state !== "play") s.scene.restart(); } });
+
+  const stored = () => { try { const s = localStorage.getItem("playlab.level"); return s ? JSON.parse(s) : null; } catch { return null; } };
+
+  if (params.get("source") === "storage" && stored()) return startLevel(stored(), "from viewer");
+  if (params.get("level")) return loadLevelUrl(params.get("level"));
+  const sel = $("levelSelect");
+  if (sel.value) return loadLevelUrl(sel.value);
+  if (stored()) return startLevel(stored(), "last level");
+  showMsg("No levels found", "run node scan.mjs on a photo, or pick a JSON file above");
+}
+
+init();
+</script>
+</body>
+</html>

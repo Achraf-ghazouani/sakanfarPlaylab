@@ -1,5 +1,6 @@
 {
   "theme": "simple notebook sketch",
+  "aspect": 1.333,
   "objects": [
     {
       "type": "start",

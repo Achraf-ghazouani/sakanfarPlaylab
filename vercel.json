@@ -4,8 +4,8 @@
     "api/scan.js": { "maxDuration": 60 },
     "api/fix.js": { "maxDuration": 120 }
   },
-  "rewrites": [
-    { "source": "/lib/(.*)", "destination": "/_not_served" }
+  "redirects": [
+    { "source": "/lib/(.*)", "destination": "/", "permanent": false }
   ],
   "headers": [
     { "source": "/api/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-store" }] },

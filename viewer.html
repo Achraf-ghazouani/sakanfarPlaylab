@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlayLab Viewer</title>
+<style>
+  :root { --bg:#111; --fg:#eee; --muted:#999; --panel:#1c1c1c; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:12px 16px; display:flex; gap:12px; flex-wrap:wrap; align-items:center; background:var(--panel); }
+  header label { display:flex; gap:6px; align-items:center; font-size:14px; }
+  main { display:grid; grid-template-columns: 1fr 1fr; gap:16px; padding:16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  section { background:var(--panel); border-radius:8px; padding:12px; }
+  h2 { margin:0 0 8px; font-size:14px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+  canvas { width:100%; height:auto; background:#000; border-radius:4px; display:block; }
+  #legend { display:flex; flex-wrap:wrap; gap:8px 14px; font-size:13px; margin-top:8px; }
+  #legend span::before { content:""; display:inline-block; width:12px; height:12px; border-radius:2px; margin-right:5px; vertical-align:-1px; background:var(--c); }
+  #list { font-family: ui-monospace, monospace; font-size:12px; white-space:pre; overflow:auto; max-height:300px; margin-top:8px; color:#ccc; }
+  button { background:#2b6cff; color:#fff; border:0; border-radius:6px; padding:8px 12px; font-size:14px; cursor:pointer; }
+  button:hover { background:#1f5be0; }
+  .hint { color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <label>Photo <input type="file" id="photo" accept="image/*"></label>
+  <label>Level JSON <input type="file" id="json" accept="application/json,.json"></label>
+  <button id="play">Play in game.html</button>
+  <span class="hint" id="status">Pick the photo and the JSON produced by scan.mjs.</span>
+</header>
+<main>
+  <section>
+    <h2>AI boxes on photo</h2>
+    <canvas id="photoCanvas" width="1000" height="1000"></canvas>
+    <div id="legend"></div>
+  </section>
+  <section>
+    <h2>Level preview (1000 x 1000 grid)</h2>
+    <canvas id="levelCanvas" width="1000" height="1000"></canvas>
+    <div id="list"></div>
+  </section>
+</main>
+<script>
+// Colors per object type — keep in sync with game.html.
+const COLORS = {
+  start: "#4ade80", goal: "#facc15", platform: "#8b5a2b", moving_platform: "#60a5fa",
+  coin: "#fbbf24", enemy: "#ef4444", spike: "#a3a3a3", decoration: "#a78bfa",
+};
+
+let image = null;   // HTMLImageElement
+let level = null;   // parsed level JSON
+
+const $ = (id) => document.getElementById(id);
+const photoCanvas = $("photoCanvas"), levelCanvas = $("levelCanvas");
+
+// Legend
+$("legend").innerHTML = Object.entries(COLORS)
+  .map(([t, c]) => `<span style="--c:${c}">${t}</span>`).join("");
+
+$("photo").addEventListener("change", async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  image = await loadImage(URL.createObjectURL(file));
+  draw();
+});
+
+$("json").addEventListener("change", async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  try {
+    level = JSON.parse(await file.text());
+    localStorage.setItem("playlab.level", JSON.stringify(level));
+    $("status").textContent = `Theme: ${level.theme || "(none)"} — ${level.objects?.length ?? 0} objects`;
+  } catch (err) {
+    $("status").textContent = "Invalid JSON: " + err.message; level = null;
+  }
+  draw();
+});
+
+$("play").addEventListener("click", () => {
+  if (!level) { $("status").textContent = "Load a level JSON first."; return; }
+  localStorage.setItem("playlab.level", JSON.stringify(level));
+  window.open("game.html?source=storage", "_blank");
+});
+
+function loadImage(src) {
+  return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+}
+
+function draw() {
+  // --- photo with boxes ---
+  const pc = photoCanvas.getContext("2d");
+  if (image) {
+    photoCanvas.width = image.naturalWidth; photoCanvas.height = image.naturalHeight;
+    pc.drawImage(image, 0, 0);
+  } else {
+    pc.fillStyle = "#000"; pc.fillRect(0, 0, photoCanvas.width, photoCanvas.height);
+  }
+  if (level?.objects) {
+    const sx = photoCanvas.width / 1000, sy = photoCanvas.height / 1000;
+    const lw = Math.max(2, photoCanvas.width / 300);
+    pc.font = `${Math.max(12, photoCanvas.width / 60)}px system-ui`;
+    for (const o of level.objects) {
+      const c = COLORS[o.type] || "#fff";
+      pc.strokeStyle = c; pc.lineWidth = lw;
+      pc.strokeRect(o.x * sx, o.y * sy, o.w * sx, o.h * sy);
+      const text = `${o.type}${o.label ? " · " + o.label : ""}`;
+      const tw = pc.measureText(text).width + 8, th = parseInt(pc.font) + 6;
+      pc.fillStyle = c; pc.fillRect(o.x * sx, o.y * sy - th, tw, th);
+      pc.fillStyle = "#000"; pc.fillText(text, o.x * sx + 4, o.y * sy - 5);
+    }
+  }
+
+  // --- simple level preview ---
+  const lc = levelCanvas.getContext("2d");
+  levelCanvas.width = 1000; levelCanvas.height = 1000;
+  lc.fillStyle = "#1e293b"; lc.fillRect(0, 0, 1000, 1000);
+  lc.strokeStyle = "#334155"; lc.lineWidth = 1;
+  for (let i = 0; i <= 1000; i += 100) { lc.beginPath(); lc.moveTo(i, 0); lc.lineTo(i, 1000); lc.moveTo(0, i); lc.lineTo(1000, i); lc.stroke(); }
+  const lines = [];
+  if (level?.objects) {
+    for (const o of level.objects) {
+      lc.fillStyle = COLORS[o.type] || "#fff";
+      if (o.type === "coin") {
+        lc.beginPath(); lc.arc(o.x + o.w / 2, o.y + o.h / 2, Math.min(o.w, o.h) / 2, 0, Math.PI * 2); lc.fill();
+      } else if (o.type === "spike") {
+        lc.beginPath(); lc.moveTo(o.x, o.y + o.h); lc.lineTo(o.x + o.w / 2, o.y); lc.lineTo(o.x + o.w, o.y + o.h); lc.closePath(); lc.fill();
+      } else {
+        lc.fillRect(o.x, o.y, o.w, o.h);
+      }
+      lc.fillStyle = "#fff"; lc.font = "16px system-ui"; lc.fillText(o.label || o.type, o.x, o.y - 4);
+      lines.push(`${o.type.padEnd(16)} ${String(o.label || "").padEnd(18)} x=${o.x} y=${o.y} w=${o.w} h=${o.h}`);
+    }
+  }
+  $("list").textContent = lines.join("\n") || "(no level loaded)";
+}
+
+// Restore last level from localStorage so the page is useful on refresh.
+try { const saved = localStorage.getItem("playlab.level"); if (saved) { level = JSON.parse(saved); $("status").textContent = "Restored last level from this browser."; } } catch {}
+draw();
+</script>
+</body>
+</html>

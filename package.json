@@ -1,0 +1,12 @@
+{
+  "name": "sakanfar-playlab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Draw a platformer level on paper, photograph it, and play it in the browser (Meta Muse Spark hackathon).",
+  "type": "module",
+  "engines": { "node": ">=20.12" },
+  "scripts": {
+    "scan": "node scan.mjs",
+    "serve": "node serve.mjs"
+  }
+}

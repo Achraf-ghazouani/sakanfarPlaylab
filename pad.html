@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#fbfaff">
+<title>PlayLab Pad</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script src="shared/phonelink.js"></script>
+<style>
+  :root { --bg:#fbfaff; --lav:#efeaff; --lav-2:#e2d9ff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --player:#22c55e; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--ink); font-family:system-ui, -apple-system, "Segoe UI", sans-serif; touch-action:none; overscroll-behavior:none; -webkit-user-select:none; user-select:none; }
+  body { background-image: radial-gradient(600px 300px at 0% 0%, #ebe3ff 0%, transparent 65%), radial-gradient(500px 300px at 100% 100%, #ffe6f4 0%, transparent 60%); }
+  .top { position:fixed; top:0; left:0; right:0; height:48px; display:flex; align-items:center; gap:10px; padding:0 max(12px, env(safe-area-inset-left)) 0 max(12px, env(safe-area-inset-right)); z-index:2; }
+  .brand { font-family:"Fredoka", system-ui, sans-serif; font-weight:700; font-size:17px; color:var(--purple-deep); white-space:nowrap; }
+  .pill { display:inline-flex; align-items:center; gap:7px; background:#fff; border:2px solid var(--lav-2); border-radius:999px; padding:5px 11px; font-size:13px; font-weight:600; color:var(--purple-deep); white-space:nowrap; }
+  .pill .dot { width:9px; height:9px; border-radius:50%; background:#f59e0b; }
+  .pill.connected .dot { background:#22c55e; }
+  .pill.reconnecting .dot, .pill.connecting .dot { background:#f59e0b; animation:blink 1s infinite; }
+  .pill.error .dot { background:#ef4444; }
+  @keyframes blink { 50% { opacity:.3; } }
+  .player { background:var(--player); color:#fff; border-color:transparent; }
+  .player i { width:12px; height:12px; border-radius:3px; background:#fff; opacity:.9; display:inline-block; }
+  .spacer { flex:1; }
+  button.small { border:0; background:#fff; border:2px solid var(--lav-2); border-radius:999px; padding:6px 12px; font-size:13px; font-weight:600; color:var(--purple-deep); }
+
+  .pad { position:fixed; inset:48px 0 0 0; }
+  .btn { position:absolute; bottom:max(18px, env(safe-area-inset-bottom)); width:min(26vh, 120px); height:min(26vh, 120px); border-radius:50%; background:#fff; border:3px solid var(--lav-2); box-shadow:0 10px 24px rgba(91,33,182,.15); display:flex; align-items:center; justify-content:center; font-size:40px; color:var(--purple-deep); touch-action:none; transition:transform .05s, background .05s; }
+  .btn.pressed { background:var(--purple); color:#fff; transform:scale(.94); border-color:var(--purple); }
+  #left { left:max(18px, env(safe-area-inset-left)); }
+  #right { left:calc(max(18px, env(safe-area-inset-left)) + min(26vh, 120px) + 16px); }
+  #jump { right:max(18px, env(safe-area-inset-right)); width:min(34vh, 150px); height:min(34vh, 150px); font-size:22px; font-family:"Fredoka", system-ui, sans-serif; font-weight:700; letter-spacing:.04em; border-color:var(--player); color:var(--player); }
+  #jump.pressed { background:var(--player); color:#fff; }
+  .hint { position:absolute; left:50%; top:38%; transform:translate(-50%, -50%); text-align:center; color:var(--muted); font-size:14px; max-width:60vw; }
+  .hint b { display:block; font-family:"Fredoka", system-ui, sans-serif; font-size:22px; color:var(--ink); margin-bottom:4px; }
+
+  #rotate { display:none; position:fixed; inset:0; z-index:5; background:#4c1d95; color:#fff; align-items:center; justify-content:center; text-align:center; font-size:22px; font-weight:800; }
+  #rotate .icon { font-size:60px; display:block; animation:tilt 1.6s ease-in-out infinite; }
+  @keyframes tilt { 0%, 100% { transform:rotate(0); } 50% { transform:rotate(90deg); } }
+  @media (orientation: portrait) { #rotate { display:flex; } }
+
+  #join { display:none; position:fixed; inset:0; z-index:4; background:var(--bg); align-items:center; justify-content:center; flex-direction:column; gap:14px; padding:20px; text-align:center; }
+  #join.show { display:flex; }
+  #join input { font-size:28px; letter-spacing:.3em; text-transform:uppercase; width:200px; text-align:center; border:2px solid var(--lav-2); border-radius:12px; padding:10px; font-family:"Fredoka", monospace; }
+  #join button { border:0; background:var(--purple); color:#fff; font-size:18px; font-weight:700; border-radius:14px; padding:12px 22px; }
+</style>
+</head>
+<body>
+<div class="top">
+  <span class="brand">PlayLab Pad</span>
+  <span class="pill connecting" id="status"><span class="dot"></span><span id="statusText">connecting...</span></span>
+  <span class="pill player" id="playerChip" style="display:none"><i></i><span id="playerName">Player 1</span></span>
+  <span class="spacer"></span>
+  <button class="small" id="fsBtn">Full screen</button>
+</div>
+
+<div class="pad">
+  <div class="hint" id="hint"><b>Room <span id="roomCode">----</span></b>Keep the game open on the computer.</div>
+  <div class="btn" id="left">&#9664;</div>
+  <div class="btn" id="right">&#9654;</div>
+  <div class="btn" id="jump">JUMP</div>
+</div>
+
+<div id="rotate"><div><span class="icon">&#128241;</span>Rotate your phone</div></div>
+
+<div id="join">
+  <div class="brand" style="font-size:26px">PlayLab Pad</div>
+  <div style="color:var(--muted)">Type the 4-letter room code shown on the computer</div>
+  <input id="codeInput" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="KX7P">
+  <button id="joinBtn">Join</button>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+let client = null;
+const state = { l: 0, r: 0 };
+
+function setStatus(status, detail) {
+  const pill = $("status");
+  pill.className = "pill " + status;
+  const text = { connecting: "connecting...", reconnecting: "reconnecting..." + (detail ? " (" + detail + ")" : ""), connected: "connected", error: "error: " + (detail || "unknown"), waiting: "waiting" }[status] || status;
+  $("statusText").textContent = text;
+  window.__padStatus = status;
+}
+
+function buzz(pattern) { try { navigator.vibrate?.(pattern); } catch {} }
+const EVENT_BUZZ = { jump: 15, coin: 30, hit: [60, 40, 90], goal: [80, 50, 80, 50, 200], level: [30, 30, 30] };
+
+function join(code) {
+  code = String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+  if (code.length !== 4) { $("join").classList.add("show"); return; }
+  $("join").classList.remove("show");
+  $("roomCode").textContent = code;
+  history.replaceState(null, "", "?room=" + code);
+  client = new PhoneLink.Client(code, {
+    onStatus: setStatus,
+    onWelcome: (w) => {
+      document.documentElement.style.setProperty("--player", w.color);
+      $("playerName").textContent = `Player ${w.slot} · ${w.name}`;
+      $("playerChip").style.display = "";
+      $("hint").innerHTML = `<b>You are player ${w.slot}</b>${w.name} on the big screen`;
+      window.__padWelcome = w;
+    },
+    onEvent: (name) => { window.__padLastEvent = name; window.__padLastEventAt = performance.now(); (window.__padEvents ||= []).push(name); if (EVENT_BUZZ[name]) buzz(EVENT_BUZZ[name]); },
+  });
+  client.start();
+  window.__padClient = client;
+}
+
+// Buttons: each tracks its own pointers so two thumbs work at once.
+function bind(id, onDown, onUp) {
+  const el = $(id), active = new Set();
+  el.addEventListener("pointerdown", (e) => { e.preventDefault(); active.add(e.pointerId); el.classList.add("pressed"); onDown(); });
+  const release = (e) => { if (!active.delete(e.pointerId)) return; if (!active.size) { el.classList.remove("pressed"); onUp(); } };
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) el.addEventListener(ev, release);
+  for (const ev of ["pointerup", "pointercancel"]) window.addEventListener(ev, release);
+  el.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+const sendInput = () => client?.sendInput(state);
+bind("left", () => { state.l = 1; sendInput(); }, () => { state.l = 0; sendInput(); });
+bind("right", () => { state.r = 1; sendInput(); }, () => { state.r = 0; sendInput(); });
+bind("jump", () => { window.__padPressAt = performance.now(); client?.sendJump(true); buzz(10); }, () => client?.sendJump(false));
+
+// Keyboard too (handy on a laptop for testing)
+const KEYS = { ArrowLeft: "l", KeyA: "l", ArrowRight: "r", KeyD: "r" };
+window.addEventListener("keydown", (e) => { if (e.repeat) return; if (KEYS[e.code]) { state[KEYS[e.code]] = 1; sendInput(); } if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") client?.sendJump(true); });
+window.addEventListener("keyup", (e) => { if (KEYS[e.code]) { state[KEYS[e.code]] = 0; sendInput(); } if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") client?.sendJump(false); });
+
+// Full screen + landscape lock, keep the screen awake
+$("fsBtn").addEventListener("click", async () => {
+  try { await document.documentElement.requestFullscreen(); } catch {}
+  try { await screen.orientation.lock("landscape"); } catch {}
+});
+let wakeLock = null;
+async function keepAwake() { try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {} }
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") { keepAwake(); if (client && !client.connected) client.retry(); }
+  else { state.l = state.r = 0; sendInput(); client?.sendJump(false); }
+});
+keepAwake();
+
+$("joinBtn").addEventListener("click", () => join($("codeInput").value));
+$("codeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") join(e.target.value); });
+join(params.get("room"));
+</script>
+</body>
+</html>

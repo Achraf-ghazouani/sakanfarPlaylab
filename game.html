@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>PlayLab Game</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <script src="shared/photo.js"></script>
+<script src="shared/phonelink.js" defer></script>
 <style>
   html, body { margin:0; height:100%; overflow:hidden; background:#111; font-family: system-ui, sans-serif; color:#eee; touch-action:none; overscroll-behavior:none; }
   #hud { position:fixed; top:0; left:0; right:0; height:44px; box-sizing:border-box; display:flex; gap:12px; align-items:center; padding:0 12px; background:rgba(0,0,0,.6); font-size:14px; z-index:2; }
@@ -25,6 +28,32 @@
   label.btn#redrawBtn { background:#0d9488; font-weight:700; }
   #redrawInput { display:none; }
   body.touch .lbl { display:none; }
+
+  /* phone controller panel */
+  #phoneBtn { background:#0ea5e9; }
+  #phoneChip { display:none; background:#fff; color:#4c1d95; border-radius:999px; padding:3px 10px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  #phoneChip.show { display:inline-flex; align-items:center; gap:6px; }
+  #phoneChip .dot { width:8px; height:8px; border-radius:50%; background:#f59e0b; }
+  #phoneChip.connected .dot { background:#22c55e; }
+  #phonePanel { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(27,21,53,.55); z-index:5; }
+  #phonePanel.show { display:flex; }
+  .pp { position:relative; background:#fbfaff; color:#1b1535; border-radius:22px; padding:22px 26px; width:min(94vw, 420px); text-align:center; box-shadow:0 24px 60px rgba(0,0,0,.35); font-family:system-ui, sans-serif; }
+  .pp h3 { margin:0 0 4px; font-size:24px; color:#5b21b6; }
+  .pp .pp-sub { margin:0 0 14px; color:#6b6480; font-size:14px; }
+  .pp .pp-qr { background:#fff; border:2px solid #e2d9ff; border-radius:16px; padding:10px; display:inline-block; }
+  .pp .pp-qr svg { width:min(60vw, 240px); height:auto; display:block; }
+  .pp .pp-code { font-size:40px; font-weight:800; letter-spacing:.25em; margin:12px 0 2px; color:#1b1535; font-family:ui-monospace, "Fredoka", monospace; }
+  .pp .pp-url { font-size:12px; color:#6b6480; word-break:break-all; }
+  .pp .pp-status { margin-top:12px; display:flex; align-items:center; justify-content:center; gap:8px; font-weight:700; color:#5b21b6; }
+  .pp .pp-status .dot { width:10px; height:10px; border-radius:50%; background:#f59e0b; }
+  .pp .pp-status.connected .dot { background:#22c55e; }
+  .pp .pp-status.waiting .dot, .pp .pp-status.connecting .dot, .pp .pp-status.reconnecting .dot { animation:ppblink 1s infinite; }
+  .pp .pp-status.error .dot { background:#ef4444; }
+  @keyframes ppblink { 50% { opacity:.3; } }
+  .pp .pp-players { margin-top:6px; font-size:14px; color:#6b6480; display:flex; justify-content:center; align-items:center; gap:6px; }
+  .pp .pp-players i { width:12px; height:12px; border-radius:3px; display:inline-block; background:#e2d9ff; }
+  .pp .pp-close { position:absolute; top:10px; right:12px; background:transparent; color:#6b6480; font-size:26px; padding:2px 8px; line-height:1; }
+  .pp .pp-tip { margin-top:10px; font-size:12px; color:#6b6480; }
 
   /* live edit: re-scan overlay */
   #rescan { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(27,21,53,.55); z-index:5; }
@@ -90,6 +119,8 @@
   <label class="desktop">or file <input type="file" id="levelFile" accept=".json,application/json"></label>
   <button id="restartBtn" title="Restart (R)">&#8635;<span class="lbl"> Restart</span></button>
   <button id="muteBtn" title="Sound on/off (M)">&#128266;</button>
+  <button id="phoneBtn" class="desktop" title="Use your phone as the controller">&#128241; Play with your phone</button>
+  <span id="phoneChip" title="Phone controller"><span class="dot"></span><span id="phoneChipText">0/4</span></span>
   <a href="viewer.html" target="_blank" class="desktop">viewer</a>
   <span id="theme" class="desktop"></span>
   <span id="score">Coins 0/0</span>
@@ -105,6 +136,17 @@
 <div id="msg"><div id="msgText"></div></div>
 <div id="toast"></div>
 <div id="rescan"><div class="card"><div class="shot"><img id="rescanPreview" alt=""><div class="rbeam"></div></div><div class="rs"><div class="spin"></div><span id="rescanText">Reading your changes...</span></div></div></div>
+<div id="phonePanel"><div class="pp">
+  <button class="pp-close" id="phoneClose" title="Close">&times;</button>
+  <h3>Play with your phone</h3>
+  <p class="pp-sub">Scan the code with your phone camera. Same Wi-Fi is fastest.</p>
+  <div class="pp-qr" id="phoneQr"></div>
+  <div class="pp-code" id="phoneCode">----</div>
+  <div class="pp-url" id="phoneUrl"></div>
+  <div class="pp-status connecting" id="phoneStatusBox"><span class="dot"></span><span id="phoneStatus">starting...</span></div>
+  <div class="pp-players" id="phonePlayers">0/4 players connected</div>
+  <div class="pp-tip">The keyboard keeps working too. Close this panel and play.</div>
+</div></div>
 <div id="hint">Move: arrows / A D &nbsp;·&nbsp; Jump: space / up / W (hold for higher) &nbsp;·&nbsp; Stomp enemies from above &nbsp;·&nbsp; R restarts &nbsp;·&nbsp; M sound</div>
 
 <script>
@@ -131,6 +173,10 @@ const PHONE_VIEW_H = 520;     // on touch devices show at most this many world u
 
 // Touch control state (set by the on-screen buttons, read by the scene)
 const touch = { left: false, right: false };
+// Phone controller state (set by messages from pad.html, read by the scene)
+const remote = { left: false, right: false };
+let host = null;                                   // PhoneLink.Host once "Play with your phone" is opened
+function gameEvent(name) { if (host) host.event(name); }
 
 // Background palette picked from the AI theme text.
 const PALETTES = [
@@ -495,8 +541,8 @@ class PlayScene extends Phaser.Scene {
 
     const b = this.player.body;
     const now = this.time.now;
-    const left = this.cursors.left.isDown || this.keys.A.isDown || touch.left;
-    const right = this.cursors.right.isDown || this.keys.D.isDown || touch.right;
+    const left = this.cursors.left.isDown || this.keys.A.isDown || touch.left || remote.left;
+    const right = this.cursors.right.isDown || this.keys.D.isDown || touch.right || remote.right;
     const onGround = b.blocked.down || b.touching.down;
 
     if (left && !right) { b.setVelocityX(-RUN_SPEED * this.ax); this.facing = -1; }
@@ -516,6 +562,7 @@ class PlayScene extends Phaser.Scene {
       this.jumpPressedAt = -1e9; this.lastGroundedAt = -1e9;
       this.squash(0.75, 1.3);
       SFX.jump();
+      gameEvent("jump");
       if (!this.jumpHeld) this.cutJump();   // buffered tap that was already released = short hop
     }
     this.prevVy = b.velocity.y;
@@ -568,6 +615,7 @@ class PlayScene extends Phaser.Scene {
     this.coins++;
     updateScore(this);
     SFX.coin();
+    gameEvent("coin");
   }
 
   hitEnemy(e) {
@@ -592,6 +640,7 @@ class PlayScene extends Phaser.Scene {
     this.physics.pause();
     this.cameras.main.shake(220, 0.006);
     SFX.hurt();
+    gameEvent("hit");
     showMsg(reason === "fell" ? "Fell off!" : "Ouch!", "restarting...");
     this.time.delayedCall(800, () => this.scene.restart());
   }
@@ -603,6 +652,7 @@ class PlayScene extends Phaser.Scene {
     this.physics.pause();
     this.squash(0.8, 1.25);
     SFX.win();
+    gameEvent("goal");
     showMsg("Level complete!", `Coins ${this.coins}/${this.totalCoins} · press R or tap to play again`);
   }
 }
@@ -707,6 +757,51 @@ async function rescan(file) {
   ov.classList.remove("show");
 }
 
+// ---------------------------------------------------------------------------
+// Phone as controller: QR panel + PeerJS host (shared/phonelink.js)
+// ---------------------------------------------------------------------------
+function setPhoneStatus(status, detail) {
+  const text = {
+    connecting: "starting the room...",
+    waiting: "waiting for a phone to scan...",
+    connected: "phone connected",
+    reconnecting: "reconnecting..." + (detail ? ` (${detail})` : ""),
+    error: "connection error" + (detail ? ` (${detail})` : ""),
+  }[status] || status;
+  $("phoneStatus").textContent = text;
+  $("phoneStatusBox").className = "pp-status " + status;
+  $("phoneChip").classList.toggle("connected", status === "connected");
+  refreshPlayers();
+}
+function refreshPlayers() {
+  const n = host ? host.count : 0;
+  $("phoneChipText").textContent = `${n}/${PhoneLink.MAX_PLAYERS}`;
+  const dots = host ? [...host.players.values()].map((p) => `<i style="background:${p.color}" title="${p.name}"></i>`).join("") : "";
+  $("phonePlayers").innerHTML = `${n}/${PhoneLink.MAX_PLAYERS} player${n === 1 ? "" : "s"} connected ${dots}`;
+}
+function startHost() {
+  if (host) return;
+  if (!window.PhoneLink || !window.Peer || !window.qrcode) { $("phoneStatus").textContent = "phone link scripts did not load (check your connection)"; return; }
+  host = new PhoneLink.Host({
+    onCode: (code) => {
+      sessionStorage.setItem("playlab.room", code);
+      const url = host.url();
+      $("phoneCode").textContent = code;
+      $("phoneUrl").textContent = url;
+      const qr = qrcode(0, "M"); qr.addData(url); qr.make();
+      $("phoneQr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+    },
+    onStatus: setPhoneStatus,
+    onJoin: (p) => { refreshPlayers(); showToast(`<b>&#128241; Phone connected</b> as player ${p.slot} (${p.name})`, 4000); },
+    onLeave: () => { refreshPlayers(); remote.left = remote.right = false; playScene()?.releaseJump(); },
+    onInput: (p, input) => { remote.left = !!input.l; remote.right = !!input.r; },
+    onJump: (p, down) => { const s = playScene(); if (s) (down ? s.pressJump() : s.releaseJump()); },
+  });
+  $("phoneChip").classList.add("show");
+  host.start(sessionStorage.getItem("playlab.room") || undefined);
+}
+function openPhonePanel() { $("phonePanel").classList.add("show"); startHost(); }
+
 const stored = () => { try { const s = localStorage.getItem("playlab.level"); return s ? JSON.parse(s) : null; } catch { return null; } };
 const storedPhoto = () => { try { return localStorage.getItem("playlab.photo") || null; } catch { return null; } };
 const STORAGE_OPTION = "__storage";
@@ -792,6 +887,17 @@ async function init() {
   });
   $("restartBtn").addEventListener("click", (e) => { e.target.blur(); restartScene(); });
   $("redrawInput").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) rescan(f); });
+  $("phoneBtn").addEventListener("click", (e) => { e.target.blur(); openPhonePanel(); });
+  $("phoneChip").addEventListener("click", openPhonePanel);
+  $("phoneClose").addEventListener("click", () => $("phonePanel").classList.remove("show"));
+  $("phonePanel").addEventListener("click", (e) => { if (e.target === $("phonePanel")) $("phonePanel").classList.remove("show"); });
+  if (params.get("room")) sessionStorage.setItem("playlab.room", params.get("room").toUpperCase());
+  // Reopen the same room after a reload (the phone keeps reconnecting to it). The link scripts are deferred,
+  // so wait for them if the document is still loading.
+  if (sessionStorage.getItem("playlab.room") && !isTouch) {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", startHost); else startHost();
+  }
+  window.addEventListener("pagehide", () => { try { host?.destroy(); } catch {} });   // free the room id quickly
   $("muteBtn").addEventListener("click", (e) => { e.target.blur(); SFX.setMuted(!SFX.muted); });
   try { SFX.setMuted(localStorage.getItem("playlab.muted") === "1"); } catch {}
   // Browsers only allow audio after a user gesture: unlock on the first key or tap.

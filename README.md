@@ -14,6 +14,17 @@ Built solo for the Meta hackathon (Oct 30 - Nov 4, 2026). Plain HTML/JS + Phaser
 4. `game.html`: plays the level with touch controls, shows the original drawing in a corner, and a toast lists what the agent changed.
 5. **Live edit by redrawing**: change the paper (add a bridge, erase a spike), tap **Redraw** in the game and snap it again. The scan gets the earlier level as context, `shared/diff.mjs` works out what changed, new things pop into the running level, the player stays where they were, and a toast says "added 1 platform, 1 coin".
 
+## Play with your phone (phone as controller)
+
+On a computer, `game.html` has a **Play with your phone** button. It shows a QR code and a 4-letter room code.
+Scanning the QR opens `pad.html?room=CODE` on the phone: a landscape controller with left / right / jump buttons
+(multi-touch, so you can run and jump at once) that vibrates on jump, coin, hit and goal. The keyboard keeps working.
+
+- Transport: WebRTC data channels through PeerJS (`shared/phonelink.js`), signaled by the public PeerServer. Measured press-to-reaction round trip on one network: under 10 ms.
+- Status is shown on both screens (connecting / waiting / connected / reconnecting). Phones ping every 3 s; a silent phone is dropped after 8 s, and the phone redials by itself when the game reloads or the network blips.
+- The room code is kept for the page session, so reloading the game keeps the same QR.
+- Rooms are temporary and need no database.
+
 ## The playtest agent
 
 `shared/reach.mjs` simulates the game's jump physics (max height 252 units, flat jump about 300 across, platforms solid from below) and walks the level graph from the start:
@@ -91,6 +102,8 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | --- | --- |
 | `index.html` | Mobile home page: camera/gallery input, resize, scanning animation, AI-fix phase, opens the game |
 | `game.html` | The game (Phaser 3 arcade physics, colored shapes, touch controls, drawing thumbnail, agent toast) |
+| `pad.html` | Phone controller page (joins a room by QR / code) |
+| `shared/phonelink.js` | PeerJS host (game) and client (pad): rooms, slots, heartbeat, reconnect |
 | `viewer.html` | Debug: AI boxes over the photo, reachability report, fix button |
 | `api/scan.js` | Vercel function: base64 photo -> validated, quick-fixed level JSON |
 | `api/fix.js` | Vercel function: level JSON -> AI-repaired level JSON |

@@ -1,6 +1,8 @@
 # Not needed on the deployed site. Patterns are anchored to the repo root with a leading slash:
 # an unanchored "scan.mjs" would also match api/scan.* and drop the function.
+# lib/ must stay in the upload (the functions import it); vercel.json rewrites hide it from the web.
 /tests/
 /scan.mjs
+/check.mjs
 /serve.mjs
 /.env.example

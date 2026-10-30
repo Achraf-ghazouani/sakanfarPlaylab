@@ -3,121 +3,228 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#6d28d9">
+<meta name="theme-color" content="#fbfaff">
+<meta name="description" content="Draw a platformer level on paper, snap a photo, and play it in seconds. Powered by Meta Muse Spark.">
 <title>Sakanfar PlayLab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --purple: #6d28d9; --purple-dark: #4c1d95; --purple-light: #a78bfa; --pink: #f472b6;
-    --paper: #fffdf7; --ink: #1e1b2e; --muted: #6b7280;
+    --bg: #fbfaff; --card: #ffffff; --lav: #efeaff; --lav-2: #e2d9ff; --lav-3: #cdbdff;
+    --purple: #7c3aed; --purple-deep: #5b21b6; --ink: #1b1535; --muted: #6b6480;
+    --yellow: #fbbf24; --green: #22c55e; --red: #ef4444; --brown: #8b5a2b; --blue: #60a5fa; --gray: #9ca3af;
+    --shadow: 0 10px 30px rgba(91, 33, 182, .10), 0 2px 6px rgba(91, 33, 182, .06);
+    --radius: 22px;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; min-height: 100%; }
+  html { scroll-behavior: smooth; }
   body {
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink);
-    background: radial-gradient(1200px 600px at 20% -10%, #c4b5fd 0%, transparent 60%),
-                radial-gradient(900px 500px at 110% 20%, #fbcfe8 0%, transparent 55%),
-                linear-gradient(180deg, #7c3aed 0%, #4c1d95 100%);
-    background-attachment: fixed;
-    padding: max(20px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
-    display: flex; flex-direction: column; align-items: center;
+    margin: 0; min-height: 100%; color: var(--ink); background: var(--bg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5;
+    background-image:
+      radial-gradient(700px 420px at 8% 0%, #ebe3ff 0%, transparent 65%),
+      radial-gradient(600px 400px at 100% 10%, #ffe6f4 0%, transparent 60%),
+      radial-gradient(800px 500px at 50% 110%, #e8e0ff 0%, transparent 60%);
   }
-  .wrap { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 16px; }
+  h1, h2, .btn, .brand, .step b, .num { font-family: "Fredoka", system-ui, sans-serif; }
+  a { color: var(--purple); }
+  .wrap { width: min(1120px, 100% - 32px); margin: 0 auto; }
 
-  header { text-align: center; color: #fff; padding: 8px 0 4px; }
-  header h1 { margin: 0; font-size: clamp(30px, 8vw, 44px); letter-spacing: -0.02em; text-shadow: 0 2px 0 rgba(0,0,0,.25); }
-  header h1 span { color: #fde68a; }
-  header p { margin: 8px 0 0; font-size: 18px; opacity: .95; }
+  /* top bar */
+  .top { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 22px; color: var(--ink); text-decoration: none; }
+  .brand .logo { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, var(--purple), #c084fc); display: grid; place-items: center; box-shadow: var(--shadow); }
+  .brand .logo svg { width: 22px; height: 22px; }
+  .brand span { color: var(--purple); }
+  .top nav { display: flex; gap: 6px; }
+  .top nav a { text-decoration: none; color: var(--muted); font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: 999px; }
+  .top nav a:hover { background: var(--lav); color: var(--purple-deep); }
 
-  .card { background: var(--paper); border-radius: 22px; padding: 20px; box-shadow: 0 16px 40px rgba(30, 10, 80, .35); }
-
-  .doodle { display: block; width: 100%; height: auto; border-radius: 14px; margin-bottom: 14px;
-            background: repeating-linear-gradient(180deg, #fffdf7 0 31px, #dbeafe 31px 32px); border: 2px dashed #c4b5fd; }
-
-  .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
-         border: 0; border-radius: 16px; padding: 18px 20px; font-size: 20px; font-weight: 800; cursor: pointer;
-         transition: transform .08s ease, box-shadow .08s ease; -webkit-tap-highlight-color: transparent; }
-  .btn:active { transform: translateY(2px) scale(.99); }
-  .btn-primary { background: linear-gradient(180deg, #8b5cf6, #6d28d9); color: #fff; box-shadow: 0 6px 0 #4c1d95, 0 10px 24px rgba(76, 29, 149, .4); }
-  .btn-primary:active { box-shadow: 0 3px 0 #4c1d95; }
-  .btn-secondary { background: #ede9fe; color: var(--purple-dark); margin-top: 10px; font-size: 17px; padding: 14px; }
-  .btn-ghost { background: transparent; color: #fff; text-decoration: underline; font-size: 15px; font-weight: 600; padding: 10px; }
-  .btn svg { width: 28px; height: 28px; flex: none; }
+  /* hero */
+  .hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px; align-items: center; padding: 28px 0 40px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; background: var(--lav); color: var(--purple-deep); font-weight: 600; font-size: 13px; padding: 6px 12px; border-radius: 999px; }
+  .eyebrow i { width: 8px; height: 8px; border-radius: 50%; background: var(--purple); display: inline-block; box-shadow: 0 0 0 4px #ddd0ff; }
+  h1 { font-size: clamp(38px, 6vw, 66px); line-height: 1.02; margin: 18px 0 14px; letter-spacing: -0.01em; font-weight: 700; }
+  h1 em { font-style: normal; background: linear-gradient(90deg, var(--purple), #d946ef); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lead { font-size: 18px; color: var(--muted); max-width: 520px; margin: 0 0 24px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; border: 0; border-radius: 16px; padding: 16px 22px; font-size: 18px; font-weight: 600; cursor: pointer; text-decoration: none; transition: transform .12s ease, box-shadow .12s ease, background .12s; -webkit-tap-highlight-color: transparent; }
+  .btn svg { width: 24px; height: 24px; flex: none; }
+  .btn-primary { background: linear-gradient(180deg, #8b5cf6, var(--purple)); color: #fff; box-shadow: 0 8px 20px rgba(124, 58, 237, .35); }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(124, 58, 237, .4); }
+  .btn-primary:active { transform: translateY(1px); }
+  .btn-secondary { background: #fff; color: var(--purple-deep); border: 2px solid var(--lav-2); }
+  .btn-secondary:hover { background: var(--lav); }
   input[type=file] { display: none; }
+  .drop-hint { font-size: 14px; color: var(--muted); margin: 14px 0 0; }
+  .drop-hint b { color: var(--ink); }
+  body.dragging .hero-text { outline: 3px dashed var(--lav-3); outline-offset: 12px; border-radius: 16px; }
 
-  .tips { font-size: 14px; color: var(--muted); margin: 14px 0 0; line-height: 1.5; }
-  .tips b { color: var(--purple-dark); }
-  .tips .pill { display: inline-block; background: #ede9fe; color: var(--purple-dark); border-radius: 999px; padding: 2px 9px; margin: 2px 2px 2px 0; font-weight: 600; white-space: nowrap; }
+  .last { display: none; align-items: center; gap: 14px; margin-top: 22px; padding: 12px; background: #fff; border: 2px solid var(--lav-2); border-radius: 18px; max-width: 420px; }
+  .last.show { display: flex; }
+  .last img { width: 72px; height: 54px; object-fit: cover; border-radius: 10px; background: var(--lav); }
+  .last b { display: block; }
+  .last a { font-weight: 600; text-decoration: none; }
 
-  /* scanning state */
-  #scan { display: none; }
+  /* animated paper -> game card */
+  .hero-visual { position: relative; }
+  .paper { background: #fff; border-radius: 20px; padding: 10px; box-shadow: var(--shadow), 0 30px 60px rgba(91, 33, 182, .12); transform: rotate(-2deg); animation: float 6s ease-in-out infinite; }
+  .paper svg { width: 100%; height: auto; display: block; border-radius: 14px; }
+  @keyframes float { 0%, 100% { transform: rotate(-2deg) translateY(0); } 50% { transform: rotate(-2deg) translateY(-8px); } }
+  .chips { display: flex; gap: 8px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+  .chip { background: #fff; border: 2px solid var(--lav-2); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; color: var(--purple-deep); }
+  .chip.live::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; animation: blink 1.4s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+
+  /* scanning card */
+  #scan { display: none; max-width: 560px; margin: 10px auto 40px; background: var(--card); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); border: 2px solid var(--lav-2); }
   #scan.show { display: block; }
-  .shot { position: relative; border-radius: 14px; overflow: hidden; background: #111; aspect-ratio: 4 / 3; }
+  .shot { position: relative; border-radius: 14px; overflow: hidden; background: #1b1535; aspect-ratio: 4 / 3; }
   .shot img { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .shot .beam { position: absolute; left: 0; right: 0; height: 26%; top: -30%;
-                background: linear-gradient(180deg, rgba(167,139,250,0) 0%, rgba(167,139,250,.55) 50%, rgba(244,114,182,0) 100%);
-                border-bottom: 3px solid #f0abfc; box-shadow: 0 0 24px #c084fc; animation: sweep 1.6s ease-in-out infinite; }
+  .shot .beam { position: absolute; left: 0; right: 0; height: 26%; top: -30%; background: linear-gradient(180deg, rgba(167,139,250,0) 0%, rgba(167,139,250,.55) 50%, rgba(244,114,182,0) 100%); border-bottom: 3px solid #e9d5ff; box-shadow: 0 0 24px #c084fc; animation: sweep 1.6s ease-in-out infinite; }
   .shot .grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px); background-size: 10% 10%; pointer-events: none; }
   @keyframes sweep { 0% { top: -30%; } 100% { top: 104%; } }
-  .status { display: flex; align-items: center; gap: 12px; margin-top: 14px; font-size: 18px; font-weight: 700; color: var(--purple-dark); min-height: 30px; }
-  .spinner { width: 22px; height: 22px; border: 3px solid #ddd6fe; border-top-color: var(--purple); border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
+  .status { display: flex; align-items: center; gap: 12px; margin-top: 14px; font-size: 18px; font-weight: 700; color: var(--purple-deep); min-height: 30px; }
+  .spinner { width: 22px; height: 22px; border: 3px solid var(--lav-2); border-top-color: var(--purple); border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .status.error { color: #b91c1c; }
   .status.error .spinner { display: none; }
   .sub { font-size: 14px; color: var(--muted); margin-top: 6px; }
-  #retry { display: none; }
+  #playNow { display: none; width: 100%; margin-top: 14px; }
+  #retry { display: none; width: 100%; margin-top: 10px; }
   #retry.show { display: flex; }
 
-  footer { text-align: center; color: rgba(255,255,255,.85); font-size: 13px; padding-top: 4px; }
-  footer a { color: #fff; }
+  /* sections */
+  section.block { padding: 26px 0; }
+  h2 { font-size: clamp(26px, 3.4vw, 36px); margin: 0 0 6px; font-weight: 700; }
+  .sub-h { color: var(--muted); margin: 0 0 22px; font-size: 16px; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .step { background: var(--card); border: 2px solid var(--lav-2); border-radius: 18px; padding: 18px; box-shadow: var(--shadow); position: relative; }
+  .step .num { position: absolute; top: -12px; left: 16px; background: var(--purple); color: #fff; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+  .step .ico { font-size: 30px; margin-top: 6px; }
+  .step b { display: block; font-size: 19px; margin: 6px 0 2px; }
+  .step p { margin: 0; color: var(--muted); font-size: 14px; }
+  .legend { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .doodle { background: var(--card); border: 2px solid var(--lav-2); border-radius: 18px; padding: 14px; display: flex; align-items: center; gap: 12px; transition: transform .12s; }
+  .doodle:hover { transform: translateY(-2px); border-color: var(--lav-3); }
+  .doodle svg { width: 64px; height: 48px; flex: none; }
+  .doodle .t { font-size: 14px; color: var(--muted); }
+  .doodle .t b { display: block; color: var(--ink); font-size: 15px; }
+  .doodle .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  footer { padding: 30px 0 40px; color: var(--muted); font-size: 13px; text-align: center; }
+  footer a { color: var(--purple-deep); }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; gap: 28px; padding-top: 10px; }
+    .steps, .legend { grid-template-columns: repeat(2, 1fr); }
+    .top nav a.hide-m { display: none; }
+  }
+  @media (max-width: 560px) {
+    .wrap { width: min(1120px, 100% - 28px); }
+    .cta { flex-direction: column; align-items: stretch; }
+    .cta .btn { width: 100%; padding: 18px; font-size: 19px; }
+    .lead { font-size: 16px; }
+    .legend { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .doodle { padding: 10px; gap: 8px; } .doodle svg { width: 48px; height: 36px; }
+    .steps { grid-template-columns: 1fr; }
+  }
+  @media (pointer: coarse) { .desktop-only { display: none; } }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>Sakanfar <span>PlayLab</span></h1>
-    <p>Draw a level on paper. Snap it. Play it.</p>
+  <header class="top">
+    <a class="brand" href="index.html">
+      <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg></span>
+      Sakanfar <span>PlayLab</span>
+    </a>
+    <nav>
+      <a href="game.html?level=levels/sample.json">Sample level</a>
+      <a href="viewer.html" class="hide-m">Debug viewer</a>
+    </nav>
   </header>
 
-  <div class="card" id="home">
-    <svg class="doodle" viewBox="0 0 400 180" aria-hidden="true">
-      <g fill="none" stroke="#1e1b2e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M20 150 Q120 146 200 150 T380 150"/>
-        <path d="M130 95 h70 M130 95 v12 h70 v-12"/>
-        <path d="M60 150 v-30 M60 120 l-12 15 M60 120 l12 15 M60 128 l-14 -6 M60 128 l14 -6"/>
-        <circle cx="60" cy="112" r="7"/>
-        <path d="M240 150 v-25 h25 v25"/>
-        <path d="M330 150 v-70 M330 80 l40 12 l-40 12"/>
-        <circle cx="160" cy="75" r="6"/><circle cx="180" cy="75" r="6"/>
-        <path d="M270 150 l10 -18 l10 18 l10 -18 l10 18"/>
-        <path d="M300 60 q-14 -8 -8 -20 q8 -14 24 -8 q16 -12 30 2 q16 0 10 16 q6 12 -10 12 z"/>
-      </g>
-      <g fill="none" stroke="#6d28d9" stroke-width="3" stroke-dasharray="6 5">
-        <rect x="46" y="100" width="28" height="52" rx="3"/>
-        <rect x="320" y="72" width="54" height="80" rx="3"/>
-        <rect x="150" y="66" width="40" height="18" rx="3"/>
-        <rect x="288" y="36" width="58" height="34" rx="3"/>
-      </g>
-      <g font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#6d28d9">
-        <text x="30" y="96">start</text><text x="322" y="68">goal</text><text x="151" y="62">coins</text><text x="284" y="32">moving platform</text>
-      </g>
-    </svg>
+  <!-- HERO -->
+  <section class="hero" id="home">
+    <div class="hero-text">
+      <span class="eyebrow"><i></i> Meta hackathon 2026 &middot; powered by Muse Spark</span>
+      <h1>Draw a level on paper.<br><em>Snap it. Play it.</em></h1>
+      <p class="lead">Sketch a platformer with any pen. Point your phone at it. Muse Spark understands what you meant, a playtest agent fixes every impossible jump, and you are playing in about ten seconds.</p>
+      <div class="cta">
+        <label class="btn btn-primary" for="cameraInput">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          Take a photo of your level
+        </label>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment">
+        <label class="btn btn-secondary" for="galleryInput">Choose from gallery</label>
+        <input type="file" id="galleryInput" accept="image/*">
+      </div>
+      <p class="drop-hint desktop-only">On a laptop? Drag a photo anywhere on this page, or open <b id="hostName">this page</b> on your phone.</p>
+      <div class="last" id="lastLevel">
+        <img id="lastThumb" alt="your last drawing">
+        <div><b>Your last drawing</b><a href="game.html?source=storage">Play it again &rarr;</a></div>
+      </div>
+    </div>
 
-    <label class="btn btn-primary" for="cameraInput">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
-      Take a photo of your level
-    </label>
-    <input type="file" id="cameraInput" accept="image/*" capture="environment">
+    <div class="hero-visual" aria-hidden="true">
+      <div class="paper">
+        <svg viewBox="0 0 480 300">
+          <defs>
+            <pattern id="rules" width="480" height="24" patternUnits="userSpaceOnUse"><line x1="0" y1="23.5" x2="480" y2="23.5" stroke="#e4ddf7" stroke-width="1"/></pattern>
+            <clipPath id="reveal"><rect x="0" y="0" width="0" height="300"><animate attributeName="width" values="0;0;480;480;0;0" keyTimes="0;0.12;0.5;0.74;0.96;1" dur="8s" repeatCount="indefinite"/></rect></clipPath>
+          </defs>
+          <rect width="480" height="300" rx="14" fill="#fffdf8"/>
+          <rect width="480" height="300" rx="14" fill="url(#rules)"/>
 
-    <label class="btn btn-secondary" for="galleryInput">Choose a photo from the gallery</label>
-    <input type="file" id="galleryInput" accept="image/*">
+          <!-- the ink sketch -->
+          <g fill="none" stroke="#1b1535" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 250 Q140 246 240 250 T460 250"/>
+            <circle cx="70" cy="196" r="9"/><path d="M70 205v30M70 235l-10 15M70 235l10 15M70 214l-12 10M70 214l12 10"/>
+            <path d="M150 170h90v12h-90z"/>
+            <circle cx="175" cy="150" r="7"/><circle cx="200" cy="150" r="7"/>
+            <path d="M302 100q-12-10-4-22q8-14 24-8q14-14 30 0q18-2 14 16q8 14-10 14z"/>
+            <path d="M250 250v-30h30v30"/>
+            <path d="M300 250v-40M300 228h-10v-14M300 220h10v-16M296 240l-4-2M304 236l4-2"/>
+            <path d="M360 250l10-18 10 18 10-18 10 18"/>
+            <path d="M430 250v-70M430 180l30 10-30 10"/>
+            <circle cx="52" cy="60" r="14"/><path d="M52 38v-8M52 90v-8M30 60h-8M82 60h-8M36 44l-5-5M73 76l-5-5M36 76l-5 5M73 44l-5 5"/>
+          </g>
 
-    <p class="tips">
-      <b>How to draw:</b> a ground line, a stick figure where you start and a flag at the end. Then anything goes:
-      <span class="pill">cactus = enemy</span><span class="pill">cloud = moving platform</span><span class="pill">circles = coins</span><span class="pill">triangles = spikes</span>
-    </p>
-  </div>
+          <!-- the game, revealed by the scan beam -->
+          <g clip-path="url(#reveal)">
+            <rect width="480" height="300" rx="14" fill="#fffdf8"/>
+            <rect width="480" height="300" rx="14" fill="url(#rules)"/>
+            <rect x="20" y="250" width="440" height="34" rx="4" fill="#8b5a2b" stroke="#4a2f12" stroke-width="2.5"/>
+            <rect x="150" y="170" width="90" height="12" rx="3" fill="#8b5a2b" stroke="#4a2f12" stroke-width="2.5"/>
+            <rect x="250" y="220" width="30" height="30" rx="3" fill="#8b5a2b" stroke="#4a2f12" stroke-width="2.5"/>
+            <g><animateTransform attributeName="transform" type="translate" values="0 0;24 0;0 0" dur="4s" repeatCount="indefinite"/>
+              <rect x="298" y="84" width="64" height="14" rx="7" fill="#60a5fa" stroke="#1d4ed8" stroke-width="2.5"/></g>
+            <ellipse cx="175" cy="150" rx="7" ry="7" fill="#fbbf24" stroke="#b45309" stroke-width="2"><animate attributeName="rx" values="7;2;7" dur="1.3s" repeatCount="indefinite"/></ellipse>
+            <ellipse cx="200" cy="150" rx="7" ry="7" fill="#fbbf24" stroke="#b45309" stroke-width="2"><animate attributeName="rx" values="2;7;2" dur="1.3s" repeatCount="indefinite"/></ellipse>
+            <polygon points="360,250 370,232 380,250 390,232 400,250 410,232 420,250" fill="#9ca3af" stroke="#4b5563" stroke-width="2"/>
+            <rect x="428" y="180" width="4" height="70" fill="#6b7280"/><polygon points="432,180 462,190 432,200" fill="#facc15" stroke="#92400e" stroke-width="2"/>
+            <g><animateTransform attributeName="transform" type="translate" values="0 0;-28 0;0 0" dur="3.2s" repeatCount="indefinite"/>
+              <rect x="288" y="210" width="24" height="40" rx="4" fill="#ef4444" stroke="#7f1d1d" stroke-width="2.5"/>
+              <rect x="293" y="218" width="5" height="5" fill="#fff"/><rect x="302" y="218" width="5" height="5" fill="#fff"/><rect x="295" y="220" width="2" height="2" fill="#111"/><rect x="304" y="220" width="2" height="2" fill="#111"/></g>
+            <g><animateTransform attributeName="transform" type="translate" values="0 0;0 -52;0 0" keyTimes="0;0.5;1" calcMode="spline" keySplines="0.2 0 0.4 1;0.6 0 0.8 1" dur="1.5s" repeatCount="indefinite"/>
+              <rect x="57" y="196" width="26" height="54" rx="4" fill="#22c55e" stroke="#14532d" stroke-width="2.5"/>
+              <rect x="62" y="206" width="6" height="6" fill="#fff"/><rect x="72" y="206" width="6" height="6" fill="#fff"/><rect x="65" y="208" width="2.5" height="2.5" fill="#111"/><rect x="75" y="208" width="2.5" height="2.5" fill="#111"/></g>
+            <circle cx="52" cy="60" r="16" fill="#fde68a" stroke="#f59e0b" stroke-width="2"/>
+          </g>
 
-  <div class="card" id="scan">
+          <!-- scan beam -->
+          <rect x="-40" y="0" width="40" height="300" fill="#c4b5fd" opacity="0.25"><animate attributeName="x" values="-40;-40;440;440;-40;-40" keyTimes="0;0.12;0.5;0.74;0.96;1" dur="8s" repeatCount="indefinite"/></rect>
+          <rect x="-3" y="0" width="3" height="300" fill="#a78bfa"><animate attributeName="x" values="-3;-3;477;477;-3;-3" keyTimes="0;0.12;0.5;0.74;0.96;1" dur="8s" repeatCount="indefinite"/></rect>
+        </svg>
+      </div>
+      <div class="chips"><span class="chip live">AI reads the sketch</span><span class="chip">Playtest agent checks every jump</span><span class="chip">Touch controls</span></div>
+    </div>
+  </section>
+
+  <!-- SCANNING -->
+  <section id="scan">
     <div class="shot">
       <img id="preview" alt="your drawing">
       <div class="grid"></div>
@@ -125,16 +232,39 @@
     </div>
     <div class="status" id="status"><div class="spinner"></div><span id="statusText">Reading your drawing...</span></div>
     <div class="sub" id="statusSub">The AI usually needs about 10 seconds.</div>
-    <button class="btn btn-primary" id="playNow" style="display:none;margin-top:14px">Play now with the quick fix</button>
+    <button class="btn btn-primary" id="playNow">Play now with the quick fix</button>
     <button class="btn btn-secondary" id="retry">Try another photo</button>
-  </div>
+  </section>
 
-  <div style="text-align:center">
-    <a class="btn btn-ghost" id="lastLink" href="game.html?source=storage" style="display:none">Play my last level again</a>
-    <a class="btn btn-ghost" href="game.html?level=levels/sample.json">Or play the sample level</a>
-  </div>
+  <!-- HOW IT WORKS -->
+  <section class="block">
+    <h2>How it works</h2>
+    <p class="sub-h">Paper to playable in four steps. No app, no account.</p>
+    <div class="steps">
+      <div class="step"><span class="num">1</span><div class="ico">&#9999;&#65039;</div><b>Draw</b><p>Any paper, any pen. A ground line, a stick figure where you start, a flag at the end. Then go wild.</p></div>
+      <div class="step"><span class="num">2</span><div class="ico">&#128248;</div><b>Snap</b><p>Take a photo. Muse Spark reads what you meant: a cactus is an enemy, a cloud is a moving platform.</p></div>
+      <div class="step"><span class="num">3</span><div class="ico">&#129302;</div><b>Playtest</b><p>An agent simulates every jump. Impossible ones get fixed, with the AI adding steps or lowering a ledge.</p></div>
+      <div class="step"><span class="num">4</span><div class="ico">&#127918;</div><b>Play</b><p>Right on your phone, with big touch buttons. Your drawing stays in the corner so everyone sees the magic.</p></div>
+    </div>
+  </section>
 
-  <footer>Meta hackathon 2026 · powered by Muse Spark · <a href="viewer.html">debug viewer</a></footer>
+  <!-- CHEAT SHEET -->
+  <section class="block">
+    <h2>Draw anything. The AI gets it.</h2>
+    <p class="sub-h">No rules to learn. These are just the usual suspects.</p>
+    <div class="legend">
+      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="11" r="6"/><path d="M32 17v15M32 32l-8 12M32 32l8 12M32 23l-10 6M32 23l10 6"/></svg><div class="t"><b>Stick figure</b><span class="dot" style="background:#22c55e"></span>start</div></div>
+      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M24 44V8M24 8l22 7-22 7"/></svg><div class="t"><b>Flag</b><span class="dot" style="background:#facc15"></span>goal</div></div>
+      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 40h48M20 20h24v7H20z"/></svg><div class="t"><b>Lines and boxes</b><span class="dot" style="background:#8b5a2b"></span>platforms</div></div>
+      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 34q-10-6-3-14q6-10 17-5q9-10 21 0q12-1 9 11q6 9-7 9z"/></svg><div class="t"><b>Cloud</b><span class="dot" style="background:#60a5fa"></span>moving platform</div></div>
+      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="9"/><circle cx="44" cy="26" r="6"/></svg><div class="t"><b>Circles</b><span class="dot" style="background:#fbbf24"></span>coins</div></div>
+      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M32 44V14M32 30h-9V20M32 24h9V12M28 38l-3-2M36 34l3-2"/></svg><div class="t"><b>Cactus, monster, anything with eyes</b><span class="dot" style="background:#ef4444"></span>enemy</div></div>
+      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 40l10-18 10 18 10-18 10 18"/></svg><div class="t"><b>Triangles, zigzags, fire</b><span class="dot" style="background:#9ca3af"></span>spikes</div></div>
+      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="24" r="8"/><path d="M32 8v4M32 36v4M16 24h4M44 24h4M21 13l3 3M40 32l3 3M21 35l3-3M40 16l3-3"/></svg><div class="t"><b>Sun, trees, words</b><span class="dot" style="background:#a78bfa"></span>decoration</div></div>
+    </div>
+  </section>
+
+  <footer>Sakanfar PlayLab &middot; Meta hackathon 2026 &middot; built with Muse Spark and Phaser &middot; <a href="viewer.html">debug viewer</a></footer>
 </div>
 
 <script>
@@ -144,12 +274,25 @@ const THUMB_SIDE = 480;         // kept in localStorage for the in-game "origina
 const MESSAGES = ["Reading your drawing...", "Finding the ground...", "Building platforms...", "Spotting enemies...", "Counting coins...", "Placing the flag...", "Checking every jump...", "Almost there..."];
 const FIX_MESSAGES = ["The AI is fixing the impossible parts...", "Adding stepping stones...", "Lowering a ledge or two...", "Re-checking every jump...", "Still thinking, the AI is thorough..."];
 
-try { if (localStorage.getItem("playlab.level")) $("lastLink").style.display = "flex"; } catch {}
+// Last drawing card
+try {
+  if (localStorage.getItem("playlab.level")) {
+    const photo = localStorage.getItem("playlab.photo");
+    if (photo) $("lastThumb").src = photo; else $("lastThumb").remove();
+    $("lastLevel").classList.add("show");
+  }
+} catch {}
+$("hostName").textContent = location.host || "this page";
 
 $("cameraInput").addEventListener("change", (e) => handleFile(e.target.files[0]));
 $("galleryInput").addEventListener("change", (e) => handleFile(e.target.files[0]));
 $("retry").addEventListener("click", () => { $("scan").classList.remove("show"); $("home").style.display = ""; $("cameraInput").value = ""; $("galleryInput").value = ""; });
 $("playNow").addEventListener("click", () => go());
+
+// Desktop: drag a photo anywhere on the page
+window.addEventListener("dragover", (e) => { e.preventDefault(); document.body.classList.add("dragging"); });
+window.addEventListener("dragleave", (e) => { if (!e.relatedTarget) document.body.classList.remove("dragging"); });
+window.addEventListener("drop", (e) => { e.preventDefault(); document.body.classList.remove("dragging"); const f = e.dataTransfer?.files?.[0]; if (f && f.type.startsWith("image/")) handleFile(f); });
 
 let msgTimer = null, navigated = false;
 function setStatus(text, sub, isError) {

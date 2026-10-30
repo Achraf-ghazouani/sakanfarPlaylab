@@ -3,397 +3,455 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#fbfaff">
-<meta name="description" content="Draw a platformer level on paper, snap a photo, and play it in seconds. Powered by Meta Muse Spark.">
+<meta name="theme-color" content="#000000">
+<meta name="description" content="Sakanfar PlayLab: draw a platformer level on paper, snap it with your phone, and play it in seconds. Powered by Meta Muse Spark.">
 <title>Sakanfar PlayLab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #fbfaff; --card: #ffffff; --lav: #efeaff; --lav-2: #e2d9ff; --lav-3: #cdbdff;
-    --purple: #7c3aed; --purple-deep: #5b21b6; --ink: #1b1535; --muted: #6b6480;
-    --yellow: #fbbf24; --green: #22c55e; --red: #ef4444; --brown: #8b5a2b; --blue: #60a5fa; --gray: #9ca3af;
-    --shadow: 0 10px 30px rgba(91, 33, 182, .10), 0 2px 6px rgba(91, 33, 182, .06);
-    --radius: 22px;
-  }
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body {
-    margin: 0; min-height: 100%; color: var(--ink); background: var(--bg);
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5;
-    background-image:
-      radial-gradient(700px 420px at 8% 0%, #ebe3ff 0%, transparent 65%),
-      radial-gradient(600px 400px at 100% 10%, #ffe6f4 0%, transparent 60%),
-      radial-gradient(800px 500px at 50% 110%, #e8e0ff 0%, transparent 60%);
-  }
-  h1, h2, .btn, .brand, .step b, .num { font-family: "Fredoka", system-ui, sans-serif; }
-  a { color: var(--purple); }
-  .wrap { width: min(1120px, 100% - 32px); margin: 0 auto; }
+  :root { --bg:#000; --ink:#fff; --muted:#b8b8c6; --line:rgba(255,255,255,.09); --green:#c6ff3d; --purple:#8b5cf6; --pink:#f472b6; }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter, system-ui, sans-serif; line-height:1.5; }
+  a { color:inherit; }
+  .px { font-family:"Press Start 2P", monospace; letter-spacing:.04em; }
 
-  /* top bar */
-  .top { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 22px; color: var(--ink); text-decoration: none; }
-  .brand .logo { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, var(--purple), #c084fc); display: grid; place-items: center; box-shadow: var(--shadow); }
-  .brand .logo svg { width: 22px; height: 22px; }
-  .brand span { color: var(--purple); }
-  .top nav { display: flex; gap: 6px; }
-  .top nav a { text-decoration: none; color: var(--muted); font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: 999px; }
-  .top nav a:hover { background: var(--lav); color: var(--purple-deep); }
+  /* ---------- hero ---------- */
+  .hero { position:relative; height:100svh; min-height:560px; overflow:hidden; background:#4aa3df; }
+  #world { position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated; image-rendering:crisp-edges; display:block; }
+  .hero::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,.25) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 60%, rgba(0,0,0,.45) 100%); pointer-events:none; }
+  .top { position:absolute; top:0; left:0; right:0; z-index:3; display:flex; align-items:center; justify-content:space-between; padding:18px 24px; }
+  .top .brand { display:flex; align-items:center; gap:10px; font-weight:600; font-size:15px; text-decoration:none; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+  .top .brand svg { width:20px; height:20px; }
+  .top .title { position:absolute; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:10px; font-weight:600; font-size:22px; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+  .top .badge { font-family:"Press Start 2P", monospace; font-size:9px; border:1px solid #fff; border-radius:999px; padding:6px 10px; letter-spacing:.08em; }
+  .top nav a { font-size:14px; text-decoration:none; margin-left:18px; opacity:.9; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+  .hero-center { position:absolute; inset:0; z-index:2; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 16px; }
+  .logo { position:relative; font-size:clamp(34px, 8.5vw, 104px); line-height:1; color:#fff; text-shadow:0 4px 0 rgba(0,0,0,.35), 0 0 30px rgba(0,0,0,.3); }
+  .logo .g { position:absolute; inset:0; color:#fff; pointer-events:none; }
+  .logo .g1 { animation:glitch1 3.6s infinite steps(1); color:#9ff0ff; mix-blend-mode:screen; }
+  .logo .g2 { animation:glitch2 3.6s infinite steps(1); color:#ff9ae6; mix-blend-mode:screen; }
+  @keyframes glitch1 { 0%, 86%, 100% { clip-path:inset(0 0 100% 0); transform:none; } 88% { clip-path:inset(10% 0 60% 0); transform:translate(-6px, 0); } 91% { clip-path:inset(55% 0 20% 0); transform:translate(5px, 0); } 94% { clip-path:inset(30% 0 40% 0); transform:translate(-3px, 0); } }
+  @keyframes glitch2 { 0%, 85%, 100% { clip-path:inset(0 0 100% 0); transform:none; } 87% { clip-path:inset(60% 0 10% 0); transform:translate(6px, 0); } 90% { clip-path:inset(20% 0 65% 0); transform:translate(-5px, 0); } 93% { clip-path:inset(45% 0 35% 0); transform:translate(4px, 0); } }
+  .tag { margin:min(16vh, 150px) 0 22px; font-size:clamp(20px, 3vw, 36px); font-weight:500; text-shadow:0 2px 6px rgba(0,0,0,.6); }
+  .start { display:inline-flex; align-items:center; justify-content:center; background:#fff; color:#000; border:0; border-radius:999px; padding:18px 36px; font-family:"Press Start 2P", monospace; font-size:13px; letter-spacing:.12em; cursor:pointer; text-decoration:none; box-shadow:0 10px 30px rgba(0,0,0,.35); transition:transform .1s; }
+  .start:hover { transform:translateY(-2px) scale(1.02); }
+  .start:active { transform:translateY(1px); }
+  .scroll-hint { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); z-index:2; font-size:12px; opacity:.8; animation:bob 1.6s infinite; }
+  @keyframes bob { 50% { transform:translate(-50%, 6px); } }
+  input[type=file] { display:none; }
 
-  /* hero */
-  .hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px; align-items: center; padding: 28px 0 40px; }
-  .eyebrow { display: inline-flex; align-items: center; gap: 8px; background: var(--lav); color: var(--purple-deep); font-weight: 600; font-size: 13px; padding: 6px 12px; border-radius: 999px; }
-  .eyebrow i { width: 8px; height: 8px; border-radius: 50%; background: var(--purple); display: inline-block; box-shadow: 0 0 0 4px #ddd0ff; }
-  h1 { font-size: clamp(38px, 6vw, 66px); line-height: 1.02; margin: 18px 0 14px; letter-spacing: -0.01em; font-weight: 700; }
-  h1 em { font-style: normal; background: linear-gradient(90deg, var(--purple), #d946ef); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .lead { font-size: 18px; color: var(--muted); max-width: 520px; margin: 0 0 24px; }
-  .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; border: 0; border-radius: 16px; padding: 16px 22px; font-size: 18px; font-weight: 600; cursor: pointer; text-decoration: none; transition: transform .12s ease, box-shadow .12s ease, background .12s; -webkit-tap-highlight-color: transparent; }
-  .btn svg { width: 24px; height: 24px; flex: none; }
-  .btn-primary { background: linear-gradient(180deg, #8b5cf6, var(--purple)); color: #fff; box-shadow: 0 8px 20px rgba(124, 58, 237, .35); }
-  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(124, 58, 237, .4); }
-  .btn-primary:active { transform: translateY(1px); }
-  .btn-secondary { background: #fff; color: var(--purple-deep); border: 2px solid var(--lav-2); }
-  .btn-secondary:hover { background: var(--lav); }
-  input[type=file] { display: none; }
-  .drop-hint { font-size: 14px; color: var(--muted); margin: 14px 0 0; }
-  .drop-hint b { color: var(--ink); }
-  body.dragging .hero-text { outline: 3px dashed var(--lav-3); outline-offset: 12px; border-radius: 16px; }
+  /* ---------- dark sections with scanlines ---------- */
+  .lines { background-image:repeating-linear-gradient(180deg, transparent 0 46px, var(--line) 46px 47px); }
+  section.block { padding:80px 24px; }
+  .wrap { width:min(1280px, 100%); margin:0 auto; }
+  .big { font-family:"Press Start 2P", monospace; font-size:clamp(20px, 4.2vw, 58px); line-height:1.35; text-align:center; margin:0; letter-spacing:.02em; }
+  .lead { text-align:center; max-width:760px; margin:26px auto 0; font-size:clamp(16px, 1.6vw, 22px); color:#e8e8ef; }
 
-  .last { display: none; align-items: center; gap: 14px; margin-top: 22px; padding: 12px; background: #fff; border: 2px solid var(--lav-2); border-radius: 18px; max-width: 420px; }
-  .last.show { display: flex; }
-  .last img { width: 72px; height: 54px; object-fit: cover; border-radius: 10px; background: var(--lav); }
-  .last b { display: block; }
-  .last a { font-weight: 600; text-decoration: none; }
+  /* tabs */
+  .tabs { display:flex; justify-content:center; gap:16px; flex-wrap:wrap; margin-bottom:36px; }
+  .tab { background:#1f1f27; color:#aaa; border:1px solid #2a2a33; border-radius:999px; padding:16px 40px; font-family:"Press Start 2P", monospace; font-size:11px; letter-spacing:.14em; cursor:pointer; transition:all .15s; }
+  .tab.active { background:transparent; color:var(--green); border-color:var(--green); box-shadow:0 0 0 1px rgba(198,255,61,.25) inset; }
+  .tab-body { font-size:clamp(15px, 1.4vw, 19px); color:#e8e8ef; max-width:1180px; margin:0 auto; }
+  .tab-body a.cta { display:inline-block; margin-top:10px; font-weight:600; text-decoration:underline; text-underline-offset:4px; }
+  .console { margin:34px auto 0; background:#17151f; border:1px solid #2b2838; border-radius:28px; padding:clamp(14px, 3vw, 40px); max-width:1260px; box-shadow:0 30px 80px rgba(0,0,0,.6); }
+  .console .inner { background:#0f0e14; border-radius:18px; padding:clamp(14px, 3vw, 36px); display:grid; grid-template-columns:1.05fr 1fr; gap:28px; align-items:center; }
+  .console .paper { background:#fffdf8; border-radius:14px; padding:8px; box-shadow:0 10px 30px rgba(0,0,0,.5); }
+  .console .paper svg { width:100%; height:auto; display:block; border-radius:10px; }
+  .console h3 { font-family:"Press Start 2P", monospace; font-size:clamp(13px, 1.5vw, 20px); line-height:1.6; margin:0 0 14px; color:#fff; }
+  .console p { color:var(--muted); margin:0 0 18px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { font-size:12px; border:1px solid #3a3746; border-radius:999px; padding:6px 10px; color:#ddd; }
+  .chip b { color:var(--green); font-weight:600; }
+  .btnrow { display:flex; flex-wrap:wrap; gap:12px; margin-top:22px; }
+  .btn { display:inline-flex; align-items:center; gap:10px; border-radius:999px; padding:14px 22px; font-family:"Press Start 2P", monospace; font-size:11px; letter-spacing:.1em; text-decoration:none; cursor:pointer; border:1px solid #fff; color:#fff; background:transparent; }
+  .btn.primary { background:#fff; color:#000; }
+  .btn svg { width:18px; height:18px; }
 
-  /* animated paper -> game card */
-  .hero-visual { position: relative; }
-  .paper { background: #fff; border-radius: 20px; padding: 10px; box-shadow: var(--shadow), 0 30px 60px rgba(91, 33, 182, .12); transform: rotate(-2deg); animation: float 6s ease-in-out infinite; }
-  .paper svg { width: 100%; height: auto; display: block; border-radius: 14px; }
-  @keyframes float { 0%, 100% { transform: rotate(-2deg) translateY(0); } 50% { transform: rotate(-2deg) translateY(-8px); } }
-  .chips { display: flex; gap: 8px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
-  .chip { background: #fff; border: 2px solid var(--lav-2); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; color: var(--purple-deep); }
-  .chip.live::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; animation: blink 1.4s infinite; }
-  @keyframes blink { 50% { opacity: .3; } }
+  /* discover */
+  .discover-pill { display:flex; justify-content:center; }
+  .discover-pill span { background:#fff; color:#000; border-radius:999px; padding:16px 34px; font-family:"Press Start 2P", monospace; font-size:12px; letter-spacing:.14em; }
+  .sub-px { text-align:center; font-family:"Press Start 2P", monospace; font-size:12px; letter-spacing:.12em; margin:40px 0 8px; }
+  .sub-txt { text-align:center; font-size:18px; margin:0 0 28px; }
+  .cards { display:flex; gap:22px; overflow-x:auto; padding:10px 24px 24px; scroll-snap-type:x mandatory; scrollbar-width:none; }
+  .cards::-webkit-scrollbar { display:none; }
+  .card { flex:0 0 min(78vw, 440px); scroll-snap-align:center; aspect-ratio:4/5; border-radius:22px; overflow:hidden; position:relative; background:#111; border:1px solid #26262e; text-decoration:none; color:#fff; }
+  .card canvas { width:100%; height:100%; display:block; image-rendering:pixelated; }
+  .card .genre { position:absolute; top:14px; left:14px; background:#000; border-radius:999px; padding:10px 16px; font-family:"Press Start 2P", monospace; font-size:10px; letter-spacing:.12em; }
+  .card .meta { position:absolute; left:14px; right:14px; bottom:14px; background:rgba(0,0,0,.72); border-radius:16px; padding:16px; backdrop-filter:blur(6px); }
+  .card .meta small { display:block; font-family:"Press Start 2P", monospace; font-size:8px; color:#bbb; letter-spacing:.1em; margin-bottom:8px; }
+  .card .meta b { display:block; font-family:"Press Start 2P", monospace; font-size:13px; letter-spacing:.06em; line-height:1.5; }
+  .card .meta p { margin:8px 0 0; font-family:"Press Start 2P", monospace; font-size:8px; color:#ccc; line-height:1.7; }
 
-  /* scanning card */
-  #scan { display: none; max-width: 560px; margin: 10px auto 40px; background: var(--card); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); border: 2px solid var(--lav-2); }
-  #scan.show { display: block; }
-  .shot { position: relative; border-radius: 14px; overflow: hidden; background: #1b1535; aspect-ratio: 4 / 3; }
-  .shot img { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .shot .beam { position: absolute; left: 0; right: 0; height: 26%; top: -30%; background: linear-gradient(180deg, rgba(167,139,250,0) 0%, rgba(167,139,250,.55) 50%, rgba(244,114,182,0) 100%); border-bottom: 3px solid #e9d5ff; box-shadow: 0 0 24px #c084fc; animation: sweep 1.6s ease-in-out infinite; }
-  .shot .grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px); background-size: 10% 10%; pointer-events: none; }
-  @keyframes sweep { 0% { top: -30%; } 100% { top: 104%; } }
-  .status { display: flex; align-items: center; gap: 12px; margin-top: 14px; font-size: 18px; font-weight: 700; color: var(--purple-deep); min-height: 30px; }
-  .spinner { width: 22px; height: 22px; border: 3px solid var(--lav-2); border-top-color: var(--purple); border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .status.error { color: #b91c1c; }
-  .status.error .spinner { display: none; }
-  .sub { font-size: 14px; color: var(--muted); margin-top: 6px; }
-  #playNow { display: none; width: 100%; margin-top: 14px; }
-  #retry { display: none; width: 100%; margin-top: 10px; }
-  #retry.show { display: flex; }
+  /* scanning card (phone flow) */
+  #scan { display:none; max-width:560px; margin:0 auto; background:#111; border:1px solid #2a2a33; border-radius:22px; padding:18px; }
+  #scan.show { display:block; }
+  .shot { position:relative; border-radius:14px; overflow:hidden; background:#000; aspect-ratio:4/3; }
+  .shot img { width:100%; height:100%; object-fit:contain; display:block; }
+  .shot .beam { position:absolute; left:0; right:0; height:26%; top:-30%; background:linear-gradient(180deg, rgba(198,255,61,0) 0%, rgba(198,255,61,.45) 50%, rgba(139,92,246,0) 100%); border-bottom:3px solid var(--green); box-shadow:0 0 24px var(--green); animation:sweep 1.6s ease-in-out infinite; }
+  .shot .grid { position:absolute; inset:0; background-image:linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px); background-size:10% 10%; pointer-events:none; }
+  @keyframes sweep { 0% { top:-30%; } 100% { top:104%; } }
+  .status { display:flex; align-items:center; gap:12px; margin-top:14px; font-family:"Press Start 2P", monospace; font-size:11px; line-height:1.7; color:var(--green); min-height:30px; }
+  .spinner { width:18px; height:18px; border:3px solid #333; border-top-color:var(--green); border-radius:50%; animation:spin .8s linear infinite; flex:none; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .status.error { color:#ff6b6b; }
+  .status.error .spinner { display:none; }
+  .sub { font-size:14px; color:var(--muted); margin-top:8px; }
+  #playNow, #retry { display:none; width:100%; margin-top:14px; justify-content:center; }
+  #retry.show { display:inline-flex; }
 
-  /* sections */
-  section.block { padding: 26px 0; }
-  h2 { font-size: clamp(26px, 3.4vw, 36px); margin: 0 0 6px; font-weight: 700; }
-  .sub-h { color: var(--muted); margin: 0 0 22px; font-size: 16px; }
-  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-  .step { background: var(--card); border: 2px solid var(--lav-2); border-radius: 18px; padding: 18px; box-shadow: var(--shadow); position: relative; }
-  .step .num { position: absolute; top: -12px; left: 16px; background: var(--purple); color: #fff; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; }
-  .step .ico { font-size: 30px; margin-top: 6px; }
-  .step b { display: block; font-size: 19px; margin: 6px 0 2px; }
-  .step p { margin: 0; color: var(--muted); font-size: 14px; }
-  .legend { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-  .doodle { background: var(--card); border: 2px solid var(--lav-2); border-radius: 18px; padding: 14px; display: flex; align-items: center; gap: 12px; transition: transform .12s; }
-  .doodle:hover { transform: translateY(-2px); border-color: var(--lav-3); }
-  .doodle svg { width: 64px; height: 48px; flex: none; }
-  .doodle .t { font-size: 14px; color: var(--muted); }
-  .doodle .t b { display: block; color: var(--ink); font-size: 15px; }
-  .doodle .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
-
-  footer { padding: 30px 0 40px; color: var(--muted); font-size: 13px; text-align: center; }
-  footer a { color: var(--purple-deep); }
+  /* footer */
+  footer { padding:40px 24px 30px; border-top:1px solid #222; }
+  footer .links { display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; font-size:14px; color:#ddd; }
+  footer .links a { text-decoration:none; margin-left:22px; }
+  footer .word { font-family:"Press Start 2P", monospace; font-size:clamp(22px, 7.2vw, 108px); line-height:1.1; margin:60px 0 40px; text-align:center; letter-spacing:-.01em; }
+  footer .bottom { display:flex; justify-content:center; flex-wrap:wrap; gap:36px; font-family:"Press Start 2P", monospace; font-size:9px; letter-spacing:.12em; color:#ddd; }
+  footer .bottom a { text-decoration:none; }
 
   @media (max-width: 900px) {
-    .hero { grid-template-columns: 1fr; gap: 28px; padding-top: 10px; }
-    .steps, .legend { grid-template-columns: repeat(2, 1fr); }
-    .top nav a.hide-m { display: none; }
+    .console .inner { grid-template-columns:1fr; }
+    .top .title { display:none; }
+    .top nav { display:none; }
+    .tab { padding:14px 22px; }
+    section.block { padding:56px 16px; }
   }
-  @media (max-width: 560px) {
-    .wrap { width: min(1120px, 100% - 28px); }
-    .cta { flex-direction: column; align-items: stretch; }
-    .cta .btn { width: 100%; padding: 18px; font-size: 19px; }
-    .lead { font-size: 16px; }
-    .legend { grid-template-columns: 1fr 1fr; gap: 10px; }
-    .doodle { padding: 10px; gap: 8px; } .doodle svg { width: 48px; height: 36px; }
-    .steps { grid-template-columns: 1fr; }
-  }
-  @media (pointer: coarse) { .desktop-only { display: none; } }
-  /* On a computer the big-screen flow is the main call to action; the photo buttons become secondary. */
-  @media (pointer: fine) {
-    #cameraBtn { background: #fff; color: var(--purple-deep); border: 2px solid var(--lav-2); box-shadow: none; }
-    #cameraBtn:hover { background: var(--lav); transform: none; }
-  }
+  @media (pointer: coarse) { .desktop-only { display:none !important; } }
+  @media (pointer: fine) { .phone-only { display:none !important; } }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <a class="brand" href="index.html">
-      <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg></span>
-      Sakanfar <span>PlayLab</span>
-    </a>
-    <nav>
-      <a href="game.html?level=levels/sample.json">Sample level</a>
-      <a href="viewer.html" class="hide-m">Debug viewer</a>
-    </nav>
-  </header>
 
-  <!-- HERO -->
-  <section class="hero" id="home">
-    <div class="hero-text">
-      <span class="eyebrow"><i></i> Meta hackathon 2026 &middot; powered by Muse Spark</span>
-      <h1>Draw a level on paper.<br><em>Snap it. Play it.</em></h1>
-      <p class="lead">Sketch a platformer with any pen. Point your phone at it. Muse Spark understands what you meant, a playtest agent fixes every impossible jump, and you are playing in about ten seconds.</p>
-      <div class="cta">
-        <a class="btn btn-primary desktop-only" id="startBtn" href="game.html?screen=1">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
-          Get started on the big screen
-        </a>
-        <label class="btn btn-primary" id="cameraBtn" for="cameraInput">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
-          Take a photo of your level
-        </label>
-        <input type="file" id="cameraInput" accept="image/*" capture="environment">
-        <label class="btn btn-secondary" for="galleryInput">Choose from gallery</label>
-        <input type="file" id="galleryInput" accept="image/*">
-      </div>
-      <p class="drop-hint desktop-only"><b>Get started</b> shows a QR code: your phone becomes the camera and the controller, the big screen shows the game. You can also drag a photo anywhere on this page, or open <b id="hostName">this page</b> on your phone.</p>
-      <div class="last" id="lastLevel">
-        <img id="lastThumb" alt="your last drawing">
-        <div><b>Your last drawing</b><a href="game.html?source=storage">Play it again &rarr;</a></div>
-      </div>
-    </div>
+<!-- ============ HERO ============ -->
+<header class="hero" id="home">
+  <canvas id="world" aria-hidden="true"></canvas>
+  <div class="top">
+    <a class="brand" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg>Sakanfar Productions</a>
+    <div class="title">PlayLab <span class="badge">HACKATHON</span></div>
+    <nav><a href="#how">How it works</a><a href="#discover">Discover</a><a href="viewer.html" class="desktop-only">Viewer</a></nav>
+  </div>
+  <div class="hero-center">
+    <div class="logo px" aria-label="PlayLab">PLAYLAB<span class="g g1" aria-hidden="true">PLAYLAB</span><span class="g g2" aria-hidden="true">PLAYLAB</span></div>
+    <h1 class="tag">Draw a level on paper. Snap it. Play it.</h1>
+    <button class="start" id="startBtn">PRESS START</button>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment">
+    <input type="file" id="galleryInput" accept="image/*">
+  </div>
+  <div class="scroll-hint">&#9660;</div>
+</header>
 
-    <div class="hero-visual" aria-hidden="true">
-      <div class="paper">
-        <svg viewBox="0 0 480 300">
-          <defs>
-            <pattern id="rules" width="480" height="24" patternUnits="userSpaceOnUse"><line x1="0" y1="23.5" x2="480" y2="23.5" stroke="#e4ddf7" stroke-width="1"/></pattern>
-            <clipPath id="reveal"><rect x="0" y="0" width="0" height="300"><animate attributeName="width" values="0;0;480;480;0;0" keyTimes="0;0.12;0.5;0.74;0.96;1" dur="8s" repeatCount="indefinite"/></rect></clipPath>
-          </defs>
-          <rect width="480" height="300" rx="14" fill="#fffdf8"/>
-          <rect width="480" height="300" rx="14" fill="url(#rules)"/>
-
-          <!-- the ink sketch -->
-          <g fill="none" stroke="#1b1535" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 250 Q140 246 240 250 T460 250"/>
-            <circle cx="70" cy="196" r="9"/><path d="M70 205v30M70 235l-10 15M70 235l10 15M70 214l-12 10M70 214l12 10"/>
-            <path d="M150 170h90v12h-90z"/>
-            <circle cx="175" cy="150" r="7"/><circle cx="200" cy="150" r="7"/>
-            <path d="M302 100q-12-10-4-22q8-14 24-8q14-14 30 0q18-2 14 16q8 14-10 14z"/>
-            <path d="M250 250v-30h30v30"/>
-            <path d="M300 250v-40M300 228h-10v-14M300 220h10v-16M296 240l-4-2M304 236l4-2"/>
-            <path d="M360 250l10-18 10 18 10-18 10 18"/>
-            <path d="M430 250v-70M430 180l30 10-30 10"/>
-            <circle cx="52" cy="60" r="14"/><path d="M52 38v-8M52 90v-8M30 60h-8M82 60h-8M36 44l-5-5M73 76l-5-5M36 76l-5 5M73 44l-5 5"/>
-          </g>
-
-          <!-- the game, revealed by the scan beam -->
-          <g clip-path="url(#reveal)">
-            <rect width="480" height="300" rx="14" fill="#fffdf8"/>
-            <rect width="480" height="300" rx="14" fill="url(#rules)"/>
-            <rect x="20" y="250" width="440" height="34" rx="4" fill="#8b5a2b" stroke="#4a2f12" stroke-width="2.5"/>
-            <rect x="150" y="170" width="90" height="12" rx="3" fill="#8b5a2b" stroke="#4a2f12" stroke-width="2.5"/>
-            <rect x="250" y="220" width="30" height="30" rx="3" fill="#8b5a2b" stroke="#4a2f12" stroke-width="2.5"/>
-            <g><animateTransform attributeName="transform" type="translate" values="0 0;24 0;0 0" dur="4s" repeatCount="indefinite"/>
-              <rect x="298" y="84" width="64" height="14" rx="7" fill="#60a5fa" stroke="#1d4ed8" stroke-width="2.5"/></g>
-            <ellipse cx="175" cy="150" rx="7" ry="7" fill="#fbbf24" stroke="#b45309" stroke-width="2"><animate attributeName="rx" values="7;2;7" dur="1.3s" repeatCount="indefinite"/></ellipse>
-            <ellipse cx="200" cy="150" rx="7" ry="7" fill="#fbbf24" stroke="#b45309" stroke-width="2"><animate attributeName="rx" values="2;7;2" dur="1.3s" repeatCount="indefinite"/></ellipse>
-            <polygon points="360,250 370,232 380,250 390,232 400,250 410,232 420,250" fill="#9ca3af" stroke="#4b5563" stroke-width="2"/>
-            <rect x="428" y="180" width="4" height="70" fill="#6b7280"/><polygon points="432,180 462,190 432,200" fill="#facc15" stroke="#92400e" stroke-width="2"/>
-            <g><animateTransform attributeName="transform" type="translate" values="0 0;-28 0;0 0" dur="3.2s" repeatCount="indefinite"/>
-              <rect x="288" y="210" width="24" height="40" rx="4" fill="#ef4444" stroke="#7f1d1d" stroke-width="2.5"/>
-              <rect x="293" y="218" width="5" height="5" fill="#fff"/><rect x="302" y="218" width="5" height="5" fill="#fff"/><rect x="295" y="220" width="2" height="2" fill="#111"/><rect x="304" y="220" width="2" height="2" fill="#111"/></g>
-            <g><animateTransform attributeName="transform" type="translate" values="0 0;0 -52;0 0" keyTimes="0;0.5;1" calcMode="spline" keySplines="0.2 0 0.4 1;0.6 0 0.8 1" dur="1.5s" repeatCount="indefinite"/>
-              <rect x="57" y="196" width="26" height="54" rx="4" fill="#22c55e" stroke="#14532d" stroke-width="2.5"/>
-              <rect x="62" y="206" width="6" height="6" fill="#fff"/><rect x="72" y="206" width="6" height="6" fill="#fff"/><rect x="65" y="208" width="2.5" height="2.5" fill="#111"/><rect x="75" y="208" width="2.5" height="2.5" fill="#111"/></g>
-            <circle cx="52" cy="60" r="16" fill="#fde68a" stroke="#f59e0b" stroke-width="2"/>
-          </g>
-
-          <!-- scan beam -->
-          <rect x="-40" y="0" width="40" height="300" fill="#c4b5fd" opacity="0.25"><animate attributeName="x" values="-40;-40;440;440;-40;-40" keyTimes="0;0.12;0.5;0.74;0.96;1" dur="8s" repeatCount="indefinite"/></rect>
-          <rect x="-3" y="0" width="3" height="300" fill="#a78bfa"><animate attributeName="x" values="-3;-3;477;477;-3;-3" keyTimes="0;0.12;0.5;0.74;0.96;1" dur="8s" repeatCount="indefinite"/></rect>
-        </svg>
-      </div>
-      <div class="chips"><span class="chip live">AI reads the sketch</span><span class="chip">Playtest agent checks every jump</span><span class="chip">Touch controls</span></div>
-    </div>
-  </section>
-
-  <!-- SCANNING -->
-  <section id="scan">
-    <div class="shot">
-      <img id="preview" alt="your drawing">
-      <div class="grid"></div>
-      <div class="beam" id="beam"></div>
-    </div>
+<!-- ============ SCANNING (phone flow) ============ -->
+<section class="block lines" id="scanBlock" style="display:none">
+  <div id="scan">
+    <div class="shot"><img id="preview" alt="your drawing"><div class="grid"></div><div class="beam" id="beam"></div></div>
     <div class="status" id="status"><div class="spinner"></div><span id="statusText">Reading your drawing...</span></div>
     <div class="sub" id="statusSub">The AI usually needs about 10 seconds.</div>
-    <button class="btn btn-primary" id="playNow">Play now with the quick fix</button>
-    <button class="btn btn-secondary" id="retry">Try another photo</button>
-  </section>
+    <button class="btn primary" id="playNow">PLAY NOW WITH THE QUICK FIX</button>
+    <button class="btn" id="retry">TRY ANOTHER PHOTO</button>
+  </div>
+</section>
 
-  <!-- HOW IT WORKS -->
-  <section class="block">
-    <h2>How it works</h2>
-    <p class="sub-h">Paper to playable in four steps. No app, no account.</p>
-    <div class="steps">
-      <div class="step"><span class="num">1</span><div class="ico">&#9999;&#65039;</div><b>Draw</b><p>Any paper, any pen. A ground line, a stick figure where you start, a flag at the end. Then go wild.</p></div>
-      <div class="step"><span class="num">2</span><div class="ico">&#128248;</div><b>Snap</b><p>Take a photo. Muse Spark reads what you meant: a cactus is an enemy, a cloud is a moving platform.</p></div>
-      <div class="step"><span class="num">3</span><div class="ico">&#129302;</div><b>Playtest</b><p>An agent simulates every jump. Impossible ones get fixed, with the AI adding steps or lowering a ledge.</p></div>
-      <div class="step"><span class="num">4</span><div class="ico">&#127918;</div><b>Play</b><p>Right on your phone, with big touch buttons. Your drawing stays in the corner so everyone sees the magic.</p></div>
+<!-- ============ MANIFESTO ============ -->
+<section class="block lines" id="how">
+  <div class="wrap">
+    <h2 class="big">IF YOU CAN DRAW IT,<br>YOU CAN PLAY IT.</h2>
+    <p class="lead">Introducing Sakanfar PlayLab, an experimental game lab where a pen and a sheet of paper are the level editor. Sketch, snap, play. No coding, no symbols to learn.</p>
+  </div>
+</section>
+
+<!-- ============ DRAW / SNAP / PLAY ============ -->
+<section class="block lines">
+  <div class="wrap">
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="draw">DRAW</button>
+      <button class="tab" data-tab="snap">SNAP</button>
+      <button class="tab" data-tab="play">PLAY</button>
     </div>
-  </section>
-
-  <!-- CHEAT SHEET -->
-  <section class="block">
-    <h2>Draw anything. The AI gets it.</h2>
-    <p class="sub-h">No rules to learn. These are just the usual suspects.</p>
-    <div class="legend">
-      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="11" r="6"/><path d="M32 17v15M32 32l-8 12M32 32l8 12M32 23l-10 6M32 23l10 6"/></svg><div class="t"><b>Stick figure</b><span class="dot" style="background:#22c55e"></span>start</div></div>
-      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M24 44V8M24 8l22 7-22 7"/></svg><div class="t"><b>Flag</b><span class="dot" style="background:#facc15"></span>goal</div></div>
-      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 40h48M20 20h24v7H20z"/></svg><div class="t"><b>Lines and boxes</b><span class="dot" style="background:#8b5a2b"></span>platforms</div></div>
-      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 34q-10-6-3-14q6-10 17-5q9-10 21 0q12-1 9 11q6 9-7 9z"/></svg><div class="t"><b>Cloud</b><span class="dot" style="background:#60a5fa"></span>moving platform</div></div>
-      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="9"/><circle cx="44" cy="26" r="6"/></svg><div class="t"><b>Circles</b><span class="dot" style="background:#fbbf24"></span>coins</div></div>
-      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M32 44V14M32 30h-9V20M32 24h9V12M28 38l-3-2M36 34l3-2"/></svg><div class="t"><b>Cactus, monster, anything with eyes</b><span class="dot" style="background:#ef4444"></span>enemy</div></div>
-      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 40l10-18 10 18 10-18 10 18"/></svg><div class="t"><b>Triangles, zigzags, fire</b><span class="dot" style="background:#9ca3af"></span>spikes</div></div>
-      <div class="doodle"><svg viewBox="0 0 64 48" fill="none" stroke="#1b1535" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="24" r="8"/><path d="M32 8v4M32 36v4M16 24h4M44 24h4M21 13l3 3M40 32l3 3M21 35l3-3M40 16l3-3"/></svg><div class="t"><b>Sun, trees, words</b><span class="dot" style="background:#a78bfa"></span>decoration</div></div>
+    <div class="tab-body" id="tabBody">
+      <p id="tabText">Stop dreaming of levels and start drawing them. A ground line, a stick figure where you start, a flag at the end, then anything goes: a cactus becomes an enemy, a cloud becomes a moving platform, circles become coins. It is your paper, you make the rules.</p>
+      <a class="cta" id="tabCta" href="#start">Start drawing</a>
     </div>
-  </section>
+    <div class="console">
+      <div class="inner">
+        <div class="paper">
+          <svg viewBox="0 0 480 300" aria-hidden="true">
+            <defs>
+              <pattern id="rules" width="480" height="24" patternUnits="userSpaceOnUse"><line x1="0" y1="23.5" x2="480" y2="23.5" stroke="#e4ddf7" stroke-width="1"/></pattern>
+              <clipPath id="reveal"><rect x="0" y="0" width="0" height="300"><animate attributeName="width" values="0;0;480;480;0;0" keyTimes="0;0.12;0.5;0.74;0.96;1" dur="8s" repeatCount="indefinite"/></rect></clipPath>
+            </defs>
+            <rect width="480" height="300" rx="10" fill="#fffdf8"/><rect width="480" height="300" rx="10" fill="url(#rules)"/>
+            <g fill="none" stroke="#1b1535" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 250 Q140 246 240 250 T460 250"/>
+              <circle cx="70" cy="196" r="9"/><path d="M70 205v30M70 235l-10 15M70 235l10 15M70 214l-12 10M70 214l12 10"/>
+              <path d="M150 170h90v12h-90z"/><circle cx="175" cy="150" r="7"/><circle cx="200" cy="150" r="7"/>
+              <path d="M302 100q-12-10-4-22q8-14 24-8q14-14 30 0q18-2 14 16q8 14-10 14z"/>
+              <path d="M250 250v-30h30v30"/><path d="M300 250v-40M300 228h-10v-14M300 220h10v-16M296 240l-4-2M304 236l4-2"/>
+              <path d="M360 250l10-18 10 18 10-18 10 18"/><path d="M430 250v-70M430 180l30 10-30 10"/>
+              <circle cx="52" cy="60" r="14"/><path d="M52 38v-8M52 90v-8M30 60h-8M82 60h-8M36 44l-5-5M73 76l-5-5M36 76l-5 5M73 44l-5 5"/>
+            </g>
+            <g clip-path="url(#reveal)">
+              <rect width="480" height="300" rx="10" fill="#fffdf8"/><rect width="480" height="300" rx="10" fill="url(#rules)"/>
+              <rect x="20" y="250" width="440" height="34" rx="4" fill="#8b5a2b" stroke="#4a2f12" stroke-width="2.5"/>
+              <rect x="150" y="170" width="90" height="12" rx="3" fill="#8b5a2b" stroke="#4a2f12" stroke-width="2.5"/>
+              <rect x="250" y="220" width="30" height="30" rx="3" fill="#8b5a2b" stroke="#4a2f12" stroke-width="2.5"/>
+              <g><animateTransform attributeName="transform" type="translate" values="0 0;24 0;0 0" dur="4s" repeatCount="indefinite"/><rect x="298" y="84" width="64" height="14" rx="7" fill="#60a5fa" stroke="#1d4ed8" stroke-width="2.5"/></g>
+              <ellipse cx="175" cy="150" rx="7" ry="7" fill="#fbbf24" stroke="#b45309" stroke-width="2"><animate attributeName="rx" values="7;2;7" dur="1.3s" repeatCount="indefinite"/></ellipse>
+              <ellipse cx="200" cy="150" rx="7" ry="7" fill="#fbbf24" stroke="#b45309" stroke-width="2"><animate attributeName="rx" values="2;7;2" dur="1.3s" repeatCount="indefinite"/></ellipse>
+              <polygon points="360,250 370,232 380,250 390,232 400,250 410,232 420,250" fill="#9ca3af" stroke="#4b5563" stroke-width="2"/>
+              <rect x="428" y="180" width="4" height="70" fill="#6b7280"/><polygon points="432,180 462,190 432,200" fill="#facc15" stroke="#92400e" stroke-width="2"/>
+              <g><animateTransform attributeName="transform" type="translate" values="0 0;-28 0;0 0" dur="3.2s" repeatCount="indefinite"/><rect x="288" y="210" width="24" height="40" rx="4" fill="#ef4444" stroke="#7f1d1d" stroke-width="2.5"/><rect x="293" y="218" width="5" height="5" fill="#fff"/><rect x="302" y="218" width="5" height="5" fill="#fff"/></g>
+              <g><animateTransform attributeName="transform" type="translate" values="0 0;0 -52;0 0" keyTimes="0;0.5;1" calcMode="spline" keySplines="0.2 0 0.4 1;0.6 0 0.8 1" dur="1.5s" repeatCount="indefinite"/><rect x="57" y="196" width="26" height="54" rx="4" fill="#22c55e" stroke="#14532d" stroke-width="2.5"/><rect x="62" y="206" width="6" height="6" fill="#fff"/><rect x="72" y="206" width="6" height="6" fill="#fff"/></g>
+              <circle cx="52" cy="60" r="16" fill="#fde68a" stroke="#f59e0b" stroke-width="2"/>
+            </g>
+            <rect x="-40" y="0" width="40" height="300" fill="#c4b5fd" opacity="0.25"><animate attributeName="x" values="-40;-40;440;440;-40;-40" keyTimes="0;0.12;0.5;0.74;0.96;1" dur="8s" repeatCount="indefinite"/></rect>
+            <rect x="-3" y="0" width="3" height="300" fill="#a78bfa"><animate attributeName="x" values="-3;-3;477;477;-3;-3" keyTimes="0;0.12;0.5;0.74;0.96;1" dur="8s" repeatCount="indefinite"/></rect>
+          </svg>
+        </div>
+        <div>
+          <h3>HI MAKER,<br>WHAT ARE WE DRAWING TODAY?</h3>
+          <p>Point your phone at the paper. Muse Spark reads what you meant, a playtest agent fixes every impossible jump, and the level builds itself on the big screen while you keep drawing.</p>
+          <div class="chips"><span class="chip"><b>stick figure</b> start</span><span class="chip"><b>flag</b> goal</span><span class="chip"><b>cloud</b> moving platform</span><span class="chip"><b>cactus</b> enemy</span><span class="chip"><b>circles</b> coins</span><span class="chip"><b>triangles</b> spikes</span></div>
+          <div class="btnrow" id="start">
+            <a class="btn primary desktop-only" href="game.html?screen=1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>BIG SCREEN + PHONE</a>
+            <label class="btn primary phone-only" for="cameraInput"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>TAKE A PHOTO</label>
+            <label class="btn" for="galleryInput">CHOOSE A PHOTO</label>
+            <a class="btn" href="game.html?level=levels/sample.json">SAMPLE LEVEL</a>
+          </div>
+          <p class="desktop-only" style="margin-top:14px;font-size:13px">On a laptop you can also drag a photo anywhere on this page, or open <b id="hostName">this page</b> on your phone.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 
-  <footer>Sakanfar PlayLab &middot; Meta hackathon 2026 &middot; built with Muse Spark and Phaser &middot; <a href="viewer.html">debug viewer</a></footer>
-</div>
+<!-- ============ DISCOVER ============ -->
+<section class="block lines" id="discover">
+  <div class="discover-pill"><span>DISCOVER</span></div>
+  <div class="sub-px">GET INSPIRED</div>
+  <p class="sub-txt">Levels drawn on paper, played in the browser</p>
+  <div class="cards" id="cards"></div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="links"><span>Other pages</span><span><a href="game.html">Game</a><a href="viewer.html">Debug viewer</a><a href="https://github.com/Achraf-ghazouani/sakanfarPlaylab" target="_blank" rel="noopener">GitHub</a></span></div>
+  <div class="word">SAKANFAR<br>PLAYLAB</div>
+  <div class="bottom"><span>META HACKATHON 2026</span><span>MUSE SPARK</span><span>PHASER 3</span><a href="viewer.html">VIEWER</a></div>
+</footer>
 
 <script src="shared/photo.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
-const MAX_SIDE = PhotoUtil.UPLOAD_SIDE;    // upload size (long edge, px)
-const THUMB_SIDE = PhotoUtil.THUMB_SIDE;   // kept in localStorage for the in-game "original drawing" corner
-const MESSAGES = ["Reading your drawing...", "Finding the ground...", "Building platforms...", "Spotting enemies...", "Counting coins...", "Placing the flag...", "Checking every jump...", "Almost there..."];
-const FIX_MESSAGES = ["The AI is fixing the impossible parts...", "Adding stepping stones...", "Lowering a ledge or two...", "Re-checking every jump...", "Still thinking, the AI is thorough..."];
+const isTouch = window.matchMedia && matchMedia("(pointer: coarse)").matches;
 
-// Last drawing card
-try {
-  if (localStorage.getItem("playlab.level")) {
-    const photo = localStorage.getItem("playlab.photo");
-    if (photo) $("lastThumb").src = photo; else $("lastThumb").remove();
-    $("lastLevel").classList.add("show");
+// ---------------------------------------------------------------------------
+// Pixel world: drawn by code at 384x216 and upscaled with crisp pixels.
+// ---------------------------------------------------------------------------
+(function pixelWorld() {
+  const c = $("world"), ctx = c.getContext("2d", { alpha: false });
+  const W = 384, H = 216;
+  c.width = W; c.height = H;
+  const P = { sky0: "#3f8fd6", sky1: "#57a9e8", sky2: "#7cc3f2", sea0: "#1d4f9a", sea1: "#2a66b8", sea2: "#3b7fd0", foam: "#bfe4ff", cloud: "#ffffff", cloudS: "#d9ecfb",
+    grass: "#6ad15a", grassD: "#3f9a3c", dirt: "#9a6a3a", dirtD: "#6e4825", rock: "#5a4030", sand: "#e3c67a", sandD: "#b8964d", trunk: "#6b4423", leaf: "#2f8f3a", leafL: "#58c25a",
+    castle: "#7c3aed", castleL: "#a78bfa", castleD: "#4c1d95", pink: "#f472b6", win: "#fde68a", ice: "#cfe9ff", iceD: "#8fc3f0", rail: "#9aa5b1", coin: "#fbbf24", coinD: "#b45309",
+    player: "#22c55e", playerD: "#14532d", enemy: "#ef4444", enemyD: "#7f1d1d", flag: "#facc15", pole: "#6b7280", balloon0: "#ef4444", balloon1: "#fbbf24", basket: "#8b5a2b" };
+  const rect = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); };
+  const clouds = Array.from({ length: 9 }, (_, i) => ({ x: (i * 53) % W, y: 8 + (i * 17) % 60, w: 22 + (i % 3) * 12, s: 0.08 + (i % 3) * 0.05, far: i % 2 === 0 }));
+  const islands = [
+    { x: 24, y: 128, w: 96, h: 40, kind: "forest" },
+    { x: 140, y: 100, w: 120, h: 52, kind: "castle" },
+    { x: 282, y: 124, w: 84, h: 40, kind: "desert" },
+    { x: 60, y: 186, w: 70, h: 18, kind: "small" },
+    { x: 250, y: 182, w: 80, h: 18, kind: "small" },
+  ];
+  let t = 0;
+  function island(i, bob) {
+    const y = i.y + bob;
+    // underside taper
+    rect(i.x + 6, y + i.h, i.w - 12, 6, P.rock); rect(i.x + 16, y + i.h + 6, i.w - 32, 5, P.rock); rect(i.x + 28, y + i.h + 11, i.w - 56, 4, P.dirtD);
+    rect(i.x, y + 6, i.w, i.h - 6, P.dirt); rect(i.x, y + i.h - 8, i.w, 8, P.dirtD);
+    rect(i.x, y, i.w, 6, P.grass); rect(i.x, y + 6, i.w, 2, P.grassD);
+    for (let k = 0; k < i.w; k += 9) rect(i.x + k, y + 10 + (k * 7) % 11, 3, 2, P.dirtD);
+    if (i.kind === "forest") {
+      for (let k = 0; k < 4; k++) { const tx = i.x + 8 + k * 22; rect(tx + 4, y - 10, 3, 10, P.trunk); rect(tx, y - 22, 11, 13, P.leaf); rect(tx + 2, y - 26, 7, 6, P.leafL); rect(tx + 3, y - 20, 3, 3, P.leafL); }
+      rect(i.x + 70, y - 8, 14, 8, P.sandD); rect(i.x + 72, y - 12, 10, 4, P.sand); rect(i.x + 76, y - 6, 3, 6, P.castleD);
+    }
+    if (i.kind === "castle") {
+      const cx = i.x + 18;
+      rect(cx, y - 34, 84, 34, P.castle); rect(cx, y - 34, 84, 3, P.castleL);
+      for (let k = 0; k < 6; k++) for (let r = 0; r < 3; r++) rect(cx + 6 + k * 13, y - 28 + r * 10, 4, 5, (Math.floor(t / 20) + k + r) % 5 === 0 ? P.pink : P.win);
+      const towers = [[cx - 6, 50], [cx + 30, 70], [cx + 66, 56]];
+      for (const [tx, th] of towers) { rect(tx, y - th, 14, th, P.castleD); rect(tx + 2, y - th, 10, th, P.castle); rect(tx - 2, y - th - 8, 18, 8, P.pink); rect(tx + 4, y - th - 16, 6, 8, P.pink); rect(tx + 5, y - th - 22, 4, 6, P.castleL); rect(tx + 5, y - th + 10, 4, 6, P.win); rect(tx + 9, y - th - 20, 1, 10, P.pole); rect(tx + 10, y - th - 20, 5, 3, P.flag); }
+      // neon sign flicker
+      rect(cx + 20, y - 40, 30, 5, (Math.floor(t / 12) % 7 === 0) ? P.castleD : P.pink); rect(cx + 23, y - 39, 24, 3, P.win);
+    }
+    if (i.kind === "desert") {
+      rect(i.x + 4, y, i.w - 8, 4, P.sand);
+      const px = i.x + 12; for (let k = 0; k < 5; k++) rect(px + k * 4, y - 6 - k * 6, 40 - k * 8, 6, k % 2 ? P.sandD : P.sand);
+      rect(i.x + 60, y - 16, 18, 16, P.ice); rect(i.x + 64, y - 26, 10, 10, P.ice); rect(i.x + 66, y - 34, 6, 8, P.iceD); rect(i.x + 62, y - 14, 4, 6, P.iceD);
+    }
   }
-} catch {}
+  function draw() {
+    t++;
+    // sky
+    rect(0, 0, W, 70, P.sky0); rect(0, 70, W, 60, P.sky1); rect(0, 130, W, 40, P.sky2);
+    // sea
+    rect(0, 170, W, H - 170, P.sea1); rect(0, 170, W, 6, P.sea2); rect(0, 200, W, 16, P.sea0);
+    for (let k = 0; k < 24; k++) { const wx = (k * 37 + Math.floor(t / 3)) % (W + 20) - 10; rect(wx, 178 + (k % 5) * 7, 6 + (k % 3) * 4, 1, P.foam); }
+    // clouds
+    for (const cl of clouds) {
+      cl.x += cl.s * (cl.far ? 0.6 : 1); if (cl.x > W + 40) cl.x = -40;
+      const col = cl.far ? P.cloudS : P.cloud;
+      rect(cl.x, cl.y + 4, cl.w, 7, col); rect(cl.x + 5, cl.y, cl.w - 10, 5, col); rect(cl.x + cl.w * 0.3, cl.y - 4, cl.w * 0.35, 5, col);
+    }
+    // rails between islands
+    rect(118, 150, 26, 2, P.rail); rect(118, 152, 26, 1, P.castleD); rect(258, 140, 26, 2, P.rail); rect(258, 142, 26, 1, P.castleD);
+    rect(130, 150, 2, 36, P.rail); rect(140, 150, 2, 36, P.rail); rect(262, 142, 2, 40, P.rail); rect(276, 142, 2, 40, P.rail);
+    // islands
+    islands.forEach((i, n) => island(i, Math.round(Math.sin(t / 40 + n) * 2)));
+    // coins
+    for (let k = 0; k < 6; k++) { const cx = 70 + k * 46, cy = 86 + (k % 2) * 10; const ph = Math.floor((t / 6 + k) % 4); const w = [5, 3, 1, 3][ph]; rect(cx - w / 2, cy, w, 6, P.coin); rect(cx - w / 2, cy + 5, w, 1, P.coinD); }
+    // flag on the right island
+    rect(348, 100, 1, 24, P.pole); rect(349, 100, 8, 5, P.flag);
+    // enemy patrolling the forest island
+    const ex = 40 + Math.abs(((t / 2) % 120) - 60);
+    rect(ex, 118, 9, 10, P.enemy); rect(ex, 126, 9, 2, P.enemyD); rect(ex + 2, 120, 2, 2, "#fff"); rect(ex + 5, 120, 2, 2, "#fff");
+    // player jumping on the castle island
+    const jump = Math.max(0, Math.sin(t / 25)) * 24;
+    const pxp = 150 + ((t / 3) % 90);
+    rect(pxp, 92 - jump, 8, 12, P.player); rect(pxp, 102 - jump, 8, 2, P.playerD); rect(pxp + 2, 94 - jump, 2, 2, "#fff"); rect(pxp + 5, 94 - jump, 2, 2, "#fff");
+    // balloon + airship
+    const by = 30 + Math.sin(t / 50) * 4;
+    rect(20, by, 18, 14, P.balloon0); rect(24, by, 4, 14, P.balloon1); rect(32, by, 4, 14, P.balloon1); rect(26, by + 14, 6, 4, P.rail); rect(25, by + 18, 8, 4, P.basket);
+    const ax = (W + 40) - ((t / 2) % (W + 80));
+    rect(ax, 22, 30, 7, P.cloudS); rect(ax + 4, 20, 22, 2, P.pink); rect(ax + 10, 29, 12, 4, P.castleD); rect(ax + 28, 24, 4, 3, P.pink);
+    requestAnimationFrame(draw);
+  }
+  function fit() { const s = Math.max(innerWidth / W, (c.parentElement.clientHeight || innerHeight) / H); c.style.width = Math.ceil(W * s) + "px"; c.style.height = Math.ceil(H * s) + "px"; c.style.left = Math.round((innerWidth - W * s) / 2) + "px"; c.style.top = Math.round(((c.parentElement.clientHeight || innerHeight) - H * s) / 2) + "px"; }
+  addEventListener("resize", fit); fit(); draw();
+})();
+
+// ---------------------------------------------------------------------------
+// PRESS START: big screen on a computer, camera on a phone
+// ---------------------------------------------------------------------------
+$("startBtn").addEventListener("click", () => { if (isTouch) $("cameraInput").click(); else location.href = "game.html?screen=1"; });
 $("hostName").textContent = location.host || "this page";
 
+// tabs
+const TABS = {
+  draw: ["Stop dreaming of levels and start drawing them. A ground line, a stick figure where you start, a flag at the end, then anything goes: a cactus becomes an enemy, a cloud becomes a moving platform, circles become coins. It is your paper, you make the rules.", "Start drawing", "#start"],
+  snap: ["Press start on the computer, scan the QR with your phone, and point the camera at the paper. The sheet is detected live, captured when you hold still, flattened and read by Muse Spark. Keep drawing: every change rebuilds the level on the big screen.", "Open the big screen", isTouch ? "#start" : "game.html?screen=1"],
+  play: ["Your phone becomes the controller: left, right, jump, with vibration on coins and hits. Friends scan the same code to join as players two to four. A playtest agent makes sure every jump is possible before you even try.", "Play the sample level", "game.html?level=levels/sample.json"],
+};
+$("tabs").addEventListener("click", (e) => {
+  const b = e.target.closest(".tab"); if (!b) return;
+  for (const t of $("tabs").children) t.classList.toggle("active", t === b);
+  const [text, cta, href] = TABS[b.dataset.tab];
+  $("tabText").textContent = text; $("tabCta").textContent = cta; $("tabCta").href = href;
+});
+
+// ---------------------------------------------------------------------------
+// Discover: level cards rendered from levels/index.json
+// ---------------------------------------------------------------------------
+const COLORS = { start: "#4ade80", goal: "#facc15", platform: "#8b5a2b", moving_platform: "#60a5fa", coin: "#fbbf24", enemy: "#ef4444", spike: "#9ca3af", decoration: "#a78bfa" };
+function renderLevel(level, canvas) {
+  const w = 128, h = 160; canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#1e1b4b"); g.addColorStop(1, "#4c1d95"); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < 40; i++) { ctx.fillStyle = i % 3 ? "#ffffff44" : "#fde68a66"; ctx.fillRect((i * 37) % w, (i * 53) % 90, 1, 1); }
+  const sx = w / 1000, sy = h / 1000;
+  for (const o of level.objects || []) {
+    ctx.fillStyle = COLORS[o.type] || "#fff";
+    const x = Math.round(o.x * sx), y = Math.round(o.y * sy), ow = Math.max(2, Math.round(o.w * sx)), oh = Math.max(2, Math.round(o.h * sy));
+    if (o.type === "coin") { ctx.fillRect(x, y, 3, 3); }
+    else if (o.type === "start" || o.type === "enemy") { ctx.fillRect(x, y + oh - 6, 4, 6); }
+    else if (o.type === "goal") { ctx.fillStyle = "#6b7280"; ctx.fillRect(x, y, 1, oh); ctx.fillStyle = COLORS.goal; ctx.fillRect(x + 1, y, 4, 3); }
+    else ctx.fillRect(x, y, ow, oh);
+  }
+}
+async function discover() {
+  const row = $("cards");
+  let levels = [];
+  try { levels = (await (await fetch("levels/index.json", { cache: "no-store" })).json()).levels; } catch {}
+  const genres = { sample: "PLATFORMER", level1: "NOTEBOOK", impossible: "FIXED BY AI" };
+  for (const l of levels) {
+    let level; try { level = await (await fetch("levels/" + l.file, { cache: "no-store" })).json(); } catch { continue; }
+    const name = l.file.replace(/\.json$/, "");
+    const a = document.createElement("a"); a.className = "card"; a.href = "game.html?level=levels/" + l.file;
+    const cv = document.createElement("canvas"); renderLevel(level, cv); a.appendChild(cv);
+    const genre = document.createElement("span"); genre.className = "genre"; genre.textContent = genres[name.replace(".fixed", "")] || "PLATFORMER"; a.appendChild(genre);
+    const meta = document.createElement("div"); meta.className = "meta";
+    meta.innerHTML = `<small>SINGLE PLAYER &middot; ${l.objects} THINGS</small><b>${name.toUpperCase().replace(".FIXED", " (AI FIX)")}</b><p>${(level.theme || "").toUpperCase()}</p>`;
+    a.appendChild(meta); row.appendChild(a);
+  }
+  if (!levels.length) row.innerHTML = `<p style="color:#888;padding:20px">Scan a drawing to see your levels here.</p>`;
+}
+discover();
+
+// ---------------------------------------------------------------------------
+// Phone flow: take a photo -> /api/scan -> AI fix phase -> game.html
+// ---------------------------------------------------------------------------
+const MAX_SIDE = PhotoUtil.UPLOAD_SIDE, THUMB_SIDE = PhotoUtil.THUMB_SIDE;
+const MESSAGES = ["READING YOUR DRAWING...", "FINDING THE GROUND...", "BUILDING PLATFORMS...", "SPOTTING ENEMIES...", "COUNTING COINS...", "PLACING THE FLAG...", "CHECKING EVERY JUMP...", "ALMOST THERE..."];
+const FIX_MESSAGES = ["THE AI IS FIXING THE IMPOSSIBLE PARTS...", "ADDING STEPPING STONES...", "LOWERING A LEDGE OR TWO...", "RE-CHECKING EVERY JUMP...", "STILL THINKING..."];
 $("cameraInput").addEventListener("change", (e) => handleFile(e.target.files[0]));
 $("galleryInput").addEventListener("change", (e) => handleFile(e.target.files[0]));
-$("retry").addEventListener("click", () => { $("scan").classList.remove("show"); $("home").style.display = ""; $("cameraInput").value = ""; $("galleryInput").value = ""; });
+$("retry").addEventListener("click", () => { $("scan").classList.remove("show"); $("scanBlock").style.display = "none"; $("cameraInput").value = ""; $("galleryInput").value = ""; });
 $("playNow").addEventListener("click", () => go());
-
-// Desktop: drag a photo anywhere on the page
-window.addEventListener("dragover", (e) => { e.preventDefault(); document.body.classList.add("dragging"); });
-window.addEventListener("dragleave", (e) => { if (!e.relatedTarget) document.body.classList.remove("dragging"); });
-window.addEventListener("drop", (e) => { e.preventDefault(); document.body.classList.remove("dragging"); const f = e.dataTransfer?.files?.[0]; if (f && f.type.startsWith("image/")) handleFile(f); });
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (f && f.type.startsWith("image/")) handleFile(f); });
 
 let msgTimer = null, navigated = false;
 function setStatus(text, sub, isError) {
-  $("statusText").textContent = text;
-  $("statusSub").textContent = sub || "";
-  $("status").classList.toggle("error", !!isError);
-  $("beam").style.display = isError ? "none" : "";
-  $("retry").classList.toggle("show", !!isError);
-  if (isError) $("playNow").style.display = "none";
+  $("statusText").textContent = text; $("statusSub").textContent = sub || "";
+  $("status").classList.toggle("error", !!isError); $("beam").style.display = isError ? "none" : "";
+  $("retry").classList.toggle("show", !!isError); if (isError) $("playNow").style.display = "none";
 }
-function startMessages(list = MESSAGES) {
-  let i = 0;
-  clearInterval(msgTimer);
-  msgTimer = setInterval(() => { i = (i + 1) % list.length; $("statusText").textContent = list[i]; }, 1500);
-}
-function saveLevel(level) {
-  localStorage.setItem("playlab.level", JSON.stringify(level));
-  localStorage.setItem("playlab.levelName", "your drawing");
-}
-function go() {
-  if (navigated) return;
-  navigated = true;
-  location.href = "game.html?source=storage";
-}
+function startMessages(list = MESSAGES) { let i = 0; clearInterval(msgTimer); msgTimer = setInterval(() => { i = (i + 1) % list.length; $("statusText").textContent = list[i]; }, 1500); }
+function saveLevel(level) { localStorage.setItem("playlab.level", JSON.stringify(level)); localStorage.setItem("playlab.levelName", "your drawing"); }
+function go() { if (navigated) return; navigated = true; location.href = "game.html?source=storage"; }
 
 async function handleFile(file) {
   if (!file) return;
-  $("home").style.display = "none";
-  $("scan").classList.add("show");
+  $("scanBlock").style.display = ""; $("scan").classList.add("show");
+  $("scanBlock").scrollIntoView({ behavior: "smooth", block: "center" });
   setStatus(MESSAGES[0], "The AI usually needs about 10 seconds.");
   startMessages();
-  window.scrollTo(0, 0);
-
   let img;
   try { img = await PhotoUtil.loadImage(file); }
-  catch { clearInterval(msgTimer); setStatus("Could not read that image.", "Try taking a photo instead of picking a file.", true); return; }
-
-  const upload = PhotoUtil.toJpeg(img, MAX_SIDE, 0.85);
-  const thumb = PhotoUtil.toJpeg(img, THUMB_SIDE, 0.7);
+  catch { clearInterval(msgTimer); setStatus("COULD NOT READ THAT IMAGE.", "Try taking a photo instead of picking a file.", true); return; }
+  const upload = PhotoUtil.toJpeg(img, MAX_SIDE, 0.85), thumb = PhotoUtil.toJpeg(img, THUMB_SIDE, 0.7);
   $("preview").src = thumb;
   try { localStorage.setItem("playlab.photo", thumb); } catch {}
-
   try {
-    const r = await fetch("api/scan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: upload }),
-      signal: AbortSignal.timeout(95_000),
-    });
+    const r = await fetch("api/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: upload }), signal: AbortSignal.timeout(95_000) });
     const data = await r.json().catch(() => ({}));
     if (!r.ok || !data.level) throw new Error(data.error || `Server error ${r.status}`);
-
     clearInterval(msgTimer);
-    saveLevel(data.level);                       // playable right away (quick auto-fix applied if needed)
+    saveLevel(data.level);
     const problems = data.meta?.playtest?.before?.problems || [];
     const found = `${data.level.theme} · ${data.level.objects.length} things found`;
-
-    if (!data.original || !problems.length) {
-      setStatus("Level ready!", `${found} · every jump checked`);
-      setTimeout(go, 600);
-      return;
-    }
-
-    // Phase 2: the drawing had impossible parts. A quick fix is already saved; now ask the AI for a proper one.
+    if (!data.original || !problems.length) { setStatus("LEVEL READY!", `${found} · every jump checked`); setTimeout(go, 600); return; }
     const n = problems.length;
-    setStatus(`Found ${n} impossible part${n > 1 ? "s" : ""}. ${FIX_MESSAGES[0]}`, "This can take up to a minute. You can also play the quick fix right away.");
-    $("playNow").style.display = "flex";
+    setStatus(`FOUND ${n} IMPOSSIBLE PART${n > 1 ? "S" : ""}. ${FIX_MESSAGES[0]}`, "This can take up to a minute. You can also play the quick fix right away.");
+    $("playNow").style.display = "inline-flex";
     startMessages(FIX_MESSAGES);
     let fixedBy = "quick fix";
     try {
-      const r2 = await fetch("api/fix", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ level: data.original }),
-        signal: AbortSignal.timeout(75_000),
-      });
+      const r2 = await fetch("api/fix", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ level: data.original }), signal: AbortSignal.timeout(75_000) });
       const d2 = await r2.json().catch(() => ({}));
       if (r2.ok && d2.level && d2.report?.after?.ok) { saveLevel(d2.level); fixedBy = d2.report.fixedBy === "ai" ? "the AI" : "the AI + quick fix"; }
-    } catch { /* keep the quick fix */ }
+    } catch {}
     clearInterval(msgTimer);
     if (navigated) return;
     $("playNow").style.display = "none";
-    setStatus("Level ready!", `${found} · ${n} impossible part${n > 1 ? "s" : ""} fixed by ${fixedBy}`);
+    setStatus("LEVEL READY!", `${found} · ${n} impossible part${n > 1 ? "s" : ""} fixed by ${fixedBy}`);
     setTimeout(go, 1400);
   } catch (err) {
     clearInterval(msgTimer);
-    const msg = err.name === "TimeoutError" ? "The AI took too long." : err.message;
-    setStatus(msg, "Good light, the whole page in frame, and a clear ground line help a lot.", true);
+    setStatus(err.name === "TimeoutError" ? "THE AI TOOK TOO LONG." : err.message.toUpperCase(), "Good light, the whole page in frame, and a clear ground line help a lot.", true);
   }
 }
-
 </script>
 </body>
 </html>

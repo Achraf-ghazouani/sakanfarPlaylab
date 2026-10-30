@@ -13,3 +13,6 @@ Thumbs.db
 
 # raw model replies saved for debugging
 levels/*.raw.txt
+
+# local HTTPS certificate for the dev server
+certs/

@@ -14,6 +14,20 @@ Built solo for the Meta hackathon (Oct 30 - Nov 4, 2026). Plain HTML/JS + Phaser
 4. `game.html`: plays the level with touch controls, shows the original drawing in a corner, and a toast lists what the agent changed.
 5. **Live edit by redrawing**: change the paper (add a bridge, erase a spike), tap **Redraw** in the game and snap it again. The scan gets the earlier level as context, `shared/diff.mjs` works out what changed, new things pop into the running level, the player stays where they were, and a toast says "added 1 platform, 1 coin".
 
+## Big screen mode (PC + phone, one QR)
+
+Click **Get started on the big screen** on the landing page (or open `game.html?screen=1`). The PC shows a QR code
+and a 4-letter room code. Scanning it opens `pad.html` on the phone, which starts its back camera right away and
+streams it to the PC over a one-way PeerJS media call, so the big screen shows what the phone sees. The phone can
+switch between **Camera** and **Controller** with one button; phones that join while a level is already loaded become
+controllers (players 2-4). Status is shown on both screens, and the stage falls back to the QR when the phone leaves.
+
+Phone cameras only work on HTTPS. The live site is HTTPS; on your LAN run `npm run dev:https` (self-signed certificate
+made with the openssl bundled with Git for Windows, accept the warning once on the phone).
+
+Coming next in this flow: paper detection with auto-capture and flattening, the instant ink layer with AI pop-in build,
+live re-scans while drawing, and the Play mode hand-off.
+
 ## Play with your phone (phone as controller)
 
 On a computer, `game.html` has a **Play with your phone** button. It shows a QR code and a 4-letter room code.
@@ -50,6 +64,7 @@ In `viewer.html`, pick a level: unreachable things get a red dashed outline, and
 ```bash
 cp .env.example .env              # put your Meta Model API key in MODEL_API_KEY
 npm run dev                       # prints http://localhost:3000/ and http://<your-LAN-ip>:3000/
+npm run dev:https                 # same on https://...:3443/ (needed for the phone camera on your LAN)
 ```
 
 Open the LAN address on your phone (same Wi-Fi). If Windows asks, allow Node on private networks.

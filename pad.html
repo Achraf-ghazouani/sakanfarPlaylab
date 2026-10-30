@@ -13,7 +13,7 @@
   * { box-sizing:border-box; }
   html, body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--ink); font-family:system-ui, -apple-system, "Segoe UI", sans-serif; touch-action:none; overscroll-behavior:none; -webkit-user-select:none; user-select:none; }
   body { background-image: radial-gradient(600px 300px at 0% 0%, #ebe3ff 0%, transparent 65%), radial-gradient(500px 300px at 100% 100%, #ffe6f4 0%, transparent 60%); }
-  .top { position:fixed; top:0; left:0; right:0; height:48px; display:flex; align-items:center; gap:10px; padding:0 max(12px, env(safe-area-inset-left)) 0 max(12px, env(safe-area-inset-right)); z-index:2; }
+  .top { position:fixed; top:0; left:0; right:0; height:48px; display:flex; align-items:center; gap:10px; padding:0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left)); z-index:3; }
   .brand { font-family:"Fredoka", system-ui, sans-serif; font-weight:700; font-size:17px; color:var(--purple-deep); white-space:nowrap; }
   .pill { display:inline-flex; align-items:center; gap:7px; background:#fff; border:2px solid var(--lav-2); border-radius:999px; padding:5px 11px; font-size:13px; font-weight:600; color:var(--purple-deep); white-space:nowrap; }
   .pill .dot { width:9px; height:9px; border-radius:50%; background:#f59e0b; }
@@ -24,9 +24,15 @@
   .player { background:var(--player); color:#fff; border-color:transparent; }
   .player i { width:12px; height:12px; border-radius:3px; background:#fff; opacity:.9; display:inline-block; }
   .spacer { flex:1; }
-  button.small { border:0; background:#fff; border:2px solid var(--lav-2); border-radius:999px; padding:6px 12px; font-size:13px; font-weight:600; color:var(--purple-deep); }
+  button.small { border:2px solid var(--lav-2); background:#fff; border-radius:999px; padding:6px 12px; font-size:13px; font-weight:600; color:var(--purple-deep); }
+  button.small.primary { background:var(--purple); color:#fff; border-color:var(--purple); }
 
-  .pad { position:fixed; inset:48px 0 0 0; }
+  /* modes */
+  .mode { display:none; }
+  body.mode-pad #pad, body.mode-cam #cam { display:block; }
+
+  /* controller */
+  #pad { position:fixed; inset:48px 0 0 0; }
   .btn { position:absolute; bottom:max(18px, env(safe-area-inset-bottom)); width:min(26vh, 120px); height:min(26vh, 120px); border-radius:50%; background:#fff; border:3px solid var(--lav-2); box-shadow:0 10px 24px rgba(91,33,182,.15); display:flex; align-items:center; justify-content:center; font-size:40px; color:var(--purple-deep); touch-action:none; transition:transform .05s, background .05s; }
   .btn.pressed { background:var(--purple); color:#fff; transform:scale(.94); border-color:var(--purple); }
   #left { left:max(18px, env(safe-area-inset-left)); }
@@ -36,10 +42,17 @@
   .hint { position:absolute; left:50%; top:38%; transform:translate(-50%, -50%); text-align:center; color:var(--muted); font-size:14px; max-width:60vw; }
   .hint b { display:block; font-family:"Fredoka", system-ui, sans-serif; font-size:22px; color:var(--ink); margin-bottom:4px; }
 
+  /* camera */
+  #cam { position:fixed; inset:48px 0 0 0; background:#1b1535; }
+  #camCanvas { width:100%; height:100%; object-fit:contain; display:block; background:#1b1535; }
+  #camStatus { position:absolute; left:50%; bottom:max(14px, env(safe-area-inset-bottom)); transform:translateX(-50%); background:rgba(255,255,255,.92); color:var(--purple-deep); font-weight:700; font-size:14px; padding:8px 14px; border-radius:999px; white-space:nowrap; max-width:92vw; overflow:hidden; text-overflow:ellipsis; }
+  #camStatus.error { color:#b91c1c; white-space:normal; text-align:center; border-radius:14px; }
+  #camStatus.live::before { content:""; display:inline-block; width:9px; height:9px; border-radius:50%; background:#ef4444; margin-right:7px; animation:blink 1.2s infinite; }
+
   #rotate { display:none; position:fixed; inset:0; z-index:5; background:#4c1d95; color:#fff; align-items:center; justify-content:center; text-align:center; font-size:22px; font-weight:800; }
   #rotate .icon { font-size:60px; display:block; animation:tilt 1.6s ease-in-out infinite; }
   @keyframes tilt { 0%, 100% { transform:rotate(0); } 50% { transform:rotate(90deg); } }
-  @media (orientation: portrait) { #rotate { display:flex; } }
+  @media (orientation: portrait) { body.mode-pad #rotate { display:flex; } }
 
   #join { display:none; position:fixed; inset:0; z-index:4; background:var(--bg); align-items:center; justify-content:center; flex-direction:column; gap:14px; padding:20px; text-align:center; }
   #join.show { display:flex; }
@@ -47,16 +60,23 @@
   #join button { border:0; background:var(--purple); color:#fff; font-size:18px; font-weight:700; border-radius:14px; padding:12px 22px; }
 </style>
 </head>
-<body>
+<body class="mode-pad">
 <div class="top">
   <span class="brand">PlayLab Pad</span>
   <span class="pill connecting" id="status"><span class="dot"></span><span id="statusText">connecting...</span></span>
   <span class="pill player" id="playerChip" style="display:none"><i></i><span id="playerName">Player 1</span></span>
   <span class="spacer"></span>
+  <button class="small" id="modeBtn" style="display:none">Controller</button>
   <button class="small" id="fsBtn">Full screen</button>
 </div>
 
-<div class="pad">
+<div id="cam" class="mode">
+  <canvas id="camCanvas"></canvas>
+  <video id="camVideo" playsinline muted autoplay hidden></video>
+  <div id="camStatus">Starting camera...</div>
+</div>
+
+<div id="pad" class="mode">
   <div class="hint" id="hint"><b>Room <span id="roomCode">----</span></b>Keep the game open on the computer.</div>
   <div class="btn" id="left">&#9664;</div>
   <div class="btn" id="right">&#9654;</div>
@@ -76,6 +96,7 @@
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 let client = null;
+let mode = "pad";
 const state = { l: 0, r: 0 };
 
 function setStatus(status, detail) {
@@ -102,12 +123,69 @@ function join(code) {
       $("playerName").textContent = `Player ${w.slot} · ${w.name}`;
       $("playerChip").style.display = "";
       $("hint").innerHTML = `<b>You are player ${w.slot}</b>${w.name} on the big screen`;
+      $("modeBtn").style.display = "";
       window.__padWelcome = w;
+      setMode(w.mode === "camera" ? "camera" : "pad", false);
     },
     onEvent: (name) => { window.__padLastEvent = name; window.__padLastEventAt = performance.now(); (window.__padEvents ||= []).push(name); if (EVENT_BUZZ[name]) buzz(EVENT_BUZZ[name]); },
   });
   client.start();
   window.__padClient = client;
+}
+
+// ---------------------------------------------------------------------------
+// Modes: "camera" (stream the paper to the big screen) and "pad" (controller)
+// ---------------------------------------------------------------------------
+function setMode(next, tell = true) {
+  mode = next;
+  document.body.classList.toggle("mode-cam", mode === "camera");
+  document.body.classList.toggle("mode-pad", mode === "pad");
+  $("modeBtn").textContent = mode === "camera" ? "Controller" : "Camera";
+  $("modeBtn").classList.toggle("primary", mode === "camera");
+  window.__padMode = mode;
+  if (tell) client?.sendMode(mode);
+  if (mode === "camera") startCamera(); else stopCamera();
+}
+$("modeBtn").addEventListener("click", () => setMode(mode === "camera" ? "pad" : "camera"));
+
+let camStream = null, camRaf = 0, camOut = null;
+function camStatus(text, cls) { const el = $("camStatus"); el.textContent = text; el.className = cls || ""; }
+async function startCamera() {
+  if (camStream) return;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    camStatus(location.protocol === "http:" ? "The camera needs HTTPS. Open the https:// address (or the vercel.app site) on your phone." : "This browser has no camera access.", "error");
+    return;
+  }
+  camStatus("Starting camera...");
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+  } catch (err) {
+    camStatus(`Camera blocked (${err.name}). Allow camera access for this site and reload.`, "error");
+    return;
+  }
+  const v = $("camVideo"), c = $("camCanvas"), ctx = c.getContext("2d");
+  v.srcObject = camStream;
+  try { await v.play(); } catch {}
+  const draw = () => {
+    if (v.videoWidth) {
+      const scale = Math.min(1, 960 / v.videoWidth);           // the preview/stream runs at <= 960px wide
+      const w = Math.round(v.videoWidth * scale), h = Math.round(v.videoHeight * scale);
+      if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+      ctx.drawImage(v, 0, 0, w, h);
+      window.__camFrames = (window.__camFrames || 0) + 1;
+    }
+    camRaf = requestAnimationFrame(draw);
+  };
+  draw();
+  camOut = c.captureStream(24);
+  client?.startVideo(camOut);
+  camStatus("Live: the big screen sees your camera", "live");
+}
+function stopCamera() {
+  cancelAnimationFrame(camRaf);
+  client?.stopVideo();
+  if (camStream) { for (const t of camStream.getTracks()) t.stop(); camStream = null; }
+  camOut = null;
 }
 
 // Buttons: each tracks its own pointers so two thumbs work at once.
@@ -126,8 +204,8 @@ bind("jump", () => { window.__padPressAt = performance.now(); client?.sendJump(t
 
 // Keyboard too (handy on a laptop for testing)
 const KEYS = { ArrowLeft: "l", KeyA: "l", ArrowRight: "r", KeyD: "r" };
-window.addEventListener("keydown", (e) => { if (e.repeat) return; if (KEYS[e.code]) { state[KEYS[e.code]] = 1; sendInput(); } if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") client?.sendJump(true); });
-window.addEventListener("keyup", (e) => { if (KEYS[e.code]) { state[KEYS[e.code]] = 0; sendInput(); } if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") client?.sendJump(false); });
+window.addEventListener("keydown", (e) => { if (e.repeat || mode !== "pad") return; if (KEYS[e.code]) { state[KEYS[e.code]] = 1; sendInput(); } if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") client?.sendJump(true); });
+window.addEventListener("keyup", (e) => { if (mode !== "pad") return; if (KEYS[e.code]) { state[KEYS[e.code]] = 0; sendInput(); } if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") client?.sendJump(false); });
 
 // Full screen + landscape lock, keep the screen awake
 $("fsBtn").addEventListener("click", async () => {

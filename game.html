@@ -55,6 +55,31 @@
   .pp .pp-close { position:absolute; top:10px; right:12px; background:transparent; color:#6b6480; font-size:26px; padding:2px 8px; line-height:1; }
   .pp .pp-tip { margin-top:10px; font-size:12px; color:#6b6480; }
 
+  /* big screen stage (game.html?screen=1): QR first, then the live video from the phone */
+  #stage { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:4; color:#1b1535; font-family:system-ui, sans-serif;
+           background:#fbfaff; background-image: radial-gradient(700px 420px at 8% 0%, #ebe3ff 0%, transparent 65%), radial-gradient(600px 400px at 100% 10%, #ffe6f4 0%, transparent 60%); }
+  #stage.show { display:flex; }
+  .st-card { text-align:center; width:min(96vw, 1000px); }
+  .st-brand { font-weight:800; color:#5b21b6; font-size:20px; margin-bottom:6px; }
+  .st-title { font-size:clamp(26px, 4vw, 40px); font-weight:800; margin:0 0 6px; }
+  .st-sub { color:#6b6480; margin:0 0 18px; font-size:16px; }
+  .st-qr { background:#fff; border:2px solid #e2d9ff; border-radius:20px; padding:16px; display:inline-block; box-shadow:0 10px 30px rgba(91,33,182,.10); }
+  .st-qr svg { width:min(48vh, 320px); height:auto; display:block; }
+  .st-code { font-size:clamp(36px, 6vw, 56px); font-weight:800; letter-spacing:.3em; margin:14px 0 2px; font-family:ui-monospace, monospace; }
+  .st-url { font-size:13px; color:#6b6480; }
+  .st-video { display:none; background:#1b1535; border-radius:20px; overflow:hidden; box-shadow:0 20px 50px rgba(27,21,53,.35); margin:0 auto; width:min(92vw, 1000px); max-height:72vh; aspect-ratio:4/3; position:relative; }
+  .st-video video { width:100%; height:100%; object-fit:contain; display:block; }
+  .st-video .st-live { position:absolute; top:12px; left:12px; background:rgba(255,255,255,.92); color:#5b21b6; font-weight:700; font-size:13px; padding:6px 12px; border-radius:999px; }
+  .st-video .st-live::before { content:""; display:inline-block; width:9px; height:9px; border-radius:50%; background:#ef4444; margin-right:7px; animation:ppblink 1.2s infinite; }
+  .st-status { margin-top:14px; display:flex; align-items:center; justify-content:center; gap:8px; font-weight:700; color:#5b21b6; font-size:16px; }
+  .st-status .dot { width:10px; height:10px; border-radius:50%; background:#f59e0b; }
+  .st-status.connected .dot { background:#22c55e; }
+  .st-status.waiting .dot, .st-status.connecting .dot, .st-status.reconnecting .dot { animation:ppblink 1s infinite; }
+  .st-status.error .dot { background:#ef4444; }
+  .st-skip { margin-top:16px; background:transparent; color:#6b6480; text-decoration:underline; font-size:13px; }
+  #stage[data-state="camera"] .st-qr, #stage[data-state="camera"] .st-code, #stage[data-state="camera"] .st-url, #stage[data-state="camera"] .st-sub, #stage[data-state="camera"] .st-title { display:none; }
+  #stage[data-state="camera"] .st-video { display:block; }
+
   /* live edit: re-scan overlay */
   #rescan { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(27,21,53,.55); z-index:5; }
   #rescan.show { display:flex; }
@@ -136,6 +161,17 @@
 <div id="msg"><div id="msgText"></div></div>
 <div id="toast"></div>
 <div id="rescan"><div class="card"><div class="shot"><img id="rescanPreview" alt=""><div class="rbeam"></div></div><div class="rs"><div class="spin"></div><span id="rescanText">Reading your changes...</span></div></div></div>
+<div id="stage" data-state="qr"><div class="st-card">
+  <div class="st-brand">Sakanfar PlayLab &middot; big screen</div>
+  <h2 class="st-title">Scan with your phone</h2>
+  <p class="st-sub">Your phone becomes the camera and the controller. Point it at your drawing.</p>
+  <div class="st-qr" id="stQr"></div>
+  <div class="st-code" id="stCode">----</div>
+  <div class="st-url" id="stUrl"></div>
+  <div class="st-video" id="stVideoBox"><video id="stageVideo" autoplay playsinline muted></video><span class="st-live">Live from your phone</span></div>
+  <div class="st-status connecting" id="stStatusBox"><span class="dot"></span><span id="stStatus">starting the room...</span></div>
+  <button class="st-skip" id="stSkip">Skip: play a level with the keyboard instead</button>
+</div></div>
 <div id="phonePanel"><div class="pp">
   <button class="pp-close" id="phoneClose" title="Close">&times;</button>
   <h3>Play with your phone</h3>
@@ -177,6 +213,10 @@ const touch = { left: false, right: false };
 const remote = { left: false, right: false };
 let host = null;                                   // PhoneLink.Host once "Play with your phone" is opened
 function gameEvent(name) { if (host) host.event(name); }
+// Big screen mode (game.html?screen=1): the PC shows a QR, the first phone becomes the camera.
+const PARAMS = new URLSearchParams(location.search);
+const isScreen = PARAMS.get("screen") === "1";
+let cameraPlayer = null;                           // the phone whose camera is on the stage
 
 // Background palette picked from the AI theme text.
 const PALETTES = [
@@ -771,7 +811,29 @@ function setPhoneStatus(status, detail) {
   $("phoneStatus").textContent = text;
   $("phoneStatusBox").className = "pp-status " + status;
   $("phoneChip").classList.toggle("connected", status === "connected");
+  if (isScreen && $("stage").dataset.state === "qr" && !(status === "connected" && cameraPlayer)) {
+    const note = stageNote && Date.now() < stageNote.until ? stageNote.text : null;   // e.g. "phone disconnected" stays readable for a while
+    stageStatus(note || (status === "waiting" ? "waiting for your phone to scan the code..." : text), status);
+  }
   refreshPlayers();
+}
+
+// --- stage (big screen) ---
+let stageNote = null;
+function stage(state) { const st = $("stage"); st.dataset.state = state; st.classList.add("show"); }
+function hideStage() { $("stage").classList.remove("show"); }
+function stageStatus(text, cls) { $("stStatus").textContent = text; $("stStatusBox").className = "st-status " + (cls || ""); }
+function showStageVideo(p, stream) {
+  cameraPlayer = p;
+  const v = $("stageVideo");
+  v.srcObject = stream;
+  v.play?.().catch(() => {});
+  stage("camera");
+  stageStatus(`live from ${p.name} phone (player ${p.slot})`, "connected");
+}
+function clearStageVideo(text) {
+  $("stageVideo").srcObject = null;
+  if (isScreen) { stage("qr"); stageNote = { text, until: Date.now() + 8000 }; stageStatus(text, "waiting"); }
 }
 function refreshPlayers() {
   const n = host ? host.count : 0;
@@ -786,14 +848,30 @@ function startHost() {
     onCode: (code) => {
       sessionStorage.setItem("playlab.room", code);
       const url = host.url();
-      $("phoneCode").textContent = code;
-      $("phoneUrl").textContent = url;
       const qr = qrcode(0, "M"); qr.addData(url); qr.make();
-      $("phoneQr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+      const svg = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+      $("phoneCode").textContent = code; $("phoneUrl").textContent = url; $("phoneQr").innerHTML = svg;
+      $("stCode").textContent = code; $("stUrl").textContent = url; $("stQr").innerHTML = svg;
     },
     onStatus: setPhoneStatus,
-    onJoin: (p) => { refreshPlayers(); showToast(`<b>&#128241; Phone connected</b> as player ${p.slot} (${p.name})`, 4000); },
-    onLeave: () => { refreshPlayers(); remote.left = remote.right = false; playScene()?.releaseJump(); },
+    // In big-screen mode the first phone (while there is no level yet) becomes the camera; others are controllers.
+    welcome: (p) => ({ mode: isScreen && !cameraPlayer && !currentLevel ? "camera" : "pad" }),
+    onJoin: (p) => {
+      if (p.mode === "camera") { cameraPlayer = p; stageStatus("phone connected, starting its camera...", "connected"); }
+      refreshPlayers();
+      if (!isScreen || p.mode !== "camera") showToast(`<b>&#128241; Phone connected</b> as player ${p.slot} (${p.name})`, 4000);
+    },
+    onStream: (p, stream) => { if (!cameraPlayer || p === cameraPlayer) showStageVideo(p, stream); },
+    onStreamEnd: (p) => { if (p === cameraPlayer) clearStageVideo("camera stopped. Switch the phone back to camera, or scan again."); },
+    onMode: (p, mode) => {
+      if (mode === "pad" && p === cameraPlayer) { cameraPlayer = null; clearStageVideo(`${p.name} phone is now a controller. Scan with another phone to use its camera.`); }
+      else if (mode === "camera" && !cameraPlayer) { cameraPlayer = p; stageStatus("phone switching to camera...", "connected"); }
+      refreshPlayers();
+    },
+    onLeave: (p) => {
+      if (p === cameraPlayer) { cameraPlayer = null; clearStageVideo("phone disconnected. Scan the code again."); }
+      refreshPlayers(); remote.left = remote.right = false; playScene()?.releaseJump();
+    },
     onInput: (p, input) => { remote.left = !!input.l; remote.right = !!input.r; },
     onJump: (p, down) => { const s = playScene(); if (s) (down ? s.pressJump() : s.releaseJump()); },
   });
@@ -894,7 +972,7 @@ async function init() {
   if (params.get("room")) sessionStorage.setItem("playlab.room", params.get("room").toUpperCase());
   // Reopen the same room after a reload (the phone keeps reconnecting to it). The link scripts are deferred,
   // so wait for them if the document is still loading.
-  if (sessionStorage.getItem("playlab.room") && !isTouch) {
+  if ((isScreen || sessionStorage.getItem("playlab.room")) && !isTouch) {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", startHost); else startHost();
   }
   window.addEventListener("pagehide", () => { try { host?.destroy(); } catch {} });   // free the room id quickly
@@ -904,6 +982,13 @@ async function init() {
   window.addEventListener("keydown", () => SFX.ensure());
   window.addEventListener("pointerdown", () => SFX.ensure());
   $("msg").addEventListener("click", () => { if (game) { const s = game.scene.getScene("play"); if (s.state !== "play") s.scene.restart(); } });
+
+  if (isScreen) {
+    // Big screen: show the QR stage and wait for the phone. No level is loaded until the phone scans one.
+    stage("qr");
+    $("stSkip").addEventListener("click", () => { hideStage(); const sel = $("levelSelect"); if (!currentLevel && sel.value) loadLevelUrl(sel.value); });
+    return;
+  }
 
   if (params.get("source") === "storage" && stored()) return startStoredLevel();
   if (params.get("level")) return loadLevelUrl(params.get("level"));

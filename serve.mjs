@@ -1,18 +1,24 @@
 // serve.mjs — dev server, no dependencies.
-//   npm run dev   (or node serve.mjs [port], default 3000)
-// Serves the static files and runs api/*.mjs the way Vercel does (handler(req, res)),
-// so the phone flow (index.html -> /api/scan -> game.html) works locally.
-// Open the LAN address it prints on your phone (same Wi-Fi).
+//   npm run dev            http://localhost:3000  (+ your LAN address)
+//   npm run dev:https      https://localhost:3443 (+ LAN) with a self-signed certificate: phones need HTTPS
+//                          for the camera. Accept the browser warning once on the phone.
+//   node serve.mjs [port] [--https]
+// Serves the static files and runs api/*.js the way Vercel does (handler(req, res)).
 
 import http from "node:http";
+import https from "node:https";
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 try { process.loadEnvFile(".env"); } catch { console.warn("No .env found: /api/scan will fail until you add MODEL_API_KEY."); }
 
-const PORT = Number(process.argv[2] || process.env.PORT) || 3000;
+const args = process.argv.slice(2);
+const useHttps = args.includes("--https");
+const PORT = Number(args.find((a) => /^\d+$/.test(a)) || process.env.PORT) || (useHttps ? 3443 : 3000);
 const ROOT = process.cwd();
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
@@ -20,9 +26,9 @@ const MIME = {
   ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon",
 };
 // Never serve secrets or internals.
-const BLOCKED = [/^\/\.env/i, /^\/\.git/i, /^\/node_modules/i, /^\/lib\//i, /^\/api\//i];
+const BLOCKED = [/^\/\.env/i, /^\/\.git/i, /^\/node_modules/i, /^\/lib\//i, /^\/api\//i, /^\/certs\//i];
 
-http.createServer(async (req, res) => {
+async function handler(req, res) {
   let pathname = "/";
   try { pathname = decodeURIComponent(new URL(req.url, "http://localhost").pathname); } catch { return send(res, 400, "Bad request"); }
   if (pathname === "/") pathname = "/index.html";
@@ -43,12 +49,31 @@ http.createServer(async (req, res) => {
     log(notFound ? 404 : 500, pathname);
     send(res, notFound ? 404 : 500, notFound ? "Not found" : String(err.code || err));
   }
-}).listen(PORT, "0.0.0.0", () => {
-  console.log(`PlayLab dev server`);
-  console.log(`  this computer:  http://localhost:${PORT}/`);
-  for (const ip of lanAddresses()) console.log(`  your phone:     http://${ip}:${PORT}/   (same Wi-Fi)`);
+}
+
+const server = useHttps ? https.createServer(ensureCerts(), handler) : http.createServer(handler);
+server.listen(PORT, "0.0.0.0", () => {
+  const proto = useHttps ? "https" : "http";
+  console.log(`PlayLab dev server${useHttps ? " (HTTPS, self-signed)" : ""}`);
+  console.log(`  this computer:  ${proto}://localhost:${PORT}/`);
+  for (const ip of lanAddresses()) console.log(`  your phone:     ${proto}://${ip}:${PORT}/   (same Wi-Fi${useHttps ? ", accept the certificate warning once" : ""})`);
+  if (!useHttps) console.log(`  camera on a phone needs HTTPS: run "npm run dev:https" or use the vercel.app site`);
   console.log(`  Ctrl+C to stop`);
 });
+
+/** Self-signed certificate in certs/ (git-ignored), made with the openssl that ships with Git for Windows. */
+function ensureCerts() {
+  const dir = path.join(ROOT, "certs"), keyFile = path.join(dir, "dev-key.pem"), certFile = path.join(dir, "dev-cert.pem");
+  if (!fsSync.existsSync(keyFile) || !fsSync.existsSync(certFile)) {
+    fsSync.mkdirSync(dir, { recursive: true });
+    const san = ["DNS:localhost", "IP:127.0.0.1", ...lanAddresses().map((ip) => "IP:" + ip)].join(",");
+    const openssl = ["openssl", "C:/Program Files/Git/usr/bin/openssl.exe"].find((bin) => { try { execFileSync(bin, ["version"], { stdio: "ignore" }); return true; } catch { return false; } });
+    if (!openssl) { console.error("openssl not found. Install Git for Windows (ships openssl) or create certs/dev-key.pem and certs/dev-cert.pem yourself."); process.exit(1); }
+    execFileSync(openssl, ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", keyFile, "-out", certFile, "-days", "365", "-subj", "/CN=playlab-dev", "-addext", "subjectAltName=" + san], { stdio: "ignore" });
+    console.log(`Created a self-signed certificate in certs/ for ${san}`);
+  }
+  return { key: fsSync.readFileSync(keyFile), cert: fsSync.readFileSync(certFile) };
+}
 
 /** Run api/<name>.js (or .mjs) like a Vercel Node function: parsed JSON body, res.status().json(). */
 async function runApi(req, res, pathname) {

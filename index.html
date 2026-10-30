@@ -131,6 +131,11 @@
     .steps { grid-template-columns: 1fr; }
   }
   @media (pointer: coarse) { .desktop-only { display: none; } }
+  /* On a computer the big-screen flow is the main call to action; the photo buttons become secondary. */
+  @media (pointer: fine) {
+    #cameraBtn { background: #fff; color: var(--purple-deep); border: 2px solid var(--lav-2); box-shadow: none; }
+    #cameraBtn:hover { background: var(--lav); transform: none; }
+  }
 </style>
 </head>
 <body>
@@ -153,7 +158,11 @@
       <h1>Draw a level on paper.<br><em>Snap it. Play it.</em></h1>
       <p class="lead">Sketch a platformer with any pen. Point your phone at it. Muse Spark understands what you meant, a playtest agent fixes every impossible jump, and you are playing in about ten seconds.</p>
       <div class="cta">
-        <label class="btn btn-primary" for="cameraInput">
+        <a class="btn btn-primary desktop-only" id="startBtn" href="game.html?screen=1">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+          Get started on the big screen
+        </a>
+        <label class="btn btn-primary" id="cameraBtn" for="cameraInput">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
           Take a photo of your level
         </label>
@@ -161,7 +170,7 @@
         <label class="btn btn-secondary" for="galleryInput">Choose from gallery</label>
         <input type="file" id="galleryInput" accept="image/*">
       </div>
-      <p class="drop-hint desktop-only">On a laptop? Drag a photo anywhere on this page, or open <b id="hostName">this page</b> on your phone.</p>
+      <p class="drop-hint desktop-only"><b>Get started</b> shows a QR code: your phone becomes the camera and the controller, the big screen shows the game. You can also drag a photo anywhere on this page, or open <b id="hostName">this page</b> on your phone.</p>
       <div class="last" id="lastLevel">
         <img id="lastThumb" alt="your last drawing">
         <div><b>Your last drawing</b><a href="game.html?source=storage">Play it again &rarr;</a></div>

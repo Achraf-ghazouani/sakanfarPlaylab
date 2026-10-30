@@ -1,17 +1,18 @@
 #!/usr/bin/env node
-// scan.mjs — photo of a drawn level -> levels/<name>.json via Meta Muse Spark.
+// scan.mjs — photo of a drawn level -> levels/<name>.json via the AI (Meta Muse Spark by default).
 //
-//   node scan.mjs photos/level1.jpg                 -> levels/level1.json
-//   node scan.mjs photos/level1.jpg --out x.json    -> custom output path
-//   node scan.mjs --mock                            -> levels/mock.json, no API call
-//   node scan.mjs --index                           -> only rebuild levels/index.json
+//   node scan.mjs photos/level1.jpg                   -> levels/level1.json
+//   node scan.mjs photos/level1.jpg --out x.json      -> custom output path
+//   node scan.mjs photos/level1.jpg --provider baseten
+//   node scan.mjs --mock                              -> levels/mock.json, no API call
+//   node scan.mjs --index                             -> only rebuild levels/index.json
 //
-// Reads MODEL_API_KEY (and optional MODEL_API_URL, MODEL_NAME) from .env.
-// Every run also rewrites levels/index.json, which game.html uses for its dropdown.
+// Keys come from .env (see .env.example). Every run also rewrites levels/index.json,
+// which game.html uses for its dropdown.
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { scanLevelFromImage, normalizeLevel, mimeFromName, imageSize, DEFAULT_API_URL, DEFAULT_MODEL } from "./lib/scan-level.mjs";
+import { scanLevelFromImage, normalizeLevel, mimeFromName, imageSize } from "./lib/scan-level.mjs";
 
 try { process.loadEnvFile(".env"); } catch { /* no .env yet; handled below */ }
 
@@ -19,7 +20,8 @@ const args = process.argv.slice(2);
 const flag = (name) => { const i = args.indexOf(name); return i === -1 ? null : args[i + 1] ?? true; };
 const mock = args.includes("--mock");
 const outFlag = flag("--out");
-const imagePath = args.find((a) => !a.startsWith("--") && a !== outFlag);
+const providerFlag = flag("--provider");
+const imagePath = args.find((a) => !a.startsWith("--") && a !== outFlag && a !== providerFlag);
 
 if (args.includes("--index")) {
   await writeIndex();
@@ -27,7 +29,7 @@ if (args.includes("--index")) {
 }
 
 if (!mock && !imagePath) {
-  console.error("Usage: node scan.mjs <photo.jpg> [--out levels/name.json]   or   node scan.mjs --mock   or   node scan.mjs --index");
+  console.error("Usage: node scan.mjs <photo.jpg> [--out levels/name.json] [--provider meta|baseten]   or   --mock   or   --index");
   process.exit(1);
 }
 
@@ -35,7 +37,7 @@ const name = mock ? "mock" : path.basename(imagePath, path.extname(imagePath));
 const outPath = typeof outFlag === "string" ? outFlag : path.join("levels", `${name}.json`);
 
 async function main() {
-  let level, raw = "", usage;
+  let level, info = {};
 
   if (mock) {
     // Pretend the AI answered, so the rest of the pipeline can be tested offline.
@@ -43,20 +45,12 @@ async function main() {
     level = normalizeLevel(JSON.parse(fake));
     console.log("(mock) using levels/sample.json instead of calling the model");
   } else {
-    const apiKey = process.env.MODEL_API_KEY;
-    if (!apiKey) {
-      console.error("No MODEL_API_KEY found. Copy .env.example to .env and put your key in it.");
-      process.exit(1);
-    }
-    const apiUrl = process.env.MODEL_API_URL || DEFAULT_API_URL;
-    const model = process.env.MODEL_NAME || DEFAULT_MODEL;
-
     let bytes;
     try { bytes = await fs.readFile(imagePath); }
     catch { console.error(`Cannot read ${imagePath}. Put your photo there first.`); process.exit(1); }
 
     const mb = bytes.length / 1e6;
-    if (mb > 4) console.warn(`Warning: ${mb.toFixed(1)} MB image. If the API rejects it, resize to ~1500px wide first.`);
+    if (mb > 4) console.warn(`Warning: ${mb.toFixed(1)} MB image. If the API rejects it, resize to ~1600px wide first.`);
 
     // Photo aspect ratio keeps the level from being squashed into a square in the game.
     const dims = imageSize(bytes);
@@ -67,10 +61,9 @@ async function main() {
       if (rotated) console.warn("Warning: this photo has EXIF rotation. If the boxes look misaligned in viewer.html, re-save the photo upright.");
     }
 
-    console.log(`Scanning ${imagePath} (${mb.toFixed(2)} MB${dims ? `, ${dims.width}x${dims.height}` : ""}) with ${model} ...`);
-    const t0 = Date.now();
+    console.log(`Scanning ${imagePath} (${mb.toFixed(2)} MB${dims ? `, ${dims.width}x${dims.height}` : ""}) ...`);
     try {
-      ({ level, raw, usage } = await scanLevelFromImage({ base64: bytes.toString("base64"), mime: mimeFromName(imagePath), apiKey, apiUrl, model, aspect }));
+      ({ level, ...info } = await scanLevelFromImage({ base64: bytes.toString("base64"), mime: mimeFromName(imagePath), aspect, provider: typeof providerFlag === "string" ? providerFlag : undefined }));
     } catch (err) {
       if (err.raw) {
         const rawPath = outPath.replace(/\.json$/, "") + ".raw.txt";
@@ -82,9 +75,8 @@ async function main() {
       }
       process.exit(2);
     }
-    const secs = ((Date.now() - t0) / 1000).toFixed(1);
-    const tok = usage ? ` (${usage.prompt_tokens ?? "?"} in / ${usage.completion_tokens ?? "?"} out tokens)` : "";
-    console.log(`Model replied in ${secs}s${tok}`);
+    const tok = info.usage ? ` (${info.usage.prompt_tokens ?? "?"} in / ${info.usage.completion_tokens ?? "?"} out tokens)` : "";
+    console.log(`${info.provider} / ${info.model} replied in ${(info.ms / 1000).toFixed(1)}s${tok}${info.fallback ? "  [fallback provider]" : ""}`);
   }
 
   await fs.mkdir(path.dirname(outPath), { recursive: true });
@@ -101,7 +93,7 @@ async function main() {
   }
   console.log(`\nSaved ${outPath}${level.aspect ? ` (aspect ${level.aspect})` : ""}`);
   await writeIndex();
-  console.log("Next: node serve.mjs, then open http://localhost:3000/game.html to play it, or viewer.html to check the boxes.");
+  console.log("Next: npm run dev, then open http://localhost:3000/game.html to play it, or viewer.html to check the boxes.");
 }
 
 /** levels/index.json lists every level for the dropdown in game.html (newest first). */

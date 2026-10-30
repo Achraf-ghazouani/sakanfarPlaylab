@@ -49,6 +49,10 @@ check("all ints", m.every((o) => [o.x, o.y, o.w, o.h].every(Number.isInteger)));
 check("aspect kept and rounded", messy.aspect === 1.333, messy.aspect);
 check("silly aspect dropped", normalizeLevel({ aspect: 42 }).aspect === undefined);
 
+// several goals are all kept (any of them ends the level)
+const twoGoals = normalizeLevel({ objects: [{ type: "goal", x: 100, y: 100, w: 40, h: 40 }, { type: "flag", x: 900, y: 100, w: 40, h: 40 }, { type: "platform", x: 0, y: 900, w: 1000, h: 30 }] });
+check("multiple goals kept", twoGoals.objects.filter((o) => o.type === "goal").length === 2);
+
 // auto goal placed on rightmost platform
 const noGoal = normalizeLevel({ objects: [{ type: "platform", x: 0, y: 900, w: 300, h: 30 }, { type: "platform", x: 600, y: 500, w: 300, h: 30 }, { type: "start", x: 10, y: 840, w: 40, h: 60 }] });
 const g = noGoal.objects.find((o) => o.type === "goal");

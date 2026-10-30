@@ -184,7 +184,7 @@ class PlayScene extends Phaser.Scene {
     this.coinGroup = this.physics.add.staticGroup();
     this.enemies = this.physics.add.group();
     this.hazards = this.physics.add.staticGroup();
-    this.goalZone = null;
+    this.goals = this.physics.add.staticGroup();
     let startBox = null;
     const solids = [];
 
@@ -267,9 +267,7 @@ class PlayScene extends Phaser.Scene {
           g.fillStyle(0x6b7280); g.fillRect(poleX - 3, Y, 6, Ht);
           g.fillStyle(COLORS.goal); g.fillTriangle(poleX + 3, Y, X + Wd, Y + Ht * 0.2, poleX + 3, Y + Ht * 0.4);
           g.lineStyle(2, 0x92400e); g.strokeTriangle(poleX + 3, Y, X + Wd, Y + Ht * 0.2, poleX + 3, Y + Ht * 0.4);
-          const z = this.add.zone(cx, cy, Wd, Ht);
-          this.physics.add.existing(z, true);
-          this.goalZone = z;
+          this.goals.add(this.add.zone(cx, cy, Wd, Ht));
           break;
         }
 
@@ -313,7 +311,7 @@ class PlayScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.coinGroup, (p, c) => this.collectCoin(c));
     this.physics.add.overlap(this.player, this.enemies, (p, e) => this.hitEnemy(e));
     this.physics.add.overlap(this.player, this.hazards, () => this.die("spikes"));
-    if (this.goalZone) this.physics.add.overlap(this.player, this.goalZone, () => this.win());
+    this.physics.add.overlap(this.player, this.goals, () => this.win());
 
     // Input. Jump presses are recorded as timestamps so they can be buffered.
     this.cursors = this.input.keyboard.createCursorKeys();

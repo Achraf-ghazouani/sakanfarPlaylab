@@ -10,7 +10,7 @@ Built solo for the Meta hackathon (Oct 30 - Nov 4, 2026). Plain HTML/JS + Phaser
 ```bash
 cp .env.example .env              # put your Meta Model API key in MODEL_API_KEY
 node scan.mjs photos/level1.jpg   # photo -> levels/level1.json (also refreshes levels/index.json)
-node serve.mjs                    # http://localhost:3000/game.html
+npm run dev                       # http://localhost:3000/game.html  (same as node serve.mjs)
 ```
 
 - `game.html` plays any level: pick one from the dropdown or load a JSON file.

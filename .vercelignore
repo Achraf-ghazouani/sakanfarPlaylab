@@ -1,0 +1,5 @@
+# Not needed on the deployed site (functions still bundle lib/ through their imports)
+tests/
+scan.mjs
+serve.mjs
+.env.example

@@ -22,6 +22,13 @@
   button, a.btn { font-size:13px; padding:4px 10px; border-radius:6px; border:0; background:#2b6cff; color:#fff; cursor:pointer; text-decoration:none; white-space:nowrap; }
   a.btn#newBtn { background:#7c3aed; font-weight:700; }
 
+  /* playtest agent toast */
+  #toast { position:fixed; left:50%; bottom:max(16px, env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(20px); opacity:0; transition:opacity .3s, transform .3s;
+           background:rgba(76,29,149,.92); color:#fff; padding:10px 16px; border-radius:12px; font-size:14px; max-width:min(92vw, 640px); z-index:4; pointer-events:none; box-shadow:0 8px 24px rgba(0,0,0,.35); }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  #toast b { color:#fde68a; }
+  body.touch #toast { bottom:130px; }
+
   /* original drawing thumbnail (tap to enlarge) */
   #thumb { display:none; position:fixed; top:52px; right:10px; width:96px; border:3px solid #fff; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,.35); z-index:2; cursor:pointer; transition:width .15s; background:#fff; }
   #thumb.show { display:block; }
@@ -78,6 +85,7 @@
 </div>
 <div id="rotate"><div><span class="icon">&#128241;</span>Rotate your phone<br><small style="font-weight:400;font-size:16px">the level is wider than it is tall</small></div></div>
 <div id="msg"><div id="msgText"></div></div>
+<div id="toast"></div>
 <div id="hint">Move: arrows / A D &nbsp;·&nbsp; Jump: space / up / W (hold for higher) &nbsp;·&nbsp; Stomp enemies from above &nbsp;·&nbsp; R restarts &nbsp;·&nbsp; M sound</div>
 
 <script>
@@ -548,6 +556,12 @@ class PlayScene extends Phaser.Scene {
 // DOM: HUD, messages, level picking
 // ---------------------------------------------------------------------------
 function showMsg(title, sub) { $("msgText").innerHTML = title + (sub ? `<small>${sub}</small>` : ""); $("msg").classList.add("show"); }
+let toastTimer = null;
+function showToast(html, ms = 7000) {
+  const t = $("toast"); t.innerHTML = html; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), ms);
+}
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 function hideMsg() { $("msg").classList.remove("show"); }
 function updateScore(scene) { $("score").textContent = `Coins ${scene.coins}/${scene.totalCoins}`; }
 function restartScene() { if (game) game.scene.getScene("play").scene.restart(); }
@@ -567,6 +581,9 @@ function startLevel(level, name, thumbSrc) {
   currentLevel = level;
   $("theme").textContent = (name ? name + " · " : "") + (level.theme || "");
   showThumb(thumbSrc);
+  if (Array.isArray(level.fixes) && level.fixes.length) {
+    showToast(`<b>&#128295; Playtest agent</b> made this level beatable: ${level.fixes.map(esc).join(" &middot; ")}`);
+  }
   try { localStorage.setItem("playlab.level", JSON.stringify(level)); } catch {}
   if (!game) {
     const parent = $("game");

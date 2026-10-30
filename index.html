@@ -125,6 +125,7 @@
     </div>
     <div class="status" id="status"><div class="spinner"></div><span id="statusText">Reading your drawing...</span></div>
     <div class="sub" id="statusSub">The AI usually needs about 10 seconds.</div>
+    <button class="btn btn-primary" id="playNow" style="display:none;margin-top:14px">Play now with the quick fix</button>
     <button class="btn btn-secondary" id="retry">Try another photo</button>
   </div>
 
@@ -140,26 +141,38 @@
 const $ = (id) => document.getElementById(id);
 const MAX_SIDE = 1600;          // upload size (long edge, px)
 const THUMB_SIDE = 480;         // kept in localStorage for the in-game "original drawing" corner
-const MESSAGES = ["Reading your drawing...", "Finding the ground...", "Building platforms...", "Spotting enemies...", "Counting coins...", "Placing the flag...", "Almost there..."];
+const MESSAGES = ["Reading your drawing...", "Finding the ground...", "Building platforms...", "Spotting enemies...", "Counting coins...", "Placing the flag...", "Checking every jump...", "Almost there..."];
+const FIX_MESSAGES = ["The AI is fixing the impossible parts...", "Adding stepping stones...", "Lowering a ledge or two...", "Re-checking every jump...", "Still thinking, the AI is thorough..."];
 
 try { if (localStorage.getItem("playlab.level")) $("lastLink").style.display = "flex"; } catch {}
 
 $("cameraInput").addEventListener("change", (e) => handleFile(e.target.files[0]));
 $("galleryInput").addEventListener("change", (e) => handleFile(e.target.files[0]));
 $("retry").addEventListener("click", () => { $("scan").classList.remove("show"); $("home").style.display = ""; $("cameraInput").value = ""; $("galleryInput").value = ""; });
+$("playNow").addEventListener("click", () => go());
 
-let msgTimer = null;
+let msgTimer = null, navigated = false;
 function setStatus(text, sub, isError) {
   $("statusText").textContent = text;
   $("statusSub").textContent = sub || "";
   $("status").classList.toggle("error", !!isError);
   $("beam").style.display = isError ? "none" : "";
   $("retry").classList.toggle("show", !!isError);
+  if (isError) $("playNow").style.display = "none";
 }
-function startMessages() {
+function startMessages(list = MESSAGES) {
   let i = 0;
   clearInterval(msgTimer);
-  msgTimer = setInterval(() => { i = (i + 1) % MESSAGES.length; $("statusText").textContent = MESSAGES[i]; }, 1500);
+  msgTimer = setInterval(() => { i = (i + 1) % list.length; $("statusText").textContent = list[i]; }, 1500);
+}
+function saveLevel(level) {
+  localStorage.setItem("playlab.level", JSON.stringify(level));
+  localStorage.setItem("playlab.levelName", "your drawing");
+}
+function go() {
+  if (navigated) return;
+  navigated = true;
+  location.href = "game.html?source=storage";
 }
 
 async function handleFile(file) {
@@ -190,10 +203,37 @@ async function handleFile(file) {
     if (!r.ok || !data.level) throw new Error(data.error || `Server error ${r.status}`);
 
     clearInterval(msgTimer);
-    setStatus("Level ready!", `${data.level.theme} · ${data.level.objects.length} things found`);
-    localStorage.setItem("playlab.level", JSON.stringify(data.level));
-    localStorage.setItem("playlab.levelName", "your drawing");
-    setTimeout(() => { location.href = "game.html?source=storage"; }, 500);
+    saveLevel(data.level);                       // playable right away (quick auto-fix applied if needed)
+    const problems = data.meta?.playtest?.before?.problems || [];
+    const found = `${data.level.theme} · ${data.level.objects.length} things found`;
+
+    if (!data.original || !problems.length) {
+      setStatus("Level ready!", `${found} · every jump checked`);
+      setTimeout(go, 600);
+      return;
+    }
+
+    // Phase 2: the drawing had impossible parts. A quick fix is already saved; now ask the AI for a proper one.
+    const n = problems.length;
+    setStatus(`Found ${n} impossible part${n > 1 ? "s" : ""}. ${FIX_MESSAGES[0]}`, "This can take up to a minute. You can also play the quick fix right away.");
+    $("playNow").style.display = "flex";
+    startMessages(FIX_MESSAGES);
+    let fixedBy = "quick fix";
+    try {
+      const r2 = await fetch("api/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ level: data.original }),
+        signal: AbortSignal.timeout(75_000),
+      });
+      const d2 = await r2.json().catch(() => ({}));
+      if (r2.ok && d2.level && d2.report?.after?.ok) { saveLevel(d2.level); fixedBy = d2.report.fixedBy === "ai" ? "the AI" : "the AI + quick fix"; }
+    } catch { /* keep the quick fix */ }
+    clearInterval(msgTimer);
+    if (navigated) return;
+    $("playNow").style.display = "none";
+    setStatus("Level ready!", `${found} · ${n} impossible part${n > 1 ? "s" : ""} fixed by ${fixedBy}`);
+    setTimeout(go, 1400);
   } catch (err) {
     clearInterval(msgTimer);
     const msg = err.name === "TimeoutError" ? "The AI took too long." : err.message;

@@ -1,10 +1,12 @@
-// api/scan.js — Vercel serverless function: photo -> level JSON.
-// POST { image: "<base64 or data URL>", mime?: "image/jpeg" }
-// -> 200 { level, meta: { provider, model, ms, usage } }
+// api/scan.js — Vercel serverless function: photo -> playable level JSON.
+// POST { image: "<base64 or data URL>", mime?: "image/jpeg", fix?: true }
+// -> 200 { level, meta: { provider, model, ms, usage, playtest } }
 // -> 4xx/5xx { error }
 // The API keys live in environment variables on the server only.
+// After the scan, the playtest agent checks every jump and repairs impossible parts (AI, then auto).
 
 import { scanLevelFromImage, aspectFromImage } from "../lib/scan-level.mjs";
+import { playtestAndFix } from "../lib/fix-level.mjs";
 
 const MAX_BASE64 = 8_000_000;                 // ~6 MB of image; the page sends ~0.3-0.8 MB
 const OK_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -27,14 +29,32 @@ export default async function handler(req, res) {
   let aspect;
   try { aspect = aspectFromImage(Buffer.from(base64, "base64")); } catch { /* not fatal */ }
 
+  let scanned;
   try {
-    const { level, provider, model, ms, usage, fallback } = await scanLevelFromImage({ base64, mime, aspect });
-    return res.status(200).json({ level, meta: { provider, model, ms, usage, fallback: !!fallback } });
+    scanned = await scanLevelFromImage({ base64, mime, aspect });
   } catch (err) {
     console.error("scan failed:", err.message);
     const status = err.status === 401 || err.status === 403 ? 500 : 502;   // never leak auth details, just say the AI failed
     return res.status(status).json({ error: friendly(err) });
   }
+
+  // Playtest agent, quick pass: check every jump and apply the instant algorithmic fix so the level is
+  // playable right away. When something was impossible, the original is returned too so the page can
+  // ask /api/fix for the slower AI repair (the AI needs ~45 s, which does not fit in this function).
+  let level = scanned.level, playtest = null, original = null;
+  if (body.fix !== false) {
+    try {
+      const fixed = await playtestAndFix(level, { useAI: false });
+      if (!fixed.report.before.ok) original = level;
+      level = fixed.level; playtest = fixed.report;
+    } catch (err) {
+      console.error("playtest failed:", err.message);
+      playtest = { error: String(err.message).slice(0, 200) };
+    }
+  }
+
+  const { provider, model, ms, usage, fallback } = scanned;
+  return res.status(200).json({ level, original, meta: { provider, model, ms, usage, fallback: !!fallback, playtest } });
 }
 
 function friendly(err) {

@@ -19,15 +19,24 @@
   #list { font-family: ui-monospace, monospace; font-size:12px; white-space:pre; overflow:auto; max-height:300px; margin-top:8px; color:#ccc; }
   button { background:#2b6cff; color:#fff; border:0; border-radius:6px; padding:8px 12px; font-size:14px; cursor:pointer; }
   button:hover { background:#1f5be0; }
+  button:disabled { opacity:.5; cursor:default; }
+  #fixBtn { background:#7c3aed; }
   .hint { color:var(--muted); font-size:13px; }
+  #report { margin-top:10px; font-size:14px; line-height:1.5; }
+  #report .ok { color:#4ade80; font-weight:700; }
+  #report .bad { color:#f87171; font-weight:700; }
+  #report ul { margin:4px 0 0; padding-left:18px; }
+  #report .fix { color:#c4b5fd; }
 </style>
 </head>
 <body>
 <header>
   <label>Photo <input type="file" id="photo" accept="image/*"></label>
   <label>Level JSON <input type="file" id="json" accept="application/json,.json"></label>
+  <label>or <select id="levelSelect"><option value="">pick a level...</option></select></label>
   <button id="play">Play in game.html</button>
-  <span class="hint" id="status">Pick the photo and the JSON produced by scan.mjs.</span>
+  <button id="fixBtn">Playtest + fix with AI</button>
+  <span class="hint" id="status">Pick the photo and the JSON produced by scan.mjs, or a level from the list.</span>
 </header>
 <main>
   <section>
@@ -36,12 +45,15 @@
     <div id="legend"></div>
   </section>
   <section>
-    <h2>Level preview (1000 x 1000 grid)</h2>
+    <h2>Level preview (1000 x 1000 grid) · red dashed = unreachable</h2>
     <canvas id="levelCanvas" width="1000" height="1000"></canvas>
+    <div id="report"></div>
     <div id="list"></div>
   </section>
 </main>
-<script>
+<script type="module">
+import { checkLevel } from "./shared/reach.mjs";
+
 // Colors per object type — keep in sync with game.html.
 const COLORS = {
   start: "#4ade80", goal: "#facc15", platform: "#8b5a2b", moving_platform: "#60a5fa",
@@ -50,13 +62,12 @@ const COLORS = {
 
 let image = null;   // HTMLImageElement
 let level = null;   // parsed level JSON
+let report = null;  // checkLevel() result
 
 const $ = (id) => document.getElementById(id);
 const photoCanvas = $("photoCanvas"), levelCanvas = $("levelCanvas");
 
-// Legend
-$("legend").innerHTML = Object.entries(COLORS)
-  .map(([t, c]) => `<span style="--c:${c}">${t}</span>`).join("");
+$("legend").innerHTML = Object.entries(COLORS).map(([t, c]) => `<span style="--c:${c}">${t}</span>`).join("");
 
 $("photo").addEventListener("change", async (e) => {
   const file = e.target.files[0]; if (!file) return;
@@ -66,14 +77,19 @@ $("photo").addEventListener("change", async (e) => {
 
 $("json").addEventListener("change", async (e) => {
   const file = e.target.files[0]; if (!file) return;
+  try { setLevel(JSON.parse(await file.text()), file.name); }
+  catch (err) { $("status").textContent = "Invalid JSON: " + err.message; }
+});
+
+$("levelSelect").addEventListener("change", async (e) => {
+  const v = e.target.value; if (!v) return;
   try {
-    level = JSON.parse(await file.text());
-    localStorage.setItem("playlab.level", JSON.stringify(level));
-    $("status").textContent = `Theme: ${level.theme || "(none)"} — ${level.objects?.length ?? 0} objects`;
-  } catch (err) {
-    $("status").textContent = "Invalid JSON: " + err.message; level = null;
-  }
-  draw();
+    const r = await fetch(v, { cache: "no-store" });
+    setLevel(await r.json(), v);
+    const name = v.split("/").pop().replace(/\.json$/, "");
+    try { image = await loadImage(`photos/${name}.jpg`); } catch { image = null; }
+    draw();
+  } catch (err) { $("status").textContent = "Could not load " + v; }
 });
 
 $("play").addEventListener("click", () => {
@@ -82,35 +98,58 @@ $("play").addEventListener("click", () => {
   window.open("game.html?source=storage", "_blank");
 });
 
+$("fixBtn").addEventListener("click", async () => {
+  if (!level) { $("status").textContent = "Load a level JSON first."; return; }
+  if (report?.ok) { $("status").textContent = "Nothing to fix: everything is reachable."; return; }
+  $("fixBtn").disabled = true; $("status").textContent = "Asking the playtest agent (AI)...";
+  try {
+    const r = await fetch("api/fix", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ level }), signal: AbortSignal.timeout(90_000) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.status);
+    level = data.level;
+    localStorage.setItem("playlab.level", JSON.stringify(level));
+    $("status").textContent = `Fixed by ${data.report.fixedBy || "nobody"}${data.report.aiError ? " (AI skipped: " + data.report.aiError + ")" : ""}`;
+    draw();
+  } catch (err) { $("status").textContent = "Fix failed: " + err.message; }
+  $("fixBtn").disabled = false;
+});
+
+function setLevel(lvl, name) {
+  level = lvl;
+  localStorage.setItem("playlab.level", JSON.stringify(level));
+  $("status").textContent = `${name}: ${level.theme || "(no theme)"} — ${level.objects?.length ?? 0} objects`;
+  draw();
+}
+
 function loadImage(src) {
   return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
 }
 
 function draw() {
+  report = level?.objects ? checkLevel(level) : null;
+  const bad = new Set((report?.problems || []).map((p) => p.index).filter((i) => i != null));
+
   // --- photo with boxes ---
   const pc = photoCanvas.getContext("2d");
-  if (image) {
-    photoCanvas.width = image.naturalWidth; photoCanvas.height = image.naturalHeight;
-    pc.drawImage(image, 0, 0);
-  } else {
-    pc.fillStyle = "#000"; pc.fillRect(0, 0, photoCanvas.width, photoCanvas.height);
-  }
+  if (image) { photoCanvas.width = image.naturalWidth; photoCanvas.height = image.naturalHeight; pc.drawImage(image, 0, 0); }
+  else { photoCanvas.width = 1000; photoCanvas.height = 750; pc.fillStyle = "#000"; pc.fillRect(0, 0, photoCanvas.width, photoCanvas.height); }
   if (level?.objects) {
     const sx = photoCanvas.width / 1000, sy = photoCanvas.height / 1000;
     const lw = Math.max(2, photoCanvas.width / 300);
     pc.font = `${Math.max(12, photoCanvas.width / 60)}px system-ui`;
-    for (const o of level.objects) {
-      const c = COLORS[o.type] || "#fff";
-      pc.strokeStyle = c; pc.lineWidth = lw;
+    level.objects.forEach((o, i) => {
+      const c = bad.has(i) ? "#ff3b3b" : COLORS[o.type] || "#fff";
+      pc.strokeStyle = c; pc.lineWidth = lw; pc.setLineDash(bad.has(i) ? [8, 6] : []);
       pc.strokeRect(o.x * sx, o.y * sy, o.w * sx, o.h * sy);
+      pc.setLineDash([]);
       const text = `${o.type}${o.label ? " · " + o.label : ""}`;
       const tw = pc.measureText(text).width + 8, th = parseInt(pc.font) + 6;
       pc.fillStyle = c; pc.fillRect(o.x * sx, o.y * sy - th, tw, th);
       pc.fillStyle = "#000"; pc.fillText(text, o.x * sx + 4, o.y * sy - 5);
-    }
+    });
   }
 
-  // --- simple level preview ---
+  // --- level preview ---
   const lc = levelCanvas.getContext("2d");
   levelCanvas.width = 1000; levelCanvas.height = 1000;
   lc.fillStyle = "#1e293b"; lc.fillRect(0, 0, 1000, 1000);
@@ -118,21 +157,31 @@ function draw() {
   for (let i = 0; i <= 1000; i += 100) { lc.beginPath(); lc.moveTo(i, 0); lc.lineTo(i, 1000); lc.moveTo(0, i); lc.lineTo(1000, i); lc.stroke(); }
   const lines = [];
   if (level?.objects) {
-    for (const o of level.objects) {
+    level.objects.forEach((o, i) => {
       lc.fillStyle = COLORS[o.type] || "#fff";
-      if (o.type === "coin") {
-        lc.beginPath(); lc.arc(o.x + o.w / 2, o.y + o.h / 2, Math.min(o.w, o.h) / 2, 0, Math.PI * 2); lc.fill();
-      } else if (o.type === "spike") {
-        lc.beginPath(); lc.moveTo(o.x, o.y + o.h); lc.lineTo(o.x + o.w / 2, o.y); lc.lineTo(o.x + o.w, o.y + o.h); lc.closePath(); lc.fill();
-      } else {
-        lc.fillRect(o.x, o.y, o.w, o.h);
-      }
-      lc.fillStyle = "#fff"; lc.font = "16px system-ui"; lc.fillText(o.label || o.type, o.x, o.y - 4);
-      lines.push(`${o.type.padEnd(16)} ${String(o.label || "").padEnd(18)} x=${o.x} y=${o.y} w=${o.w} h=${o.h}`);
-    }
+      if (o.type === "coin") { lc.beginPath(); lc.arc(o.x + o.w / 2, o.y + o.h / 2, Math.min(o.w, o.h) / 2, 0, Math.PI * 2); lc.fill(); }
+      else if (o.type === "spike") { lc.beginPath(); lc.moveTo(o.x, o.y + o.h); lc.lineTo(o.x + o.w / 2, o.y); lc.lineTo(o.x + o.w, o.y + o.h); lc.closePath(); lc.fill(); }
+      else lc.fillRect(o.x, o.y, o.w, o.h);
+      if (bad.has(i)) { lc.strokeStyle = "#ff3b3b"; lc.lineWidth = 4; lc.setLineDash([10, 6]); lc.strokeRect(o.x - 4, o.y - 4, o.w + 8, o.h + 8); lc.setLineDash([]); }
+      lc.fillStyle = "#fff"; lc.font = "16px system-ui"; lc.fillText(o.label || o.type, o.x, o.y - 6);
+      lines.push(`${o.type.padEnd(16)} ${String(o.label || "").padEnd(24)} x=${o.x} y=${o.y} w=${o.w} h=${o.h}`);
+    });
   }
   $("list").textContent = lines.join("\n") || "(no level loaded)";
+
+  // --- playtest report ---
+  if (!report) $("report").innerHTML = "";
+  else if (report.ok) $("report").innerHTML = `<span class="ok">Playtest: every platform, coin and goal is reachable.</span>` + fixesHtml();
+  else $("report").innerHTML = `<span class="bad">Playtest: ${report.problems.length} problem(s)</span><ul>${report.problems.map((p) => `<li>${esc(p.message)}</li>`).join("")}</ul>` + fixesHtml();
 }
+function fixesHtml() { return level?.fixes?.length ? `<div class="fix">Agent fixes: ${level.fixes.map(esc).join(" · ")}</div>` : ""; }
+function esc(s) { return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+
+// Level list from levels/index.json (needs npm run dev)
+try {
+  const r = await fetch("levels/index.json", { cache: "no-store" });
+  for (const l of (await r.json()).levels) { const o = document.createElement("option"); o.value = "levels/" + l.file; o.textContent = `${l.file} · ${l.theme}`; $("levelSelect").appendChild(o); }
+} catch { /* file:// or no index */ }
 
 // Restore last level from localStorage so the page is useful on refresh.
 try { const saved = localStorage.getItem("playlab.level"); if (saved) { level = JSON.parse(saved); $("status").textContent = "Restored last level from this browser."; } } catch {}

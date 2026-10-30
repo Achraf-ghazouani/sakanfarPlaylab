@@ -6,6 +6,7 @@
 //   node scan.mjs photos/level1.jpg --provider baseten
 //   node scan.mjs --mock                              -> levels/mock.json, no API call
 //   node scan.mjs --index                             -> only rebuild levels/index.json
+//   add --no-fix to skip the playtest agent (reachability check + AI repair)
 //
 // Keys come from .env (see .env.example). Every run also rewrites levels/index.json,
 // which game.html uses for its dropdown.
@@ -13,6 +14,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { scanLevelFromImage, normalizeLevel, mimeFromName, imageSize } from "./lib/scan-level.mjs";
+import { playtestAndFix } from "./lib/fix-level.mjs";
 
 try { process.loadEnvFile(".env"); } catch { /* no .env yet; handled below */ }
 
@@ -77,6 +79,21 @@ async function main() {
     }
     const tok = info.usage ? ` (${info.usage.prompt_tokens ?? "?"} in / ${info.usage.completion_tokens ?? "?"} out tokens)` : "";
     console.log(`${info.provider} / ${info.model} replied in ${(info.ms / 1000).toFixed(1)}s${tok}${info.fallback ? "  [fallback provider]" : ""}`);
+  }
+
+  // Playtest agent: check every jump, let the AI repair impossible parts (auto fallback).
+  if (!args.includes("--no-fix")) {
+    const { level: fixed, report } = await playtestAndFix(level, { useAI: !mock });
+    if (report.before.ok) console.log("Playtest: every platform, coin and goal is reachable.");
+    else {
+      console.log(`Playtest: ${report.before.problems.length} problem(s):`);
+      for (const p of report.before.problems) console.log("  - " + p);
+      if (report.aiError) console.log("  AI fix skipped: " + report.aiError);
+      console.log(`  Fixed by ${report.fixedBy}${report.aiMs ? ` (AI ${(report.aiMs / 1000).toFixed(1)}s)` : ""}:`);
+      for (const c of report.fixes) console.log("  * " + c);
+      if (!report.after.ok) console.log("  Still unreachable: " + report.after.problems.join("; "));
+    }
+    level = fixed;
   }
 
   await fs.mkdir(path.dirname(outPath), { recursive: true });

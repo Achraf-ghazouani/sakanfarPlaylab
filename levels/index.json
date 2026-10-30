@@ -1,6 +1,16 @@
 {
   "levels": [
     {
+      "file": "impossible.fixed.json",
+      "theme": "impossible demo (hand-made)",
+      "objects": 11
+    },
+    {
+      "file": "impossible.json",
+      "theme": "impossible demo (hand-made)",
+      "objects": 8
+    },
+    {
       "file": "level1.json",
       "theme": "simple notebook sketch",
       "objects": 6

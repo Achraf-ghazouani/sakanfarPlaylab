@@ -1,4 +1,4 @@
-// api/scan.mjs — Vercel serverless function: photo -> level JSON.
+// api/scan.js — Vercel serverless function: photo -> level JSON.
 // POST { image: "<base64 or data URL>", mime?: "image/jpeg" }
 // -> 200 { level, meta: { provider, model, ms, usage } }
 // -> 4xx/5xx { error }

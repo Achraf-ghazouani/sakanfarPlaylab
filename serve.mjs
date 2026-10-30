@@ -50,16 +50,19 @@ http.createServer(async (req, res) => {
   console.log(`  Ctrl+C to stop`);
 });
 
-/** Run api/<name>.mjs like a Vercel Node function: parsed JSON body, res.status().json(). */
+/** Run api/<name>.js (or .mjs) like a Vercel Node function: parsed JSON body, res.status().json(). */
 async function runApi(req, res, pathname) {
   const name = pathname.slice(5);
-  const file = path.join(ROOT, "api", `${name}.mjs`);
   let mod;
-  try { mod = await import(pathToFileURL(file).href + `?t=${Date.now()}`); }   // re-import each call so edits apply without restart
-  catch (err) {
-    if (err.code === "ERR_MODULE_NOT_FOUND") { log(404, pathname); return send(res, 404, `No api/${name}.mjs`); }
-    console.error(err); log(500, pathname); return send(res, 500, "API module failed to load: " + err.message);
+  for (const ext of [".js", ".mjs"]) {
+    const file = path.join(ROOT, "api", name + ext);
+    try { mod = await import(pathToFileURL(file).href + `?t=${Date.now()}`); break; }   // re-import each call so edits apply without restart
+    catch (err) {
+      if (err.code === "ERR_MODULE_NOT_FOUND" && String(err.message).includes(name + ext)) continue;
+      console.error(err); log(500, pathname); return send(res, 500, "API module failed to load: " + err.message);
+    }
   }
+  if (!mod) { log(404, pathname); return send(res, 404, `No api/${name}.js`); }
 
   const chunks = [];
   for await (const c of req) chunks.push(c);

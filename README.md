@@ -48,14 +48,16 @@ The repo is ready: `vercel.json` gives the scan function 60 s, `.vercelignore` s
 
 To change a variable later: Project -> Settings -> Environment Variables, then Deployments -> Redeploy.
 
-**From the terminal (Vercel CLI is installed):**
+**From the terminal (no install needed, npx fetches the CLI):**
 
 ```bash
-vercel login
-vercel link                                  # pick your account, create project "sakanfar-playlab"
-vercel env add MODEL_API_KEY production      # paste the key when asked; repeat with "preview" if you want preview deploys to work
-vercel --prod
+npx vercel login
+npx vercel link                                  # pick your account, create project "sakanfar-playlab"
+npx vercel env add MODEL_API_KEY production      # paste the key when asked; repeat with "preview" if you want preview deploys to work
+npx vercel --prod
 ```
+
+If a deploy fails with "pattern ... doesn't match any Serverless Functions", check that `api/scan.js` was not excluded by `.vercelignore` (patterns there follow gitignore rules, so keep them anchored with a leading `/`).
 
 ## Files
 
@@ -64,7 +66,7 @@ vercel --prod
 | `index.html` | Mobile home page: camera/gallery input, resize, scanning animation, opens the game |
 | `game.html` | The game (Phaser 3 arcade physics, colored shapes, touch controls, drawing thumbnail) |
 | `viewer.html` | Debug: AI boxes drawn over the photo + grid preview |
-| `api/scan.mjs` | Vercel function: base64 photo -> validated level JSON. Keys stay on the server. |
+| `api/scan.js` | Vercel function: base64 photo -> validated level JSON. Keys stay on the server. |
 | `lib/ai.mjs` | OpenAI-compatible chat client for Meta (default) and Baseten |
 | `lib/scan-level.mjs` | Prompt, JSON extraction, level normalization, image size / EXIF |
 | `serve.mjs` | Dev server: static files + `/api` emulation + LAN address |

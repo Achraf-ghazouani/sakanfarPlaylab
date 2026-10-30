@@ -1,5 +1,6 @@
-# Not needed on the deployed site (functions still bundle lib/ through their imports)
-tests/
-scan.mjs
-serve.mjs
-.env.example
+# Not needed on the deployed site. Patterns are anchored to the repo root with a leading slash:
+# an unanchored "scan.mjs" would also match api/scan.* and drop the function.
+/tests/
+/scan.mjs
+/serve.mjs
+/.env.example

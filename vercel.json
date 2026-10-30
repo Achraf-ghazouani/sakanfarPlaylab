@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/scan.mjs": { "maxDuration": 60, "memory": 1024 }
+    "api/scan.js": { "maxDuration": 60, "memory": 1024 }
   },
   "headers": [
     { "source": "/api/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-store" }] },

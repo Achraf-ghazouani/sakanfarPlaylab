@@ -267,10 +267,11 @@
   <footer>Sakanfar PlayLab &middot; Meta hackathon 2026 &middot; built with Muse Spark and Phaser &middot; <a href="viewer.html">debug viewer</a></footer>
 </div>
 
+<script src="shared/photo.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
-const MAX_SIDE = 1600;          // upload size (long edge, px)
-const THUMB_SIDE = 480;         // kept in localStorage for the in-game "original drawing" corner
+const MAX_SIDE = PhotoUtil.UPLOAD_SIDE;    // upload size (long edge, px)
+const THUMB_SIDE = PhotoUtil.THUMB_SIDE;   // kept in localStorage for the in-game "original drawing" corner
 const MESSAGES = ["Reading your drawing...", "Finding the ground...", "Building platforms...", "Spotting enemies...", "Counting coins...", "Placing the flag...", "Checking every jump...", "Almost there..."];
 const FIX_MESSAGES = ["The AI is fixing the impossible parts...", "Adding stepping stones...", "Lowering a ledge or two...", "Re-checking every jump...", "Still thinking, the AI is thorough..."];
 
@@ -327,11 +328,11 @@ async function handleFile(file) {
   window.scrollTo(0, 0);
 
   let img;
-  try { img = await loadImage(file); }
+  try { img = await PhotoUtil.loadImage(file); }
   catch { clearInterval(msgTimer); setStatus("Could not read that image.", "Try taking a photo instead of picking a file.", true); return; }
 
-  const upload = toJpeg(img, MAX_SIDE, 0.85);
-  const thumb = toJpeg(img, THUMB_SIDE, 0.7);
+  const upload = PhotoUtil.toJpeg(img, MAX_SIDE, 0.85);
+  const thumb = PhotoUtil.toJpeg(img, THUMB_SIDE, 0.7);
   $("preview").src = thumb;
   try { localStorage.setItem("playlab.photo", thumb); } catch {}
 
@@ -384,26 +385,6 @@ async function handleFile(file) {
   }
 }
 
-function loadImage(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("decode")); };
-    img.src = url;   // browsers apply EXIF rotation to <img> by default, so the canvas below is upright
-  });
-}
-
-function toJpeg(img, maxSide, quality) {
-  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-  const w = Math.round(img.naturalWidth * scale), h = Math.round(img.naturalHeight * scale);
-  const c = document.createElement("canvas");
-  c.width = w; c.height = h;
-  const ctx = c.getContext("2d");
-  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);   // PNG transparency -> white paper
-  ctx.drawImage(img, 0, 0, w, h);
-  return c.toDataURL("image/jpeg", quality);
-}
 </script>
 </body>
 </html>

@@ -10,7 +10,7 @@
     "check": "node check.mjs",
     "dev": "node serve.mjs",
     "serve": "node serve.mjs",
-    "test": "node tests/normalize.test.mjs && node tests/reach.test.mjs",
+    "test": "node tests/normalize.test.mjs && node tests/reach.test.mjs && node tests/diff.test.mjs",
     "playtest": "node tests/playtest.mjs http://localhost:3000"
   }
 }

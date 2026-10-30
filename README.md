@@ -12,6 +12,7 @@ Built solo for the Meta hackathon (Oct 30 - Nov 4, 2026). Plain HTML/JS + Phaser
 2. `POST /api/scan`: Muse Spark reads the photo and returns level JSON. The playtest agent checks reachability and applies an instant fix if needed.
 3. If something was impossible, the page calls `POST /api/fix`: Muse Spark repairs the drawn level with minimal edits (add a step, lower a ledge). A "play now" button lets you skip the wait.
 4. `game.html`: plays the level with touch controls, shows the original drawing in a corner, and a toast lists what the agent changed.
+5. **Live edit by redrawing**: change the paper (add a bridge, erase a spike), tap **Redraw** in the game and snap it again. The scan gets the earlier level as context, `shared/diff.mjs` works out what changed, new things pop into the running level, the player stays where they were, and a toast says "added 1 platform, 1 coin".
 
 ## The playtest agent
 
@@ -48,6 +49,7 @@ Other commands:
 | Command | What it does |
 | --- | --- |
 | `node scan.mjs photos/level1.jpg` | Scan a photo from the terminal -> `levels/level1.json`, runs the playtest agent, refreshes `levels/index.json` |
+| `node scan.mjs photos/level1b.jpg --previous levels/level1.json` | Re-scan an edited drawing and print what changed |
 | `node scan.mjs --mock` | Fake scan from `levels/sample.json`, no API call |
 | `node check.mjs <level.json> [--fix]` | Playtest report, optional repair |
 | `npm test` | Unit checks: level normalizer, image parsing, reachability and auto-fix |
@@ -93,6 +95,8 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | `api/scan.js` | Vercel function: base64 photo -> validated, quick-fixed level JSON |
 | `api/fix.js` | Vercel function: level JSON -> AI-repaired level JSON |
 | `shared/reach.mjs` | Reachability checker + algorithmic fixer (pure JS, used by server and pages) |
+| `shared/diff.mjs` | What changed between two scans of the same drawing (added / removed / moved) |
+| `shared/photo.js` | Browser photo resize helper used by index.html and game.html |
 | `lib/fix-level.mjs` | Playtest agent orchestration: AI repair, validation, auto fallback |
 | `lib/ai.mjs` | OpenAI-compatible chat client for Meta (default) and Baseten |
 | `lib/scan-level.mjs` | Scan prompt, JSON extraction, level normalization, image size / EXIF |
@@ -115,7 +119,7 @@ Coordinates are on a 1000 x 1000 grid, y goes down, `x,y` is the top-left corner
 `aspect` is the photo's width / height; the game stretches the grid by it so the level keeps the paper's proportions.
 Types: `start`, `goal`, `platform`, `moving_platform`, `coin`, `enemy`, `spike`, `decoration`.
 The server guarantees exactly one start, at least one goal, at least one platform, every number inside the grid, and unknown types become `decoration`.
-`checked` and `fixes` are added by the playtest agent.
+`checked` and `fixes` are added by the playtest agent; `diff` is added when a scan was a re-scan of an edited drawing (`POST /api/scan` with `previous`).
 
 ## Rules we follow
 

@@ -23,7 +23,8 @@ const flag = (name) => { const i = args.indexOf(name); return i === -1 ? null : 
 const mock = args.includes("--mock");
 const outFlag = flag("--out");
 const providerFlag = flag("--provider");
-const imagePath = args.find((a) => !a.startsWith("--") && a !== outFlag && a !== providerFlag);
+const previousFlag = flag("--previous");     // re-scan of an edited drawing: path of the earlier level JSON
+const imagePath = args.find((a) => !a.startsWith("--") && a !== outFlag && a !== providerFlag && a !== previousFlag);
 
 if (args.includes("--index")) {
   await writeIndex();
@@ -63,9 +64,16 @@ async function main() {
       if (rotated) console.warn("Warning: this photo has EXIF rotation. If the boxes look misaligned in viewer.html, re-save the photo upright.");
     }
 
+    let previous = null;
+    if (typeof previousFlag === "string") {
+      previous = normalizeLevel(JSON.parse(await fs.readFile(previousFlag, "utf8")));
+      console.log(`Re-scan: comparing with ${previousFlag} (${previous.objects.length} objects)`);
+    }
+
     console.log(`Scanning ${imagePath} (${mb.toFixed(2)} MB${dims ? `, ${dims.width}x${dims.height}` : ""}) ...`);
     try {
-      ({ level, ...info } = await scanLevelFromImage({ base64: bytes.toString("base64"), mime: mimeFromName(imagePath), aspect, provider: typeof providerFlag === "string" ? providerFlag : undefined }));
+      ({ level, ...info } = await scanLevelFromImage({ base64: bytes.toString("base64"), mime: mimeFromName(imagePath), aspect, previous, provider: typeof providerFlag === "string" ? providerFlag : undefined }));
+      if (previous) { const { diffLevels } = await import("./shared/diff.mjs"); level.diff = diffLevels(previous, level); console.log(`Changes: ${level.diff.summary}`); }
     } catch (err) {
       if (err.raw) {
         const rawPath = outPath.replace(/\.json$/, "") + ".raw.txt";

@@ -5,8 +5,9 @@
 // The API keys live in environment variables on the server only.
 // After the scan, the playtest agent checks every jump and repairs impossible parts (AI, then auto).
 
-import { scanLevelFromImage, aspectFromImage } from "../lib/scan-level.mjs";
+import { scanLevelFromImage, aspectFromImage, normalizeLevel } from "../lib/scan-level.mjs";
 import { playtestAndFix } from "../lib/fix-level.mjs";
+import { diffLevels } from "../shared/diff.mjs";
 
 const MAX_BASE64 = 8_000_000;                 // ~6 MB of image; the page sends ~0.3-0.8 MB
 const OK_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -29,9 +30,15 @@ export default async function handler(req, res) {
   let aspect;
   try { aspect = aspectFromImage(Buffer.from(base64, "base64")); } catch { /* not fatal */ }
 
+  // Optional: the level from the earlier scan of the same drawing (live edit by redrawing).
+  let previous = null;
+  if (body.previous && Array.isArray(body.previous.objects) && body.previous.objects.length <= 300) {
+    previous = normalizeLevel(body.previous, { aspect: body.previous.aspect });
+  }
+
   let scanned;
   try {
-    scanned = await scanLevelFromImage({ base64, mime, aspect });
+    scanned = await scanLevelFromImage({ base64, mime, aspect, previous });
   } catch (err) {
     console.error("scan failed:", err.message);
     const status = err.status === 401 || err.status === 403 ? 500 : 502;   // never leak auth details, just say the AI failed
@@ -52,6 +59,8 @@ export default async function handler(req, res) {
       playtest = { error: String(err.message).slice(0, 200) };
     }
   }
+
+  if (previous) level.diff = diffLevels(previous, level);
 
   const { provider, model, ms, usage, fallback } = scanned;
   return res.status(200).json({ level, original, meta: { provider, model, ms, usage, fallback: !!fallback, playtest } });

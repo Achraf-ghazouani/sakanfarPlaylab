@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>PlayLab Game</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js"></script>
+<script src="shared/photo.js"></script>
 <style>
   html, body { margin:0; height:100%; overflow:hidden; background:#111; font-family: system-ui, sans-serif; color:#eee; touch-action:none; overscroll-behavior:none; }
   #hud { position:fixed; top:0; left:0; right:0; height:44px; box-sizing:border-box; display:flex; gap:12px; align-items:center; padding:0 12px; background:rgba(0,0,0,.6); font-size:14px; z-index:2; }
@@ -19,8 +20,23 @@
   #msg div { background:rgba(0,0,0,.78); color:#fff; padding:22px 34px; border-radius:14px; text-align:center; font-size:30px; font-weight:700; cursor:pointer; }
   #msg small { display:block; font-size:15px; font-weight:400; margin-top:8px; color:#ccc; }
   #hint { position:fixed; bottom:8px; left:12px; font-size:12px; color:rgba(0,0,0,.55); z-index:2; pointer-events:none; }
-  button, a.btn { font-size:13px; padding:4px 10px; border-radius:6px; border:0; background:#2b6cff; color:#fff; cursor:pointer; text-decoration:none; white-space:nowrap; }
+  button, a.btn, label.btn { font-size:13px; padding:4px 10px; border-radius:6px; border:0; background:#2b6cff; color:#fff; cursor:pointer; text-decoration:none; white-space:nowrap; }
   a.btn#newBtn { background:#7c3aed; font-weight:700; }
+  label.btn#redrawBtn { background:#0d9488; font-weight:700; }
+  #redrawInput { display:none; }
+  body.touch .lbl { display:none; }
+
+  /* live edit: re-scan overlay */
+  #rescan { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(27,21,53,.55); z-index:5; }
+  #rescan.show { display:flex; }
+  #rescan .card { background:#fff; color:#1b1535; border-radius:18px; padding:14px; width:min(92vw, 420px); box-shadow:0 20px 50px rgba(0,0,0,.35); }
+  #rescan .shot { position:relative; border-radius:12px; overflow:hidden; background:#1b1535; height:min(45vh, 300px); }
+  #rescan .shot img { width:100%; height:100%; object-fit:contain; display:block; }
+  #rescan .rbeam { position:absolute; left:0; right:0; height:26%; top:-30%; background:linear-gradient(180deg, rgba(167,139,250,0), rgba(167,139,250,.55) 50%, rgba(244,114,182,0)); border-bottom:3px solid #e9d5ff; box-shadow:0 0 24px #c084fc; animation:rsweep 1.6s ease-in-out infinite; }
+  @keyframes rsweep { 0% { top:-30%; } 100% { top:104%; } }
+  #rescan .rs { margin-top:12px; font-weight:700; font-size:17px; color:#4c1d95; display:flex; align-items:center; gap:10px; }
+  #rescan .spin { width:18px; height:18px; border:3px solid #e2d9ff; border-top-color:#7c3aed; border-radius:50%; animation:rspin .8s linear infinite; flex:none; }
+  @keyframes rspin { to { transform:rotate(360deg); } }
 
   /* playtest agent toast */
   #toast { position:fixed; left:50%; bottom:max(16px, env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(20px); opacity:0; transition:opacity .3s, transform .3s;
@@ -67,10 +83,12 @@
 </head>
 <body>
 <div id="hud">
-  <a class="btn" id="newBtn" href="index.html" title="Scan another drawing">&#10010; New level</a>
+  <a class="btn" id="newBtn" href="index.html" title="Scan another drawing">&#10010;<span class="lbl"> New level</span></a>
+  <label class="btn" id="redrawBtn" for="redrawInput" title="Changed the drawing on paper? Snap it again and the level updates in place">&#9998; Redraw</label>
+  <input type="file" id="redrawInput" accept="image/*" capture="environment">
   <label><span class="desktop">Level</span><select id="levelSelect"></select></label>
   <label class="desktop">or file <input type="file" id="levelFile" accept=".json,application/json"></label>
-  <button id="restartBtn" title="Restart (R)">&#8635; Restart</button>
+  <button id="restartBtn" title="Restart (R)">&#8635;<span class="lbl"> Restart</span></button>
   <button id="muteBtn" title="Sound on/off (M)">&#128266;</button>
   <a href="viewer.html" target="_blank" class="desktop">viewer</a>
   <span id="theme" class="desktop"></span>
@@ -86,6 +104,7 @@
 <div id="rotate"><div><span class="icon">&#128241;</span>Rotate your phone<br><small style="font-weight:400;font-size:16px">the level is wider than it is tall</small></div></div>
 <div id="msg"><div id="msgText"></div></div>
 <div id="toast"></div>
+<div id="rescan"><div class="card"><div class="shot"><img id="rescanPreview" alt=""><div class="rbeam"></div></div><div class="rs"><div class="spin"></div><span id="rescanText">Reading your changes...</span></div></div></div>
 <div id="hint">Move: arrows / A D &nbsp;·&nbsp; Jump: space / up / W (hold for higher) &nbsp;·&nbsp; Stomp enemies from above &nbsp;·&nbsp; R restarts &nbsp;·&nbsp; M sound</div>
 
 <script>
@@ -249,17 +268,23 @@ class PlayScene extends Phaser.Scene {
       return { X, Y: o.y, Wd, Ht: o.h, cx: X + Wd / 2, cy: o.y + o.h / 2 };
     };
 
+    this.created = new Map();                       // object index -> game objects (for pop-in after a re-scan)
+    const mark = (i, ...gos) => this.created.set(i, (this.created.get(i) || []).concat(gos));
+
     // Pass 1: solid platforms, so everything else can snap onto them.
-    for (const o of L.objects) {
+    for (let i = 0; i < L.objects.length; i++) {
+      const o = L.objects[i];
       if (o.type !== "platform") continue;
       const { X, Y, Wd, Ht, cx, cy } = toWorld(o);
       const r = this.add.rectangle(cx, cy, Wd, Ht, COLORS.platform).setStrokeStyle(3, 0x4a2f12);
       this.platforms.add(r);
       solids.push({ left: X, right: X + Wd, top: Y, bottom: Y + Ht });
+      mark(i, r);
     }
 
     // Pass 2: everything else.
-    for (const o of L.objects) {
+    for (let i = 0; i < L.objects.length; i++) {
+      const o = L.objects[i];
       const { X, Y, Wd, Ht, cx, cy } = toWorld(o);
       switch (o.type) {
         case "platform": break;
@@ -267,6 +292,7 @@ class PlayScene extends Phaser.Scene {
         case "moving_platform": {
           const r = this.add.rectangle(cx, cy, Wd, Ht, COLORS.moving_platform).setStrokeStyle(3, 0x1d4ed8);
           this.movers.add(r);
+          mark(i, r);
           r.body.setImmovable(true);
           r.body.allowGravity = false;
           r.body.friction.x = 0;              // riders are carried manually in update()
@@ -282,6 +308,7 @@ class PlayScene extends Phaser.Scene {
           const c = this.add.circle(cx, cy, rad, COLORS.coin).setStrokeStyle(3, 0xb45309);
           this.coinGroup.add(c);
           this.totalCoins++;
+          mark(i, c);
           break;
         }
 
@@ -299,6 +326,7 @@ class PlayScene extends Phaser.Scene {
           e.setData("patrol", patrol);
           e.setData("dir", -1);
           e.setData("eyes", this.makeEyes(6));
+          mark(i, e);
           break;
         }
 
@@ -314,6 +342,7 @@ class PlayScene extends Phaser.Scene {
           }
           const z = this.add.zone(cx, Y + Ht * 0.7, Wd * 0.9, Ht * 0.6);
           this.hazards.add(z);
+          mark(i, g);
           break;
         }
 
@@ -324,6 +353,7 @@ class PlayScene extends Phaser.Scene {
           g.fillStyle(COLORS.goal); g.fillTriangle(poleX + 3, Y, X + Wd, Y + Ht * 0.2, poleX + 3, Y + Ht * 0.4);
           g.lineStyle(2, 0x92400e); g.strokeTriangle(poleX + 3, Y, X + Wd, Y + Ht * 0.2, poleX + 3, Y + Ht * 0.4);
           this.goals.add(this.add.zone(cx, cy, Wd, Ht));
+          mark(i, g);
           break;
         }
 
@@ -334,9 +364,10 @@ class PlayScene extends Phaser.Scene {
         }
 
         default: { // decoration
-          this.add.rectangle(cx, cy, Wd, Ht, COLORS.decoration, 0.12).setStrokeStyle(2, COLORS.decoration, 0.5).setDepth(-5);
-          this.add.text(cx, cy, o.label || "", { fontFamily: "system-ui, sans-serif", fontSize: "20px", color: "#7c3aed" })
+          const rect = this.add.rectangle(cx, cy, Wd, Ht, COLORS.decoration, 0.12).setStrokeStyle(2, COLORS.decoration, 0.5).setDepth(-5);
+          const text = this.add.text(cx, cy, o.label || "", { fontFamily: "system-ui, sans-serif", fontSize: "20px", color: "#7c3aed" })
             .setOrigin(0.5).setAlpha(0.8).setDepth(-5);
+          mark(i, rect, text);
         }
       }
     }
@@ -349,6 +380,13 @@ class PlayScene extends Phaser.Scene {
     } else if (solids.length) {
       const g = solids.reduce((a, b) => (b.left < a.left ? b : a));
       px = g.left + 40; feetY = g.top;
+    }
+    // Live edit: after a re-scan, keep the player where they were if there is still ground there.
+    if (pendingSpawn) {
+      const sx = pendingSpawn.x * this.ax;
+      const g = groundUnder(solids, sx, pendingSpawn.y, 120);
+      if (g) { px = sx; feetY = g.top; }
+      pendingSpawn = null;
     }
     // Physics body is an invisible rectangle; the visible "skin" squashes and stretches
     // without touching the collision size.
@@ -386,6 +424,23 @@ class PlayScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, false, 0.1, 0.1);
     this.scale.on("resize", this.layout, this);
     this.events.once("shutdown", () => this.scale.off("resize", this.layout, this));
+
+    // Live edit: things added by the latest re-scan pop in (static shapes scale up, the rest fades in).
+    const added = new Set(Array.isArray(L.diff?.added) ? L.diff.added : []);
+    for (const [i, gos] of this.created) {
+      if (!added.has(i)) continue;
+      for (const go of gos) {
+        const dynamic = go.body && go.body.physicsType === Phaser.Physics.Arcade.DYNAMIC_BODY;
+        if (!dynamic && go.type !== "Graphics" && go.setScale) {
+          const sx = go.scaleX, sy = go.scaleY;
+          go.setScale(0.01);
+          this.tweens.add({ targets: go, scaleX: sx, scaleY: sy, duration: 500, ease: "Back.Out", delay: 150 });
+        } else {
+          go.setAlpha(0);
+          this.tweens.add({ targets: go, alpha: 1, duration: 500, delay: 150 });
+        }
+      }
+    }
 
     updateScore(this);
     hideMsg();
@@ -602,6 +657,56 @@ function startLevel(level, name, thumbSrc) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Live edit by redrawing: snap the edited paper again, the level updates in place.
+// ---------------------------------------------------------------------------
+let pendingSpawn = null;   // { x: grid x, y: world feet y } of the player before the re-scan
+const stripLevel = (l) => ({ theme: l.theme, aspect: l.aspect, objects: l.objects.map(({ type, label, x, y, w, h }) => ({ type, label, x, y, w, h })) });
+
+async function rescan(file) {
+  if (!currentLevel || !window.PhotoUtil) return;
+  const scene = playScene();
+  const ov = $("rescan"), text = $("rescanText");
+  const msgs = ["Reading your changes...", "Comparing with the last scan...", "Updating platforms...", "Checking every jump..."];
+  let i = 0;
+  text.textContent = msgs[0];
+  const timer = setInterval(() => { i = (i + 1) % msgs.length; text.textContent = msgs[i]; }, 1500);
+  $("rescanPreview").removeAttribute("src");
+  ov.classList.add("show");
+  try {
+    const img = await PhotoUtil.loadImage(file);
+    const upload = PhotoUtil.toJpeg(img, PhotoUtil.UPLOAD_SIDE, 0.85);
+    const thumb = PhotoUtil.toJpeg(img, PhotoUtil.THUMB_SIDE, 0.7);
+    $("rescanPreview").src = thumb;
+    const spawn = scene?.player && scene.state === "play" ? { x: scene.player.x / scene.ax, y: scene.player.body.bottom } : null;
+
+    const r = await fetch("api/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: upload, previous: stripLevel(currentLevel) }),
+      signal: AbortSignal.timeout(95_000),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.level) throw new Error(data.error || `Server error ${r.status}`);
+
+    try { localStorage.setItem("playlab.photo", thumb); } catch {}
+    pendingSpawn = spawn;
+    startLevel(data.level, "your drawing", thumb);
+    const sel = $("levelSelect");
+    if (![...sel.options].some((o) => o.value === STORAGE_OPTION)) {
+      const o = document.createElement("option"); o.value = STORAGE_OPTION; o.textContent = "✎ your drawing"; sel.prepend(o);
+    }
+    sel.value = STORAGE_OPTION;
+    const d = data.level.diff;
+    const fixes = data.level.fixes?.length ? ` &middot; agent: ${data.level.fixes.map(esc).join(", ")}` : "";
+    showToast(`<b>&#9998; Redrawn:</b> ${esc(d?.summary || "level updated")}${fixes}`, 8000);
+  } catch (err) {
+    showToast(`<b>Could not update the level.</b> ${esc(err.name === "TimeoutError" ? "The AI took too long." : err.message)}`, 6000);
+  }
+  clearInterval(timer);
+  ov.classList.remove("show");
+}
+
 const stored = () => { try { const s = localStorage.getItem("playlab.level"); return s ? JSON.parse(s) : null; } catch { return null; } };
 const storedPhoto = () => { try { return localStorage.getItem("playlab.photo") || null; } catch { return null; } };
 const STORAGE_OPTION = "__storage";
@@ -686,6 +791,7 @@ async function init() {
     catch (err) { showMsg("Invalid JSON file", err.message); }
   });
   $("restartBtn").addEventListener("click", (e) => { e.target.blur(); restartScene(); });
+  $("redrawInput").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) rescan(f); });
   $("muteBtn").addEventListener("click", (e) => { e.target.blur(); SFX.setMuted(!SFX.muted); });
   try { SFX.setMuted(localStorage.getItem("playlab.muted") === "1"); } catch {}
   // Browsers only allow audio after a user gesture: unlock on the first key or tap.

@@ -27,13 +27,14 @@
   <label>Level <select id="levelSelect"></select></label>
   <label>or file <input type="file" id="levelFile" accept=".json,application/json"></label>
   <button id="restartBtn">Restart (R)</button>
+  <button id="muteBtn" title="Sound on/off (M)">&#128266;</button>
   <a href="viewer.html" target="_blank">viewer</a>
   <span id="theme"></span>
   <span id="score">Coins 0/0</span>
 </div>
 <div id="game"></div>
 <div id="msg"><div id="msgText"></div></div>
-<div id="hint">Move: arrows / A D &nbsp;·&nbsp; Jump: space / up / W &nbsp;·&nbsp; Stomp enemies from above &nbsp;·&nbsp; R restarts</div>
+<div id="hint">Move: arrows / A D &nbsp;·&nbsp; Jump: space / up / W (hold for higher) &nbsp;·&nbsp; Stomp enemies from above &nbsp;·&nbsp; R restarts &nbsp;·&nbsp; M sound</div>
 
 <script>
 // ---------------------------------------------------------------------------
@@ -50,6 +51,11 @@ const JUMP_VEL = 1100;      // with GRAVITY 2400 -> ~250 units jump height
 const GRAVITY = 2400;
 const ENEMY_SPEED = 70;
 const MOVER_SPEED = 90, MOVER_RANGE = 150;
+// Game feel
+const COYOTE_MS = 120;        // you can still jump this long after walking off an edge
+const JUMP_BUFFER_MS = 130;   // a jump pressed this long before landing still fires
+const JUMP_CUT = 0.45;        // releasing jump early multiplies upward speed by this
+const CAMERA_ZOOM = 1.25;     // 1 = whole level on screen; more = closer, camera follows
 
 // Background palette picked from the AI theme text.
 const PALETTES = [
@@ -66,6 +72,61 @@ const $ = (id) => document.getElementById(id);
 const hex = (n) => "#" + n.toString(16).padStart(6, "0");
 let currentLevel = null;   // level JSON currently loaded
 let game = null;
+
+// ---------------------------------------------------------------------------
+// Sound effects: tiny synth on the Web Audio API, no audio files.
+// The AudioContext is created on the first key press / tap (browser autoplay rules).
+// ---------------------------------------------------------------------------
+const SFX = {
+  ctx: null, master: null, muted: false,
+  ensure() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!this.ctx) {
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.18;
+      this.master.connect(this.ctx.destination);
+    }
+    if (this.ctx.state === "suspended") this.ctx.resume();
+  },
+  tone({ freq = 440, to = freq, type = "square", dur = 0.1, vol = 1, delay = 0 }) {
+    if (!this.ctx || this.muted) return;
+    const t0 = this.ctx.currentTime + delay;
+    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t0);
+    if (to !== freq) o.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  },
+  noise(dur = 0.2, vol = 0.5) {
+    if (!this.ctx || this.muted) return;
+    const n = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 900;
+    const g = this.ctx.createGain(); g.gain.value = vol;
+    src.connect(f); f.connect(g); g.connect(this.master);
+    src.start();
+  },
+  jump()  { this.tone({ freq: 280, to: 720, type: "square", dur: 0.12, vol: 0.5 }); },
+  land()  { this.tone({ freq: 140, to: 60, type: "triangle", dur: 0.07, vol: 0.6 }); },
+  coin()  { this.tone({ freq: 1047, type: "square", dur: 0.07, vol: 0.4 }); this.tone({ freq: 1568, type: "square", dur: 0.16, vol: 0.4, delay: 0.07 }); },
+  stomp() { this.tone({ freq: 520, to: 110, type: "sawtooth", dur: 0.18, vol: 0.5 }); },
+  hurt()  { this.tone({ freq: 220, to: 45, type: "sawtooth", dur: 0.4, vol: 0.7 }); this.noise(0.3, 0.5); },
+  win()   { [523, 659, 784, 1047].forEach((f, i) => this.tone({ freq: f, type: "square", dur: 0.2, vol: 0.45, delay: i * 0.12 })); },
+  setMuted(m) {
+    this.muted = m;
+    $("muteBtn").innerHTML = m ? "&#128263;" : "&#128266;";
+    try { localStorage.setItem("playlab.muted", m ? "1" : "0"); } catch {}
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Helpers: find the platform under a point so things can stand on it
@@ -99,6 +160,9 @@ class PlayScene extends Phaser.Scene {
     this.H = 1000;
     this.state = "play";
     this.coins = 0; this.totalCoins = 0; this.facing = 1;
+    // Jump feel bookkeeping (timestamps in ms from this.time.now)
+    this.lastGroundedAt = -1e9; this.jumpPressedAt = -1e9; this.jumpHeld = false;
+    this.wasGrounded = false; this.prevVy = 0; this.lookAhead = 0;
 
     // Background
     const pal = PALETTES.find((p) => p.re.test((L.theme || "").toLowerCase())) || DEFAULT_PAL;
@@ -232,10 +296,13 @@ class PlayScene extends Phaser.Scene {
       const g = solids.reduce((a, b) => (b.left < a.left ? b : a));
       px = g.left + 40; feetY = g.top;
     }
-    this.player = this.add.rectangle(px, feetY - PLAYER_H / 2 - 1, PLAYER_W, PLAYER_H, COLORS.player)
-      .setStrokeStyle(3, 0x14532d).setDepth(5);
+    // Physics body is an invisible rectangle; the visible "skin" squashes and stretches
+    // without touching the collision size.
+    this.player = this.add.rectangle(px, feetY - PLAYER_H / 2 - 1, PLAYER_W, PLAYER_H).setVisible(false);
     this.physics.add.existing(this.player);
     this.player.body.setCollideWorldBounds(true);
+    this.skin = this.add.rectangle(px, feetY, PLAYER_W, PLAYER_H, COLORS.player)
+      .setOrigin(0.5, 1).setStrokeStyle(3, 0x14532d).setDepth(5);
     this.playerEyes = this.makeEyes(7);
 
     // Collisions
@@ -248,13 +315,21 @@ class PlayScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.hazards, () => this.die("spikes"));
     if (this.goalZone) this.physics.add.overlap(this.player, this.goalZone, () => this.win());
 
-    // Input
+    // Input. Jump presses are recorded as timestamps so they can be buffered.
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.keys = this.input.keyboard.addKeys("W,A,S,D,SPACE");
+    this.keys = this.input.keyboard.addKeys("A,D");
+    const onJumpDown = (e) => { if (e.repeat) return; this.jumpPressedAt = this.time.now; this.jumpHeld = true; };
+    const onJumpUp = () => { this.jumpHeld = false; this.cutJump(); };
+    for (const k of ["SPACE", "W", "UP"]) {
+      this.input.keyboard.on("keydown-" + k, onJumpDown);
+      this.input.keyboard.on("keyup-" + k, onJumpUp);
+    }
     this.input.keyboard.on("keydown-R", () => this.scene.restart());
+    this.input.keyboard.on("keydown-M", () => SFX.setMuted(!SFX.muted));
 
-    // Camera
+    // Camera: slightly zoomed in, follows the player smoothly, clamped to the level.
     this.layout();
+    this.cameras.main.startFollow(this.player, false, 0.1, 0.1);
     this.scale.on("resize", this.layout, this);
     this.events.once("shutdown", () => this.scale.off("resize", this.layout, this));
 
@@ -262,13 +337,31 @@ class PlayScene extends Phaser.Scene {
     hideMsg();
   }
 
-  // Fit the whole level on screen.
+  // Zoom so the level would fit the screen, then a little closer so the camera has room to follow.
   layout() {
     const vw = this.scale.width, vh = this.scale.height;
     if (!vw || !vh || !this.W) return;
+    const fit = Math.min(vw / this.W, vh / this.H);
     const cam = this.cameras.main;
-    cam.setZoom(Math.min(vw / this.W, vh / this.H));
-    cam.centerOn(this.W / 2, this.H / 2);
+    cam.setZoom(fit * CAMERA_ZOOM);
+    // Bounds: the level itself, or, when the view is bigger than the level on an axis,
+    // a box centered on the level so it sits in the middle instead of top-left.
+    const dw = vw / cam.zoom, dh = vh / cam.zoom;
+    const bx = Math.min(0, (this.W - dw) / 2), by = Math.min(0, (this.H - dh) / 2);
+    cam.setBounds(bx, by, Math.max(this.W, dw), Math.max(this.H, dh));
+  }
+
+  // Squash/stretch the skin, then ease back to normal.
+  squash(sx, sy) {
+    this.tweens.killTweensOf(this.skin);
+    this.skin.setScale(sx, sy);
+    this.tweens.add({ targets: this.skin, scaleX: 1, scaleY: 1, duration: 180, ease: "Quad.Out" });
+  }
+
+  // Variable jump height: letting go early shortens the jump.
+  cutJump() {
+    const b = this.player?.body;
+    if (this.state === "play" && b && b.velocity.y < -150) b.setVelocityY(b.velocity.y * JUMP_CUT);
   }
 
   makeEyes(size) {
@@ -286,6 +379,7 @@ class PlayScene extends Phaser.Scene {
     if (this.state !== "play") return;
 
     const b = this.player.body;
+    const now = this.time.now;
     const left = this.cursors.left.isDown || this.keys.A.isDown;
     const right = this.cursors.right.isDown || this.keys.D.isDown;
     const onGround = b.blocked.down || b.touching.down;
@@ -294,12 +388,29 @@ class PlayScene extends Phaser.Scene {
     else if (right && !left) { b.setVelocityX(RUN_SPEED * this.ax); this.facing = 1; }
     else b.setVelocityX(0);
 
-    const jump = Phaser.Input.Keyboard.JustDown(this.cursors.up)
-      || Phaser.Input.Keyboard.JustDown(this.keys.W)
-      || Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
-    if (jump && onGround) b.setVelocityY(-JUMP_VEL);
+    // Landing: squash + thud (only after a real fall)
+    if (onGround && !this.wasGrounded && this.prevVy > 250) { this.squash(1.3, 0.72); SFX.land(); }
+    this.wasGrounded = onGround;
+    if (onGround) this.lastGroundedAt = now;
 
-    this.placeEyes(this.playerEyes, this.player.x, this.player.y - PLAYER_H / 2 + 14, this.facing, 7);
+    // Jump with coyote time + input buffer. Grounded time is consumed on jump so no double jumps.
+    const wantsJump = now - this.jumpPressedAt <= JUMP_BUFFER_MS;
+    const canJump = now - this.lastGroundedAt <= COYOTE_MS;
+    if (wantsJump && canJump) {
+      b.setVelocityY(-JUMP_VEL);
+      this.jumpPressedAt = -1e9; this.lastGroundedAt = -1e9;
+      this.squash(0.75, 1.3);
+      SFX.jump();
+      if (!this.jumpHeld) this.cutJump();   // buffered tap that was already released = short hop
+    }
+    this.prevVy = b.velocity.y;
+
+    // Skin + eyes follow the body; camera looks a little ahead of where you face.
+    this.skin.setPosition(this.player.x, b.bottom);
+    const top = this.skin.y - PLAYER_H * this.skin.scaleY;
+    this.placeEyes(this.playerEyes, this.player.x, top + 14 * this.skin.scaleY, this.facing, 7 * this.skin.scaleX);
+    this.lookAhead += (this.facing * 60 * this.ax - this.lookAhead) * 0.04;
+    this.cameras.main.setFollowOffset(-this.lookAhead, 40);
 
     // Enemies patrol their platform.
     for (const e of this.enemies.getChildren()) {
@@ -341,6 +452,7 @@ class PlayScene extends Phaser.Scene {
     c.destroy();
     this.coins++;
     updateScore(this);
+    SFX.coin();
   }
 
   hitEnemy(e) {
@@ -353,13 +465,18 @@ class PlayScene extends Phaser.Scene {
     for (const g of e.getData("eyes")) g.destroy();
     this.tweens.add({ targets: e, scaleY: 0.15, y: eb.bottom - 4, duration: 120, onComplete: () => e.destroy() });
     pb.setVelocityY(-JUMP_VEL * 0.6);
+    this.lastGroundedAt = -1e9;
+    this.squash(0.8, 1.25);
+    SFX.stomp();
   }
 
   die(reason) {
     if (this.state !== "play") return;
     this.state = "dead";
-    this.player.setFillStyle(0xef4444);
+    this.skin.setFillStyle(0xef4444);
     this.physics.pause();
+    this.cameras.main.shake(220, 0.006);
+    SFX.hurt();
     showMsg(reason === "fell" ? "Fell off!" : "Ouch!", "restarting...");
     this.time.delayedCall(800, () => this.scene.restart());
   }
@@ -369,6 +486,8 @@ class PlayScene extends Phaser.Scene {
     this.state = "won";
     this.player.body.setVelocity(0, 0);
     this.physics.pause();
+    this.squash(0.8, 1.25);
+    SFX.win();
     showMsg("Level complete!", `Coins ${this.coins}/${this.totalCoins} · press R or tap to play again`);
   }
 }
@@ -450,6 +569,11 @@ async function init() {
     catch (err) { showMsg("Invalid JSON file", err.message); }
   });
   $("restartBtn").addEventListener("click", (e) => { e.target.blur(); restartScene(); });
+  $("muteBtn").addEventListener("click", (e) => { e.target.blur(); SFX.setMuted(!SFX.muted); });
+  try { SFX.setMuted(localStorage.getItem("playlab.muted") === "1"); } catch {}
+  // Browsers only allow audio after a user gesture: unlock on the first key or tap.
+  window.addEventListener("keydown", () => SFX.ensure());
+  window.addEventListener("pointerdown", () => SFX.ensure());
   $("msg").addEventListener("click", () => { if (game) { const s = game.scene.getScene("play"); if (s.state !== "play") s.scene.restart(); } });
 
   const stored = () => { try { const s = localStorage.getItem("playlab.level"); return s ? JSON.parse(s) : null; } catch { return null; } };

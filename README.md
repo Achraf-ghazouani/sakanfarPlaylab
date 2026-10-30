@@ -17,7 +17,9 @@ npm run dev                       # http://localhost:3000/game.html  (same as no
 - `viewer.html` overlays the AI boxes on the photo so you can check what it understood.
 - No key or photo yet? `node scan.mjs --mock` writes a level from `levels/sample.json` without calling the API.
 
-Controls: arrows / WASD to move, space / up / W to jump, stomp enemies from above, R restarts.
+Controls: arrows / WASD to move, space / up / W to jump (hold for a higher jump), stomp enemies from above, R restarts, M toggles sound.
+
+Game feel: coyote time (120 ms), jump buffering (130 ms), variable jump height, squash and stretch, a smooth camera that looks ahead, and sound effects synthesized with the Web Audio API (no audio files).
 
 ## Files
 

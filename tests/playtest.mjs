@@ -91,21 +91,54 @@ try {
   const s2 = await snap();
   check("A key moves player left", s2.x < s.x - 50, { dx: s2.x - s.x });
 
-  // 3. jump
+  // 3. jump: full (held) vs short hop (tapped), variable height
+  const minYDuring = async (ms) => { let min = 9999; const t0 = Date.now(); while (Date.now() - t0 < ms) { min = Math.min(min, (await snap()).y); await sleep(25); } return min; };
   await restart();
-  await hold("Space", 32, 60);
-  await sleep(240);
-  s = await snap();
-  check("Space jumps (player rose > 100 units)", s.y < 872 - 100, { y: s.y, vy: s.vy });
-  await sleep(1000);
+  await key("keydown", "Space", 32);
+  const fullMin = await minYDuring(700);
+  await key("keyup", "Space", 32);
+  const fullRise = 872 - fullMin;
+  check("held Space = full jump (rose > 180 units)", fullRise > 180, { rise: fullRise });
+  await sleep(600);
   s = await snap();
   check("lands back on ground", s.onGround && Math.abs(s.y - 872) < 6, { y: s.y, onGround: s.onGround });
+  await hold("Space", 32, 40);
+  const shortRise = 872 - (await minYDuring(600));
+  check("tapped Space = short hop (lower than full jump)", shortRise > 40 && shortRise < fullRise - 60, { shortRise, fullRise });
+  await sleep(400);
   await hold("ArrowUp", 38, 60); await sleep(240); s = await snap();
-  check("ArrowUp also jumps", s.y < 872 - 100, { y: s.y });
+  check("ArrowUp also jumps", s.y < 872 - 60, { y: s.y });
   await sleep(1000);
-  await hold("Space", 32, 60); await sleep(100);
+  await hold("KeyW", 87, 60); await sleep(240); s = await snap();
+  check("W also jumps", s.y < 872 - 60, { y: s.y });
+  await sleep(1000);
+  await hold("Space", 32, 60); await sleep(150);
   await hold("Space", 32, 60); await sleep(200); s = await snap();
   check("no double jump in the air", s.y > 872 - 260, { y: s.y });
+
+  // 3b. coyote time: run off ledge 1 (x 200-360, top 760) and jump a few frames late
+  await restart();
+  await teleport(350, 733); await sleep(300);
+  await hold("ArrowRight", 39, 130);
+  await key("keydown", "Space", 32);
+  await sleep(200);
+  s = await snap();
+  await key("keyup", "Space", 32);
+  check("coyote time: jump still works just after walking off an edge", s.y < 700 && s.x > 378, { x: s.x, y: s.y, vy: s.vy });
+
+  // 3c. jump buffer: press jump shortly before landing, it fires on touchdown
+  await restart();
+  await teleport(100, 650);           // falls ~223 units, lands after ~430ms
+  await sleep(330);
+  await hold("Space", 32, 50);        // tapped and released ~50ms before touchdown
+  await sleep(100);                   // now landed; a buffered tap gives a short hop
+  const bufferedRise = 872 - (await minYDuring(400));
+  check("jump buffer: tap just before landing still hops", bufferedRise > 25 && bufferedRise < 160, { rise: bufferedRise });
+
+  // 3d. skin follows the physics body
+  await sleep(600);
+  const skin = await evalJS(`(() => { const s = ${S}; return { dx: Math.abs(s.skin.x - s.player.x), dy: Math.abs(s.skin.y - s.player.body.bottom), sx: s.skin.scaleX, sy: s.skin.scaleY }; })()`);
+  check("visible skin tracks the body", skin.dx < 1 && skin.dy < 1 && Math.abs(skin.sx - 1) < 0.05 && Math.abs(skin.sy - 1) < 0.05, skin);
 
   // 4. coin
   await restart();
@@ -167,6 +200,22 @@ try {
   const e0 = await enemy(0), e1 = await enemy(1);
   check("enemy 0 stays within its patrol range", e0.x >= e0.patrol.left - 2 && e0.x <= e0.patrol.right + 2, e0);
   check("enemy 1 stays within its patrol range", e1.x >= e1.patrol.left - 2 && e1.x <= e1.patrol.right + 2, e1);
+
+  // 12a. camera: zoomed past "fit" and follows the player vertically
+  await restart();
+  await sleep(600);
+  const camGround = await evalJS(`(() => { const s = ${S}; const c = s.cameras.main; return { zoom: c.zoom, fit: Math.min(s.scale.width / s.W, s.scale.height / s.H), scrollY: c.scrollY }; })()`);
+  check("camera zoom is above fit-to-screen", camGround.zoom > camGround.fit * 1.1, camGround);
+  await teleport(900, 380); await sleep(1200);
+  const camHigh = await evalJS(`${S}.cameras.main.scrollY`);
+  check("camera scrolls up when player climbs", camGround.scrollY - camHigh > 50, { ground: Math.round(camGround.scrollY), high: Math.round(camHigh) });
+
+  // 12b. audio context created on first key, mute toggles with M
+  check("AudioContext created after key input", await evalJS(`!!SFX.ctx`));
+  const mutedBefore = await evalJS(`SFX.muted`);
+  await hold("KeyM", 77, 50); await sleep(100);
+  check("M toggles mute", (await evalJS(`SFX.muted`)) === !mutedBefore);
+  await hold("KeyM", 77, 50); await sleep(100);
 
   // 12. level switch via dropdown
   await evalJS(`(() => { const sel = document.getElementById("levelSelect"); sel.value = "levels/level1.json"; sel.dispatchEvent(new Event("change")); return true; })()`);

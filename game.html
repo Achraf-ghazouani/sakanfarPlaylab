@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js" defer></script>
 <script src="shared/photo.js"></script>
 <script src="shared/phonelink.js" defer></script>
 <style>
@@ -217,6 +218,8 @@ function gameEvent(name) { if (host) host.event(name); }
 const PARAMS = new URLSearchParams(location.search);
 const isScreen = PARAMS.get("screen") === "1";
 let cameraPlayer = null;                           // the phone whose camera is on the stage
+let relayCfg = null;                               // { url, key } from api/config: Supabase Realtime fallback transport
+const configReady = fetch("api/config", { cache: "no-store" }).then((r) => r.json()).then((c) => { relayCfg = c.relay || null; if (host && relayCfg) host.startRelay(relayCfg); return relayCfg; }).catch(() => null);
 
 // Background palette picked from the AI theme text.
 const PALETTES = [
@@ -838,8 +841,11 @@ function clearStageVideo(text) {
 function refreshPlayers() {
   const n = host ? host.count : 0;
   $("phoneChipText").textContent = `${n}/${PhoneLink.MAX_PLAYERS}`;
-  const dots = host ? [...host.players.values()].map((p) => `<i style="background:${p.color}" title="${p.name}"></i>`).join("") : "";
-  $("phonePlayers").innerHTML = `${n}/${PhoneLink.MAX_PLAYERS} player${n === 1 ? "" : "s"} connected ${dots}`;
+  const list = host ? [...host.players.values()] : [];
+  const dots = list.map((p) => `<i style="background:${p.color}" title="${p.name} (${p.transport === "relay" ? "relay" : "direct"})"></i>`).join("");
+  const relayed = list.filter((p) => p.transport === "relay").length;
+  const via = relayed ? ` · ${relayed} via relay` : "";
+  $("phonePlayers").innerHTML = `${n}/${PhoneLink.MAX_PLAYERS} player${n === 1 ? "" : "s"} connected${via} ${dots}`;
 }
 function startHost() {
   if (host) return;
@@ -857,9 +863,12 @@ function startHost() {
     // In big-screen mode the first phone (while there is no level yet) becomes the camera; others are controllers.
     welcome: (p) => ({ mode: isScreen && !cameraPlayer && !currentLevel ? "camera" : "pad" }),
     onJoin: (p) => {
-      if (p.mode === "camera") { cameraPlayer = p; stageStatus("phone connected, starting its camera...", "connected"); }
+      if (p.mode === "camera") {
+        cameraPlayer = p;
+        stageStatus(p.transport === "relay" ? "phone connected through the relay: controls work, but live video needs a direct connection" : "phone connected, starting its camera...", "connected");
+      }
       refreshPlayers();
-      if (!isScreen || p.mode !== "camera") showToast(`<b>&#128241; Phone connected</b> as player ${p.slot} (${p.name})`, 4000);
+      if (!isScreen || p.mode !== "camera") showToast(`<b>&#128241; Phone connected</b> as player ${p.slot} (${p.name}${p.transport === "relay" ? ", via relay" : ""})`, 4000);
     },
     onStream: (p, stream) => { if (!cameraPlayer || p === cameraPlayer) showStageVideo(p, stream); },
     onStreamEnd: (p) => { if (p === cameraPlayer) clearStageVideo("camera stopped. Switch the phone back to camera, or scan again."); },
@@ -876,6 +885,7 @@ function startHost() {
     onJump: (p, down) => { const s = playScene(); if (s) (down ? s.pressJump() : s.releaseJump()); },
   });
   $("phoneChip").classList.add("show");
+  if (relayCfg) host.startRelay(relayCfg);         // listen on the Supabase relay too (phones that cannot do WebRTC)
   host.start(sessionStorage.getItem("playlab.room") || undefined);
 }
 function openPhonePanel() { $("phonePanel").classList.add("show"); startHost(); }

@@ -7,6 +7,7 @@
 <title>PlayLab Pad</title>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js"></script>
 <script src="shared/phonelink.js"></script>
 <style>
   :root { --bg:#fbfaff; --lav:#efeaff; --lav-2:#e2d9ff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --player:#22c55e; }
@@ -102,22 +103,32 @@ const state = { l: 0, r: 0 };
 function setStatus(status, detail) {
   const pill = $("status");
   pill.className = "pill " + status;
-  const text = { connecting: "connecting...", reconnecting: "reconnecting..." + (detail ? " (" + detail + ")" : ""), connected: "connected", error: "error: " + (detail || "unknown"), waiting: "waiting" }[status] || status;
+  const text = { connecting: "connecting..." + (detail === "relay" ? " (relay)" : ""), reconnecting: "reconnecting..." + (detail ? " (" + detail + ")" : ""), connected: "connected" + (detail === "relay" ? " (relay)" : ""), error: "error: " + (detail || "unknown"), waiting: "waiting" }[status] || status;
   $("statusText").textContent = text;
   window.__padStatus = status;
+  window.__padTransport = client?.transport;
 }
 
 function buzz(pattern) { try { navigator.vibrate?.(pattern); } catch {} }
 const EVENT_BUZZ = { jump: 15, coin: 30, hit: [60, 40, 90], goal: [80, 50, 80, 50, 200], level: [30, 30, 30] };
 
-function join(code) {
+// Public config (Supabase relay) from the server; the page works without it, just without the fallback.
+const configReady = Promise.race([
+  fetch("api/config", { cache: "no-store" }).then((r) => r.json()).then((c) => c.relay || null),
+  new Promise((r) => setTimeout(() => r(null), 2500)),
+]).catch(() => null);
+
+async function join(code) {
   code = String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
   if (code.length !== 4) { $("join").classList.add("show"); return; }
   $("join").classList.remove("show");
   $("roomCode").textContent = code;
   history.replaceState(null, "", "?room=" + code);
+  const relay = await configReady;
+  const opts = { relay, forceRelay: params.get("relay") === "1", peerHost: params.get("peerhost") || undefined };
   client = new PhoneLink.Client(code, {
     onStatus: setStatus,
+    onTransport: (t) => { window.__padTransport = t; if (t === "relay" && mode === "camera") camStatus("Connected through the relay: controls work, but live video needs a direct connection (same Wi-Fi).", "error"); },
     onWelcome: (w) => {
       document.documentElement.style.setProperty("--player", w.color);
       $("playerName").textContent = `Player ${w.slot} · ${w.name}`;
@@ -128,7 +139,7 @@ function join(code) {
       setMode(w.mode === "camera" ? "camera" : "pad", false);
     },
     onEvent: (name) => { window.__padLastEvent = name; window.__padLastEventAt = performance.now(); (window.__padEvents ||= []).push(name); if (EVENT_BUZZ[name]) buzz(EVENT_BUZZ[name]); },
-  });
+  }, opts);
   client.start();
   window.__padClient = client;
 }
@@ -178,6 +189,7 @@ async function startCamera() {
   };
   draw();
   camOut = c.captureStream(24);
+  if (client && !client.canStreamVideo) { camStatus("Connected through the relay: controls work, but live video needs a direct connection (same Wi-Fi).", "error"); return; }
   client?.startVideo(camOut);
   camStatus("Live: the big screen sees your camera", "live");
 }

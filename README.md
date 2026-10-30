@@ -35,6 +35,7 @@ Scanning the QR opens `pad.html?room=CODE` on the phone: a landscape controller 
 (multi-touch, so you can run and jump at once) that vibrates on jump, coin, hit and goal. The keyboard keeps working.
 
 - Transport: WebRTC data channels through PeerJS (`shared/phonelink.js`), signaled by the public PeerServer. Measured press-to-reaction round trip on one network: under 10 ms.
+- Fallback: if WebRTC has not connected within 5 s (mobile data, strict Wi-Fi), the phone switches to a relay over **Supabase Realtime Broadcast** (channel `playlab-CODE`, no database, rooms are temporary). The game listens on both. Controls work over the relay (about 150 ms round trip); live video needs the direct connection. Both screens show "(relay)" when it is in use. Configure it with `SUPABASE_URL` and `SUPABASE_ANON_KEY` (the publishable key) in `.env` and on Vercel; `api/config.js` hands them to the pages.
 - Status is shown on both screens (connecting / waiting / connected / reconnecting). Phones ping every 3 s; a silent phone is dropped after 8 s, and the phone redials by itself when the game reloads or the network blips.
 - The room code is kept for the page session, so reloading the game keeps the same QR.
 - Rooms are temporary and need no database.

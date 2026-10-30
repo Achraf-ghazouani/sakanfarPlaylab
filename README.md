@@ -67,7 +67,7 @@ The repo is ready: `vercel.json` gives the scan function 60 s and the fix functi
 2. Framework Preset: **Other**. Leave Build Command and Output Directory empty (the root is served as static files, `api/` becomes functions).
 3. Open **Environment Variables** on that same screen and add:
    - `MODEL_API_KEY` = your Meta Model API key (required)
-   - `BASETEN_API_KEY`, `BASETEN_BASE_URL`, `BASETEN_MODEL` = optional second provider, used as a fallback if Meta fails
+   - `BASETEN_API_KEY` = optional second provider (Muse Spark open weights on Baseten), used as a fallback if Meta fails. `BASETEN_BASE_URL` and `BASETEN_MODEL` default to `https://inference.baseten.co/v1` and `meta-models/muse-spark-open-1026`. That model always reasons; the client strips the reasoning and keeps only the answer.
    - `AI_PROVIDER` = `meta` (default) or `baseten` to make Baseten the primary
 4. Click **Deploy**. Open the `https://....vercel.app` URL on your phone.
 

@@ -13,8 +13,10 @@ import { playtestAndFix } from "./lib/fix-level.mjs";
 try { process.loadEnvFile(".env"); } catch { /* only needed for --fix with AI */ }
 
 const args = process.argv.slice(2);
-const file = args.find((a) => !a.startsWith("--"));
-if (!file) { console.error("Usage: node check.mjs <level.json> [--fix] [--write] [--no-ai]"); process.exit(1); }
+const pi = args.indexOf("--provider");
+const provider = pi !== -1 ? args[pi + 1] : undefined;
+const file = args.find((a) => !a.startsWith("--") && a !== provider);
+if (!file) { console.error("Usage: node check.mjs <level.json> [--fix] [--write] [--no-ai] [--provider meta|baseten]"); process.exit(1); }
 
 const level = JSON.parse(await fs.readFile(file, "utf8"));
 const report = checkLevel(level);
@@ -25,7 +27,7 @@ else { console.log(`${report.problems.length} problem(s):`); for (const p of rep
 if (args.includes("--fix") && !report.ok) {
   const useAI = !args.includes("--no-ai");
   console.log(`\nFixing (${useAI ? "AI first, then auto" : "auto only"}) ...`);
-  const { level: fixed, report: r } = await playtestAndFix(level, { useAI });
+  const { level: fixed, report: r } = await playtestAndFix(level, { useAI, provider });
   if (r.aiError) {
     console.log("AI fix skipped: " + r.aiError);
     if (r.aiRaw) { const rawPath = file.replace(/\.json$/, ".fix.raw.txt"); await fs.writeFile(rawPath, r.aiRaw); console.log(`  raw AI reply saved to ${rawPath}`); }

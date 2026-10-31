@@ -1,33 +1,40 @@
-// api/agent.js — the studio game agent endpoint.
-// Step 1 (this version): understands a few built-in actions and answers the rest with a short, honest reply
-// so the chat loop, projects and versions can be exercised end to end. Step 2 puts Muse Spark behind it
-// with create_level / edit_level tools.
-//   POST { project_id, message, level?, attachments? } -> { reply, actions: [...], level? }
-// Actions the page already knows how to run itself: "scan" (an attached image), "playtest" (reachability + AI fix).
+// api/agent.js — the Studio game agent endpoint (Vercel serverless function).
+//   POST { message, level?, history?: [{role, content}], attachments?: [{name, type}] }
+//   -> 200 { reply, actions, level?, kind?: "create"|"edit", note?, diff?, playtest?, meta? }
+// Muse Spark (Meta Model API) answers with function tools; the server validates the level, runs the quick
+// reachability fix and returns it. The page saves it as a version. Keys stay in environment variables.
+
+import { runAgent } from "../lib/agent.mjs";
+import { normalizeLevel } from "../lib/scan-level.mjs";
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") return res.status(405).json({ error: "Use POST." });
   const body = typeof req.body === "string" ? safeJson(req.body) : (req.body || {});
-  const text = String(body.message || "").trim();
-  const hasLevel = !!(body.level && Array.isArray(body.level.objects));
-  const hasImage = Array.isArray(body.attachments) && body.attachments.some((a) => a && String(a.type || "").startsWith("image/"));
-  const lower = text.toLowerCase();
 
-  if (hasImage) return res.status(200).json({ reply: "Got your picture. I am reading it as a level now.", actions: [{ type: "scan" }] });
-  if (/playtest|reachable|fix/.test(lower)) {
-    if (!hasLevel) return res.status(200).json({ reply: "There is no level yet. Describe one, or attach a drawing, and I will playtest it.", actions: [] });
-    return res.status(200).json({ reply: "Running the playtest agent: checking every jump and fixing what is impossible.", actions: [{ type: "playtest" }] });
+  const message = String(body.message || "").slice(0, 2000);
+  let level = null;
+  if (body.level && Array.isArray(body.level.objects) && body.level.objects.length && body.level.objects.length <= 300) {
+    level = normalizeLevel(body.level, { aspect: body.level.aspect });
   }
-  if (/share/.test(lower)) return res.status(200).json({ reply: "Sharing links arrive in a later step. For now, use the Share button in the top bar once it is enabled.", actions: [] });
-  if (/3d/.test(lower)) return res.status(200).json({ reply: "3D modes (side view and world) are coming in a later step. The 2D game is live in the preview.", actions: [] });
-  if (/art|generate/.test(lower)) return res.status(200).json({ reply: "Art generation with Muse Image and SAM cut-outs comes in a later step. The notebook style stays for now.", actions: [] });
-  if (!text) return res.status(200).json({ reply: "Tell me what to build, or attach a drawing.", actions: [] });
+  const history = Array.isArray(body.history) ? body.history.slice(-20) : [];
+  const attachments = Array.isArray(body.attachments) ? body.attachments.slice(0, 10) : [];
 
-  // No designer brain yet: say so clearly instead of pretending.
-  const reply = hasLevel
-    ? `I heard: "${text.slice(0, 120)}". Editing levels by chat lands in the next step. Until then you can attach a drawing, ask me to playtest, or pick a version from History.`
-    : `I heard: "${text.slice(0, 120)}". Building levels from words lands in the next step. Attach a drawing or a picture and I will turn it into a level right now.`;
-  return res.status(200).json({ reply, actions: [] });
+  try {
+    const out = await runAgent({ message, level, history, attachments }, { timeoutMs: 50_000 });
+    return res.status(200).json(out);
+  } catch (err) {
+    console.error("agent failed:", err.message);
+    const status = err.status === 401 || err.status === 403 ? 500 : 502;   // never leak auth details
+    return res.status(status).json({ error: friendly(err) });
+  }
+}
+
+function friendly(err) {
+  const m = String(err?.message || err);
+  if (/no API key|not configured/i.test(m)) return "The AI is not configured on the server (MODEL_API_KEY).";
+  if (err?.name === "TimeoutError" || /timed? ?out|aborted/i.test(m)) return "The AI took too long. Try again.";
+  if (err?.status === 429) return "The AI is busy right now. Try again in a moment.";
+  return "The AI could not answer: " + m.slice(0, 160);
 }
 function safeJson(s) { try { return JSON.parse(s); } catch { return {}; } }

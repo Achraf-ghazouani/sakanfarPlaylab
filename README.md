@@ -77,7 +77,8 @@ In `viewer.html`, pick a level: unreachable things get a red dashed outline, and
 
 Chat on the left, the live game on the right. The game page runs inside an iframe in embed mode (`game.html?embed=1`) and receives levels and commands by `postMessage`, so the game code is shared with the phone and big-screen flows.
 
-What works today (step 1 of the Studio plan):
+What works today (steps 1-2 of the Studio plan):
+- **Build and change the game by chat.** Muse Spark gets the brief (level format, jump physics, design rules), the last chat turns and the current level, and answers with a function tool: `create_level`, `edit_level` (full updated level, unchanged things keep their coordinates) or `playtest_level`. The server validates the objects, runs the instant reachability fix and the page saves the result as a version with the model's own note ("harder: two more spikes"). Per the Meta Model API docs, `tool_choice` is left on `auto` (the only accepted value) and `parallel_tool_calls:false` keeps it to one call per turn. If the Meta API fails, Muse Spark Open on Baseten gets the same brief and answers with a JSON object instead.
 - Projects are saved in Supabase (`projects`, `messages`, `versions`). Each browser gets an anonymous owner id (localStorage) sent as the `x-owner` header; row-level security keeps every owner to their own rows. Shared projects (later step) are readable by anyone with the link.
 - "My games" sidebar, auto-created project on the first message, rename by clicking the title, reload reopens the last game.
 - Attach a picture or drawing: it goes through the existing `/api/scan` and lands in the preview as a new version.
@@ -92,11 +93,11 @@ Endpoints (all keyed by the `x-owner` header, keys stay on the server):
 | `GET/POST/PATCH/DELETE /api/projects` | List, create, update (a `level` in a PATCH also adds a version), delete |
 | `GET/POST /api/messages` | Chat history of a project |
 | `GET /api/version?project_id=&n=` | One saved version |
-| `POST /api/agent` | The game agent. Step 1 is a stub that routes pictures to scan and "playtest" to the fixer; step 2 puts Muse Spark behind it |
+| `POST /api/agent` | The game agent: `{ message, level?, history? }` -> `{ reply, level?, kind, note, diff, playtest, actions }` (`lib/agent.mjs`) |
 
 Schema: `db/schema.sql` (run it in the Supabase SQL editor once). Uses the same `SUPABASE_URL` / `SUPABASE_ANON_KEY` as the phone relay.
 
-Still to come: the Muse Spark game agent (create / edit levels from words and images), sketch and camera inside the chat, the full phone controller, art and UI kits (Muse Image + SAM 3.1), 3D modes, share links and remix.
+Still to come: sketch and camera inside the chat, the full phone controller, art and UI kits (Muse Image + SAM 3.1), 3D modes, share links and remix.
 
 ## Run it locally
 
@@ -160,7 +161,7 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | `game.html` | The game (Phaser 3 arcade physics, colored shapes, touch controls, drawing thumbnail, agent toast); `?embed=1` for the Studio preview |
 | `studio.html` | PlayLab Studio: chat + live preview, My games, versions, history, undo |
 | `api/projects.js`, `api/messages.js`, `api/version.js` | Vercel functions for saved games (Supabase through PostgREST, `lib/db.mjs`) |
-| `api/agent.js` | The Studio game agent endpoint (step 1 stub) |
+| `api/agent.js`, `lib/agent.mjs` | The Studio game agent: Muse Spark function tools, validation, quick fix, Baseten fallback (`node tests/agent.live.mjs` runs it for real) |
 | `db/schema.sql` | Supabase tables, row-level security and functions for the Studio |
 | `pad.html` | Phone controller page (joins a room by QR / code) |
 | `shared/phonelink.js` | PeerJS host (game) and client (pad): rooms, slots, heartbeat, reconnect |

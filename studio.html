@@ -419,12 +419,14 @@ async function send() {
   appendMessage({ role: "user", content: text, meta: { attachments: attMeta } });
   try {
     await ensureProject(text || (atts[0] && "Level from " + atts[0].name));
+    // Chat context for the agent: the last turns before this message.
+    const history = S.messages.filter((m) => m.role === "user" || m.role === "assistant").slice(-12).map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 600) }));
     await saveMessage("user", text, { attachments: attMeta });
-    showTyping();
-    const res = await api("api/agent", { method: "POST", body: { project_id: S.project.id, message: text, level: S.level, attachments: attMeta } });
-    await streamAssistant(res.reply || "...");
-    await saveMessage("assistant", res.reply || "");
-    for (const action of res.actions || []) await runAction(action, atts);
+    const img = atts.find((a) => a.upload);
+    const model3d = atts.find((a) => /gltf|glb/i.test(a.type) || /\.(glb|gltf)$/i.test(a.name));
+    if (img) await runScan(img);                                   // a picture goes through the scanner, like the phone flow
+    if (model3d && !img && !text) await streamAssistant("3D models come with the 3D modes in a later step. For now send drawings, pictures or words.");
+    else if (text || !img) await askAgent(text, history);           // the agent gets the words (after the scan, if there was one)
   } catch (err) {
     hideTyping();
     await streamAssistant("Something went wrong: " + err.message);
@@ -432,23 +434,44 @@ async function send() {
   S.busy = false; $("sendBtn").disabled = false; $("composer").focus();
 }
 
+/** A picture becomes a level through /api/scan (the same scanner as the phone flow). */
+async function runScan(img) {
+  showTyping();
+  try {
+    const data = await api("api/scan", { method: "POST", body: { image: img.upload, previous: S.level ? strip(S.level) : undefined } });
+    hideTyping();
+    const lvl = data.level, problems = data.meta?.playtest?.before?.problems || [];
+    await applyLevel(lvl, { note: "from picture", thumb: img.thumb, toastText: `Built from your picture: ${lvl.objects.length} objects` });
+    const d = lvl.diff?.short;
+    await addCard({ icon: "&#128444;", title: "Level from your picture", text: `${lvl.objects.length} objects · ${lvl.theme}${d ? ` · ${d}` : ""}${problems.length ? ` · quick-fixed ${problems.length} impossible part${problems.length > 1 ? "s" : ""}` : " · every jump reachable"}` });
+    await streamAssistant(`Done. I found ${lvl.objects.length} things (${lvl.theme}). It is playable on the right${problems.length ? ", and I fixed what was impossible" : ""}.`);
+    await saveMessage("assistant", `Built ${lvl.objects.length} objects from the picture.`);
+  } catch (err) { hideTyping(); await streamAssistant("I could not read that picture: " + err.message); }
+}
+
+/** The game agent (Muse Spark): words in, a reply and maybe a new level or an action out. */
+async function askAgent(text, history) {
+  showTyping();
+  let res;
+  try {
+    res = await api("api/agent", { method: "POST", body: { project_id: S.project?.id, message: text, level: S.level ? strip(S.level) : null, history } });
+  } catch (err) { hideTyping(); await streamAssistant("The agent could not answer: " + err.message); return; }
+  hideTyping();
+  if (res.level && Array.isArray(res.level.objects)) {
+    const isEdit = res.kind === "edit";
+    const note = res.note || (isEdit ? "edited" : "new level");
+    await applyLevel(res.level, { note, keepPlayer: isEdit, toastText: note });
+    const fixed = res.playtest?.fixed || 0;
+    await addCard({ icon: isEdit ? "&#9998;" : "&#10024;", title: note, text: `${res.level.objects.length} objects · ${res.level.theme}${res.diff ? ` · ${res.diff}` : ""}${fixed ? ` · patched ${fixed} impossible spot${fixed > 1 ? "s" : ""}` : ""}` });
+  }
+  await streamAssistant(res.reply || "...");
+  await saveMessage("assistant", res.reply || "", res.level ? { level: true, note: res.note || null } : null);
+  for (const action of res.actions || []) await runAction(action);
+}
+
 /** Actions the page runs itself with the existing endpoints. */
-async function runAction(action, atts) {
-  if (action.type === "scan") {
-    const img = atts.find((a) => a.upload);
-    if (!img) return;
-    showTyping();
-    try {
-      const data = await api("api/scan", { method: "POST", body: { image: img.upload, previous: S.level ? strip(S.level) : undefined } });
-      hideTyping();
-      const lvl = data.level, problems = data.meta?.playtest?.before?.problems || [];
-      await applyLevel(lvl, { note: "from picture", thumb: img.thumb, toastText: `Built from your picture: ${lvl.objects.length} objects` });
-      const d = lvl.diff?.short;
-      await addCard({ icon: "&#128444;", title: "Level from your picture", text: `${lvl.objects.length} objects · ${lvl.theme}${d ? ` · ${d}` : ""}${problems.length ? ` · quick-fixed ${problems.length} impossible part${problems.length > 1 ? "s" : ""}` : " · every jump reachable"}` });
-      await streamAssistant(`Done. I found ${lvl.objects.length} things (${lvl.theme}). It is playable on the right${problems.length ? ", and I fixed what was impossible" : ""}.`);
-      await saveMessage("assistant", `Built ${lvl.objects.length} objects from the picture.`);
-    } catch (err) { hideTyping(); await streamAssistant("I could not read that picture: " + err.message); }
-  } else if (action.type === "playtest") {
+async function runAction(action) {
+  if (action.type === "playtest") {
     if (!S.level) return;
     showTyping();
     try {

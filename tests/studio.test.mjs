@@ -79,18 +79,25 @@ const LEVEL_A = { theme: "lava castle", aspect: 1.333, objects: [
   { type: "platform", label: "ground", x: 0, y: 900, w: 1000, h: 60 }, { type: "start", x: 40, y: 840, w: 40, h: 60 }, { type: "goal", x: 900, y: 840, w: 40, h: 60 },
   { type: "platform", label: "ledge", x: 300, y: 760, w: 200, h: 30 }, { type: "coin", x: 380, y: 700, w: 30, h: 30 }, { type: "enemy", x: 600, y: 850, w: 40, h: 50 } ] };
 const LEVEL_B = { ...LEVEL_A, theme: "lava castle", objects: [...LEVEL_A.objects, { type: "coin", x: 700, y: 820, w: 30, h: 30 }] };
+const LEVEL_C = { ...LEVEL_B, objects: [...LEVEL_B.objects, { type: "spike", x: 500, y: 870, w: 60, h: 30 }] };
 const inject = `
   try { localStorage.setItem("playlab.owner", ${JSON.stringify(OWNER)}); } catch {}
-  window.__scanCalls = 0; window.__fixCalls = 0; window.__sawTyping = false;
+  window.__scanCalls = 0; window.__fixCalls = 0; window.__agentCalls = 0; window.__sawTyping = false;
   document.addEventListener("DOMContentLoaded", () => {
     new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.id === "typing") window.__sawTyping = true; }).observe(document.documentElement, { childList: true, subtree: true });
   });
-  const LA = ${JSON.stringify(LEVEL_A)}, LB = ${JSON.stringify(LEVEL_B)};
+  const LA = ${JSON.stringify(LEVEL_A)}, LB = ${JSON.stringify(LEVEL_B)}, LC = ${JSON.stringify(LEVEL_C)};
   const realFetch = window.fetch.bind(window);
   const json = (o) => Promise.resolve(new Response(JSON.stringify(o), { status: 200, headers: { "Content-Type": "application/json" } }));
   window.fetch = (url, init) => {
     const u = String(url);
-    if (/api\\/scan$/.test(u)) { window.__scanCalls++; const lvl = window.__scanCalls === 1 ? LA : LB; return json({ level: { ...lvl, checked: true, fixes: [] }, original: lvl, meta: { provider: "mock", playtest: { before: { ok: true, problems: [] } } } }); }
+    if (/api\\/agent$/.test(u)) {
+      window.__agentCalls++; const b = JSON.parse(init.body); window.__lastAgentBody = b;
+      if (/playtest/i.test(b.message)) return json({ reply: "Running the playtest agent.", actions: [{ type: "playtest" }] });
+      if (b.level) return json({ reply: "Changed it.", level: { ...b.level, theme: "edited " + b.level.theme }, kind: "edit", note: "edited by chat", diff: "theme changed", playtest: { ok: true, fixed: 0 }, actions: [] });
+      return json({ reply: "Built a lava castle with a ledge and a guard.", level: { ...LA, checked: true, fixes: [] }, kind: "create", note: "lava castle, one ledge", playtest: { ok: true, fixed: 0 }, actions: [] });
+    }
+    if (/api\\/scan$/.test(u)) { window.__scanCalls++; const lvl = window.__scanCalls === 1 ? LB : LC; return json({ level: { ...lvl, checked: true, fixes: [] }, original: lvl, meta: { provider: "mock", playtest: { before: { ok: true, problems: [] } } } }); }
     if (/api\\/fix$/.test(u)) { window.__fixCalls++; const lvl = JSON.parse(init.body).level; return json({ level: { ...lvl, checked: true, fixes: [] }, report: { before: { ok: true, problems: [] }, after: { ok: true, problems: [] }, fixes: [], fixedBy: null } }); }
     return realFetch(url, init);
   };
@@ -119,44 +126,54 @@ try {
   check("project auto-created", !!pid, pid);
   check("title taken from the first message", await evalJS(`document.getElementById("title").value`) === "A lava castle with moving platforms");
   check("sidebar lists the new game", !!(await waitFor(`document.querySelectorAll(".proj").length === 1`)));
+  check("agent called once with no level and empty history", await evalJS(`window.__agentCalls === 1 && window.__lastAgentBody.level === null && Array.isArray(window.__lastAgentBody.history) && window.__lastAgentBody.history.length === 0`), await evalJS(`window.__lastAgentBody`));
+  check("level built from words", await evalJS(`S.level && S.level.objects.length`) === 6);
+  check("version 1 created from the chat", await evalJS(`S.versions.length === 1 && S.versions[0].n === 1 && S.versions[0].note === "lava castle, one ledge"`), await evalJS(`S.versions.map((v) => v.n + ":" + v.note)`));
+  check("create card rendered", /lava castle, one ledge/.test(await evalJS(`document.body.innerText`)));
   let saved = await api(`api/projects?id=${pid}`);
-  check("messages saved to the database", saved.messages?.length === 2 && saved.messages[0].role === "user" && saved.messages[1].role === "assistant", saved.messages?.map((m) => m.role));
+  check("messages saved to the database", saved.messages?.length === 3 && saved.messages.map((m) => m.role).join() === "user,tool,assistant", saved.messages?.map((m) => m.role));
+  const player = await waitFor(`(() => { try { const s = game.scene.getScene("play"); return s && s.player ? { x: Math.round(s.player.x), state: s.state } : null; } catch { return null; } })()`, { contextId: iframeCtx(), timeout: 15_000 });
+  check("preview iframe is running the level", !!player && player.state === "play", player);
 
-  // 2. attach a picture: scan (mocked), level to preview, version 1
+  // 2. a chat edit: the agent gets the level + history, the result is version 2
+  await type("Change theme"); await sendMsg(); await idle();
+  check("edit sends the current level and history", await evalJS(`window.__agentCalls === 2 && window.__lastAgentBody.level && window.__lastAgentBody.level.objects.length === 6 && window.__lastAgentBody.history.length === 2 && window.__lastAgentBody.history[0].role === "user"`), await evalJS(`({ h: window.__lastAgentBody.history, n: window.__lastAgentBody.level && window.__lastAgentBody.level.objects.length })`));
+  check("edit becomes version 2 with the theme changed", await evalJS(`S.versions[0].n === 2 && S.versions[0].note === "edited by chat" && /^edited /.test(S.level.theme)`), await evalJS(`({ v: S.versions.map((v) => v.n), theme: S.level.theme })`));
+  check("edit card shows the diff", /edited by chat/.test(await evalJS(`document.body.innerText`)) && /theme changed/.test(await evalJS(`document.body.innerText`)));
+
+  // 3. attach a picture: scan (mocked, not the agent), level to preview, version 3
   await attachPhoto();
   check("attachment chip shows", !!(await waitFor(`document.querySelectorAll(".attach").length === 1`)));
   await sendMsg(); await idle();
-  check("scan endpoint called once", await evalJS(`window.__scanCalls`) === 1);
-  check("level loaded in the page", await evalJS(`S.level && S.level.objects.length`) === 6);
-  check("version 1 created", await evalJS(`S.versions.length === 1 && S.versions[0].n === 1`), await evalJS(`S.versions.map((v) => v.n)`));
-  check("preview status text", /6 objects/.test(await evalJS(`document.getElementById("previewStatus").textContent`)));
+  check("picture goes to the scanner, not the agent", await evalJS(`window.__scanCalls === 1 && window.__agentCalls === 2`), await evalJS(`({ scans: window.__scanCalls, agent: window.__agentCalls })`));
+  check("level loaded in the page", await evalJS(`S.level && S.level.objects.length`) === 7);
+  check("version 3 created", await evalJS(`S.versions.length === 3 && S.versions[0].n === 3`), await evalJS(`S.versions.map((v) => v.n)`));
+  check("preview status text", /7 objects/.test(await evalJS(`document.getElementById("previewStatus").textContent`)));
   check("change card rendered", /Level from your picture/.test(await evalJS(`document.body.innerText`)));
-  const player = await waitFor(`(() => { try { const s = game.scene.getScene("play"); return s && s.player ? { x: Math.round(s.player.x), state: s.state } : null; } catch { return null; } })()`, { contextId: iframeCtx(), timeout: 15_000 });
-  check("preview iframe is running the level", !!player && player.state === "play", player);
   saved = await api(`api/projects?id=${pid}`);
-  check("level + photo saved on the project", saved.project?.level?.objects?.length === 6 && String(saved.project.photo || "").startsWith("data:image/jpeg"));
+  check("level + photo saved on the project", saved.project?.level?.objects?.length === 7 && String(saved.project.photo || "").startsWith("data:image/jpeg"));
   check("sidebar thumbnail uses the photo", !!(await waitFor(`document.querySelector(".proj img") !== null`)));
 
-  // 3. playtest chip -> /api/fix (mocked) -> card
+  // 4. playtest chip -> agent action -> /api/fix (mocked) -> card
   await evalJS(`[...document.querySelectorAll(".chip")].find((c) => c.textContent === "Playtest it").click(); true`); await idle();
   check("playtest chip hits /api/fix", await evalJS(`window.__fixCalls`) === 1);
   check("playtest card says reachable", /every platform, coin and goal is reachable/.test(await evalJS(`document.body.innerText`)));
 
-  // 4. second picture -> version 2, history shows both, undo restores v1 as v3
+  // 5. second picture -> version 4, history shows all, undo restores v3 as v5
   await attachPhoto();
   check("second attachment accepted", await evalJS(`S.attachments.length`) === 1);
   await sendMsg(); await idle();
-  check("second scan gives 7 objects and version 2", await evalJS(`S.level.objects.length === 7 && S.versions[0].n === 2`), await evalJS(`({ n: S.level.objects.length, scans: window.__scanCalls, v: S.versions.map((v) => v.n) })`));
+  check("second scan gives 8 objects and version 4", await evalJS(`S.level.objects.length === 8 && S.versions[0].n === 4`), await evalJS(`({ n: S.level.objects.length, scans: window.__scanCalls, v: S.versions.map((v) => v.n) })`));
   await click("#historyBtn");
-  check("history popover lists 2 versions", await evalJS(`document.getElementById("historyPop").classList.contains("show") && document.querySelectorAll("#historyPop .v").length`) === 2);
+  check("history popover lists 4 versions", await evalJS(`document.getElementById("historyPop").classList.contains("show") && document.querySelectorAll("#historyPop .v").length`) === 4);
   await click("#historyBtn");
-  check("undo enabled with 2 versions", await evalJS(`!document.getElementById("undoBtn").disabled`));
+  check("undo enabled", await evalJS(`!document.getElementById("undoBtn").disabled`));
   await click("#undoBtn");
-  await waitFor(`S.versions[0] && S.versions[0].n === 3`, { timeout: 15_000 }); await idle();
-  check("undo restored v1 as a new version 3", await evalJS(`S.versions[0].n === 3 && S.level.objects.length === 6 && /restored v1/.test(S.versions[0].note)`), await evalJS(`S.versions.map((v) => v.n + ":" + v.note)`));
-  check("restored card in the chat", /Restored v1/.test(await evalJS(`document.body.innerText`)));
+  await waitFor(`S.versions[0] && S.versions[0].n === 5`, { timeout: 15_000 }); await idle();
+  check("undo restored v3 as a new version 5", await evalJS(`S.versions[0].n === 5 && S.level.objects.length === 7 && /restored v3/.test(S.versions[0].note)`), await evalJS(`S.versions.map((v) => v.n + ":" + v.note)`));
+  check("restored card in the chat", /Restored v3/.test(await evalJS(`document.body.innerText`)));
   const v = await api(`api/version?project_id=${pid}&n=2`);
-  check("GET /api/version returns a stored version", v.version?.n === 2 && v.version.level.objects.length === 7);
+  check("GET /api/version returns a stored version", v.version?.n === 2 && /^edited /.test(v.version.level.theme));
 
   // 5. rename
   await evalJS(`(() => { const t = document.getElementById("title"); t.value = "Lava Castle"; t.dispatchEvent(new Event("change")); return true; })()`);
@@ -169,8 +186,8 @@ try {
   await waitFor(`typeof S === "object" && S.project && S.project.id === ${JSON.stringify(pid)}`, { timeout: 15_000 });
   await waitFor(`S.previewReady`, { timeout: 20_000 });
   check("reload reopens the last project", await evalJS(`S.project.id`) === pid);
-  check("messages restored", (await evalJS(`document.querySelectorAll(".msg, .card").length`)) >= 8, await evalJS(`document.querySelectorAll(".msg, .card").length`));
-  check("versions restored", await evalJS(`S.versions.length`) === 3);
+  check("messages restored", (await evalJS(`document.querySelectorAll(".msg, .card").length`)) >= 12, await evalJS(`document.querySelectorAll(".msg, .card").length`));
+  check("versions restored", await evalJS(`S.versions.length`) === 5);
   const again = await waitFor(`(() => { try { const s = game.scene.getScene("play"); return !!(s && s.player); } catch { return false; } })()`, { contextId: iframeCtx(), timeout: 15_000 });
   check("preview restarts the saved level after reload", !!again);
 

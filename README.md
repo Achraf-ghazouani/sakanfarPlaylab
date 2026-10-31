@@ -73,6 +73,31 @@ node check.mjs levels/impossible.json --fix --no-ai
 
 In `viewer.html`, pick a level: unreachable things get a red dashed outline, and the "Playtest + fix with AI" button repairs them live.
 
+## PlayLab Studio (chat builder, `studio.html`)
+
+Chat on the left, the live game on the right. The game page runs inside an iframe in embed mode (`game.html?embed=1`) and receives levels and commands by `postMessage`, so the game code is shared with the phone and big-screen flows.
+
+What works today (step 1 of the Studio plan):
+- Projects are saved in Supabase (`projects`, `messages`, `versions`). Each browser gets an anonymous owner id (localStorage) sent as the `x-owner` header; row-level security keeps every owner to their own rows. Shared projects (later step) are readable by anyone with the link.
+- "My games" sidebar, auto-created project on the first message, rename by clicking the title, reload reopens the last game.
+- Attach a picture or drawing: it goes through the existing `/api/scan` and lands in the preview as a new version.
+- "Playtest it" runs the playtest agent (`/api/fix`) and shows what it changed.
+- Every level change is a version: History lists them, Undo restores the previous one (as a new version, nothing is lost).
+- Word-by-word streaming, typing indicator, quick chips, example prompts. On phones the chat is full screen with a Preview tab.
+
+Endpoints (all keyed by the `x-owner` header, keys stay on the server):
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET/POST/PATCH/DELETE /api/projects` | List, create, update (a `level` in a PATCH also adds a version), delete |
+| `GET/POST /api/messages` | Chat history of a project |
+| `GET /api/version?project_id=&n=` | One saved version |
+| `POST /api/agent` | The game agent. Step 1 is a stub that routes pictures to scan and "playtest" to the fixer; step 2 puts Muse Spark behind it |
+
+Schema: `db/schema.sql` (run it in the Supabase SQL editor once). Uses the same `SUPABASE_URL` / `SUPABASE_ANON_KEY` as the phone relay.
+
+Still to come: the Muse Spark game agent (create / edit levels from words and images), sketch and camera inside the chat, the full phone controller, art and UI kits (Muse Image + SAM 3.1), 3D modes, share links and remix.
+
 ## Run it locally
 
 ```bash
@@ -94,6 +119,8 @@ Other commands:
 | `node check.mjs <level.json> [--fix]` | Playtest report, optional repair |
 | `npm test` | Unit checks: level normalizer, image parsing, reachability and auto-fix |
 | `npm run playtest` | Headless Chrome drives the game through 36 checks (needs `npm run dev` running) |
+| `npm run test:db` | Round trip against the real Supabase tables, including the row-level security checks (needs the Supabase values in `.env`) |
+| `npm run test:studio` | Headless Chrome drives `studio.html`: chat, saved projects, versions, undo, reload, mobile tabs (needs `npm run dev` and Supabase) |
 
 Controls: arrows / WASD to move, space / up / W to jump (hold for a higher jump), stomp enemies from above, R restarts, M toggles sound. Phones get on-screen buttons in landscape.
 
@@ -130,7 +157,11 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | File | Purpose |
 | --- | --- |
 | `index.html` | Mobile home page: camera/gallery input, resize, scanning animation, AI-fix phase, opens the game |
-| `game.html` | The game (Phaser 3 arcade physics, colored shapes, touch controls, drawing thumbnail, agent toast) |
+| `game.html` | The game (Phaser 3 arcade physics, colored shapes, touch controls, drawing thumbnail, agent toast); `?embed=1` for the Studio preview |
+| `studio.html` | PlayLab Studio: chat + live preview, My games, versions, history, undo |
+| `api/projects.js`, `api/messages.js`, `api/version.js` | Vercel functions for saved games (Supabase through PostgREST, `lib/db.mjs`) |
+| `api/agent.js` | The Studio game agent endpoint (step 1 stub) |
+| `db/schema.sql` | Supabase tables, row-level security and functions for the Studio |
 | `pad.html` | Phone controller page (joins a room by QR / code) |
 | `shared/phonelink.js` | PeerJS host (game) and client (pad): rooms, slots, heartbeat, reconnect |
 | `viewer.html` | Debug: AI boxes over the photo, reachability report, fix button |

@@ -130,6 +130,9 @@
   #tJump { right:max(14px, env(safe-area-inset-right)); width:104px; height:104px; }
   body.touch #touch { display:block; }
   body.touch #hint, body.touch .desktop { display:none !important; }
+  /* embedded in the studio preview: the studio owns levels, history and sharing */
+  body.embed #newBtn, body.embed #redrawBtn, body.embed #phoneBtn, body.embed .desktop, body.embed #hint, body.embed #levelSelect, body.embed #thumb { display:none !important; }
+  body.embed #hud { background:rgba(27,21,53,.85); }
   body.touch #hud { gap:8px; padding:0 8px; }
   body.touch #hud select { max-width:150px; }
 
@@ -228,10 +231,15 @@ const touch = { left: false, right: false };
 // Phone controller state (set by messages from pad.html, read by the scene)
 const remote = { left: false, right: false };
 let host = null;                                   // PhoneLink.Host once "Play with your phone" is opened
-function gameEvent(name) { if (host) host.event(name); }
+function gameEvent(name) {
+  if (host) host.event(name);
+  if (isEmbed) { try { parent.postMessage({ type: "playlab:event", name }, "*"); } catch {} }
+}
 // Big screen mode (game.html?screen=1): the PC shows a QR, the first phone becomes the camera.
 const PARAMS = new URLSearchParams(location.search);
 const isScreen = PARAMS.get("screen") === "1";
+const isEmbed = PARAMS.get("embed") === "1";         // inside studio.html: levels arrive by postMessage
+if (isEmbed) document.body.classList.add("embed");
 let cameraPlayer = null;                           // the phone whose camera is on the stage
 let relayCfg = null;                               // { url, key } from api/config: Supabase Realtime fallback transport
 const configReady = fetch("api/config", { cache: "no-store" }).then((r) => r.json()).then((c) => { relayCfg = c.relay || null; if (host && relayCfg) host.startRelay(relayCfg); return relayCfg; }).catch(() => null);
@@ -1141,6 +1149,25 @@ async function init() {
   window.addEventListener("keydown", () => SFX.ensure());
   window.addEventListener("pointerdown", () => SFX.ensure());
   $("msg").addEventListener("click", () => { if (game) { const s = game.scene.getScene("play"); if (s.state !== "play") s.scene.restart(); } });
+
+  if (isEmbed) {
+    // Studio preview: the parent page pushes levels and commands through postMessage.
+    window.addEventListener("message", (e) => {
+      const m = e.data;
+      if (!m || typeof m !== "object" || typeof m.type !== "string") return;
+      if (m.type === "playlab:level" && m.level && Array.isArray(m.level.objects)) {
+        const s = playScene();
+        if (m.keepPlayer && s?.player && s.state === "play") pendingSpawn = { x: s.player.x / s.ax, y: s.player.body.bottom };
+        startLevel(m.level, m.name || "studio", m.thumb || null);
+        if (m.toast) showToast(m.toast, 6000);
+      } else if (m.type === "playlab:restart") restartScene();
+      else if (m.type === "playlab:phone") openPhonePanel();
+      else if (m.type === "playlab:mute") SFX.setMuted(!!m.muted);
+    });
+    try { parent.postMessage({ type: "playlab:ready" }, "*"); } catch {}
+    showMsg("No game yet", "describe one in the chat, or attach a drawing");
+    return;
+  }
 
   if (isScreen) {
     // Big screen: show the QR stage and wait for the phone. No level is loaded until the phone scans one.

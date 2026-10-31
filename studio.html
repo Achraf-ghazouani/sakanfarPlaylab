@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fbfaff">
+<title>PlayLab Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+<script src="shared/photo.js"></script>
+<style>
+  :root { --bg:#fbfaff; --panel:#ffffff; --lav:#efeaff; --lav-2:#e2d9ff; --lav-3:#cdbdff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --line:#ebe6f7; --green:#22c55e; --shadow:0 10px 30px rgba(91,33,182,.08); }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; }
+  body { background:var(--bg); color:var(--ink); font-family:Inter, system-ui, sans-serif; font-size:15px; line-height:1.5; overflow:hidden; }
+  button { font:inherit; cursor:pointer; }
+  .app { display:grid; grid-template-columns:260px 1fr; height:100%; }
+
+  /* sidebar */
+  aside { background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; min-width:0; }
+  .brand { display:flex; align-items:center; gap:10px; padding:16px 16px 10px; font-family:Fredoka, system-ui, sans-serif; font-weight:700; font-size:19px; color:var(--purple-deep); text-decoration:none; }
+  .brand .logo { width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg, var(--purple), #c084fc); display:grid; place-items:center; }
+  .brand .logo svg { width:17px; height:17px; }
+  .newbtn { margin:6px 12px 10px; border:0; background:var(--purple); color:#fff; border-radius:12px; padding:11px 14px; font-weight:600; display:flex; align-items:center; gap:8px; justify-content:center; }
+  .newbtn:hover { background:var(--purple-deep); }
+  .side-h { padding:8px 16px 4px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:600; }
+  #projectsList { overflow:auto; padding:0 8px 12px; flex:1; }
+  .proj { display:flex; align-items:center; gap:10px; width:100%; text-align:left; border:0; background:transparent; border-radius:12px; padding:9px 10px; color:var(--ink); }
+  .proj:hover { background:var(--lav); }
+  .proj.active { background:var(--lav-2); }
+  .proj img, .proj .ph { width:40px; height:30px; border-radius:6px; object-fit:cover; background:var(--lav); flex:none; display:grid; place-items:center; font-size:14px; }
+  .proj .t { flex:1; min-width:0; }
+  .proj .t b { display:block; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px; }
+  .proj .t small { color:var(--muted); font-size:12px; }
+  .side-foot { padding:10px 16px; border-top:1px solid var(--line); font-size:12px; color:var(--muted); }
+  .side-foot a { color:var(--purple-deep); }
+
+  /* main */
+  main { display:flex; flex-direction:column; min-width:0; height:100%; }
+  .top { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); background:var(--panel); }
+  .top .menu { display:none; border:0; background:transparent; font-size:20px; padding:4px 6px; }
+  #title { font-family:Fredoka, system-ui, sans-serif; font-weight:600; font-size:18px; border:1px solid transparent; border-radius:10px; padding:5px 10px; min-width:120px; max-width:34vw; background:transparent; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #title:hover, #title:focus { border-color:var(--lav-2); background:var(--lav); outline:none; }
+  .seg { display:inline-flex; border:1px solid var(--lav-2); border-radius:999px; overflow:hidden; background:#fff; }
+  .seg button { border:0; background:transparent; padding:6px 12px; font-size:13px; font-weight:600; color:var(--muted); }
+  .seg button.on { background:var(--purple); color:#fff; }
+  .seg button:disabled { opacity:.5; cursor:not-allowed; }
+  .spacer { flex:1; }
+  .tb { border:1px solid var(--lav-2); background:#fff; color:var(--purple-deep); border-radius:999px; padding:7px 13px; font-size:13px; font-weight:600; display:inline-flex; align-items:center; gap:7px; white-space:nowrap; position:relative; }
+  .tb:hover { background:var(--lav); }
+  .tb.primary { background:var(--purple); color:#fff; border-color:var(--purple); }
+  .tb.primary:hover { background:var(--purple-deep); }
+  .tb:disabled { opacity:.5; cursor:not-allowed; }
+  .tb svg { width:16px; height:16px; }
+  .pop { position:absolute; top:calc(100% + 8px); right:0; width:300px; background:#fff; border:1px solid var(--lav-2); border-radius:14px; box-shadow:var(--shadow); padding:8px; display:none; z-index:5; text-align:left; }
+  .pop.show { display:block; }
+  .pop .v { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; cursor:pointer; }
+  .pop .v:hover { background:var(--lav); }
+  .pop .v b { font-size:13px; }
+  .pop .v small { color:var(--muted); font-size:12px; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px; }
+  .pop .v .n { width:28px; height:28px; border-radius:50%; background:var(--lav-2); display:grid; place-items:center; font-weight:700; font-size:12px; color:var(--purple-deep); flex:none; }
+  .pop .v.cur .n { background:var(--purple); color:#fff; }
+  .pop .empty { padding:10px; color:var(--muted); font-size:13px; }
+
+  .split { display:grid; grid-template-columns:minmax(360px, 46%) 1fr; flex:1; min-height:0; }
+  .chat { display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--line); background:var(--bg); }
+  #messages { flex:1; overflow:auto; padding:18px 18px 8px; display:flex; flex-direction:column; gap:12px; }
+  .msg { display:flex; gap:10px; max-width:92%; animation:pop .18s ease-out; }
+  @keyframes pop { from { opacity:0; transform:translateY(6px); } }
+  .msg.user { align-self:flex-end; flex-direction:row-reverse; }
+  .msg .av { width:30px; height:30px; border-radius:50%; flex:none; display:grid; place-items:center; font-size:14px; background:linear-gradient(135deg, var(--purple), #c084fc); color:#fff; }
+  .msg.user .av { background:var(--lav-2); color:var(--purple-deep); }
+  .bubble { background:#fff; border:1px solid var(--line); border-radius:16px; padding:10px 14px; box-shadow:0 2px 8px rgba(91,33,182,.05); white-space:pre-wrap; word-break:break-word; }
+  .msg.user .bubble { background:var(--purple); color:#fff; border-color:var(--purple); border-bottom-right-radius:6px; }
+  .msg.assistant .bubble { border-bottom-left-radius:6px; }
+  .bubble .att { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .bubble .att img { width:96px; height:72px; object-fit:cover; border-radius:8px; border:2px solid rgba(255,255,255,.6); }
+  .bubble .att span { font-size:12px; background:rgba(255,255,255,.2); border-radius:8px; padding:4px 8px; }
+  .card { align-self:stretch; background:#fff; border:1px solid var(--lav-2); border-left:4px solid var(--purple); border-radius:12px; padding:10px 14px; font-size:13px; color:var(--ink); display:flex; gap:10px; align-items:center; animation:pop .18s ease-out; }
+  .card b { color:var(--purple-deep); }
+  .card .ic { font-size:18px; }
+  .typing { display:inline-flex; gap:4px; padding:4px 2px; }
+  .typing i { width:7px; height:7px; border-radius:50%; background:var(--lav-3); animation:blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay:.2s; } .typing i:nth-child(3) { animation-delay:.4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity:.3; } 40% { opacity:1; } }
+
+  .empty-state { margin:auto; text-align:center; max-width:460px; padding:20px; }
+  .empty-state h2 { font-family:Fredoka, system-ui, sans-serif; font-size:28px; margin:0 0 6px; }
+  .empty-state p { color:var(--muted); margin:0 0 16px; }
+  .examples { display:grid; gap:8px; }
+  .examples button { text-align:left; background:#fff; border:1px solid var(--lav-2); border-radius:12px; padding:11px 14px; color:var(--ink); }
+  .examples button:hover { border-color:var(--purple); background:var(--lav); }
+
+  .composer { padding:10px 14px 12px; border-top:1px solid var(--line); background:var(--panel); }
+  #attachments { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  #attachments:empty { display:none; }
+  .attach { position:relative; border:1px solid var(--lav-2); border-radius:10px; padding:4px; background:#fff; display:flex; align-items:center; gap:6px; font-size:12px; }
+  .attach img { width:56px; height:42px; object-fit:cover; border-radius:6px; }
+  .attach .x { border:0; background:var(--lav); border-radius:50%; width:20px; height:20px; font-size:12px; line-height:1; }
+  .box { display:flex; align-items:flex-end; gap:8px; border:1px solid var(--lav-2); border-radius:16px; padding:8px 8px 8px 12px; background:#fff; }
+  .box:focus-within { border-color:var(--purple); box-shadow:0 0 0 3px rgba(124,58,237,.12); }
+  #composer { flex:1; border:0; resize:none; outline:none; font:inherit; max-height:140px; min-height:24px; padding:6px 0; background:transparent; }
+  .ib { border:0; background:transparent; width:36px; height:36px; border-radius:50%; display:grid; place-items:center; color:var(--muted); }
+  .ib:hover { background:var(--lav); color:var(--purple-deep); }
+  .ib svg { width:20px; height:20px; }
+  #sendBtn { background:var(--purple); color:#fff; }
+  #sendBtn:hover { background:var(--purple-deep); }
+  #sendBtn:disabled { background:var(--lav-2); color:#fff; cursor:default; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .chip { border:1px solid var(--lav-2); background:#fff; border-radius:999px; padding:5px 11px; font-size:12px; color:var(--purple-deep); font-weight:600; }
+  .chip:hover { background:var(--lav); }
+  input[type=file] { display:none; }
+
+  .preview { position:relative; background:#1b1535; min-height:0; }
+  .preview iframe { width:100%; height:100%; border:0; display:block; }
+  #previewStatus { position:absolute; left:10px; bottom:10px; background:rgba(255,255,255,.92); color:var(--purple-deep); font-size:12px; font-weight:600; padding:6px 10px; border-radius:999px; pointer-events:none; }
+  .mtabs { display:none; border-top:1px solid var(--line); background:#fff; }
+  .mtabs button { flex:1; border:0; background:transparent; padding:12px; font-weight:600; color:var(--muted); }
+  .mtabs button.on { color:var(--purple); box-shadow:inset 0 -3px 0 var(--purple); }
+  #toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#1b1535; color:#fff; padding:9px 14px; border-radius:10px; font-size:13px; opacity:0; transition:opacity .25s; pointer-events:none; z-index:9; }
+  #toast.show { opacity:1; }
+  .overlay { position:fixed; inset:0; background:rgba(27,21,53,.4); display:none; z-index:4; }
+  .overlay.show { display:block; }
+
+  @media (max-width: 980px) {
+    .app { grid-template-columns:1fr; }
+    aside { position:fixed; inset:0 auto 0 0; width:280px; z-index:6; transform:translateX(-100%); transition:transform .2s; }
+    aside.open { transform:none; }
+    .top .menu { display:block; }
+    .top { gap:6px; padding:8px 10px; }
+    .top .seg, .top .tb { flex:none; }
+    .tb { padding:7px 9px; }
+    #undoBtn { display:none; }   /* History has restore; keeps the bar on one line */
+    #title { flex:1; min-width:60px; max-width:none; }
+    .split { grid-template-columns:1fr; }
+    .preview { display:none; }
+    body.tab-preview .preview { display:block; }
+    body.tab-preview .chat { display:none; }
+    .mtabs { display:flex; }
+    .tb span.lbl { display:none; }
+    #composer::placeholder { font-size:14px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside id="sidebar">
+    <a class="brand" href="index.html"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg></span>PlayLab Studio</a>
+    <button class="newbtn" id="newGameBtn">&#10010; New game</button>
+    <div class="side-h">My games</div>
+    <div id="projectsList"></div>
+    <div class="side-foot">Games are saved as you chat. <a href="index.html">Home</a> &middot; <a href="game.html?screen=1">Big screen</a></div>
+  </aside>
+
+  <main>
+    <header class="top">
+      <button class="menu" id="menuBtn" aria-label="Menu">&#9776;</button>
+      <input id="title" value="Untitled game" aria-label="Project name" maxlength="80">
+      <div class="seg" id="modeSeg"><button class="on" data-mode="2d">2D</button><button data-mode="3d" disabled title="3D arrives in a later step">3D</button></div>
+      <span class="spacer"></span>
+      <button class="tb" id="undoBtn" title="Restore the previous version"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l-4-4 4-4"/><path d="M5 10h9a5 5 0 0 1 0 10h-3"/></svg><span class="lbl">Undo</span></button>
+      <button class="tb" id="historyBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="lbl">History</span>
+        <div class="pop" id="historyPop"><div class="empty">No versions yet</div></div>
+      </button>
+      <button class="tb" id="phoneBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg><span class="lbl">Play with phone</span></button>
+      <button class="tb primary" id="shareBtn" disabled title="Share links arrive in a later step"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 15V3M8 7l4-4 4 4"/></svg><span class="lbl">Share</span></button>
+    </header>
+
+    <div class="split">
+      <section class="chat">
+        <div id="messages">
+          <div class="empty-state" id="emptyState">
+            <h2>What are we building today?</h2>
+            <p>Describe a game, attach a sketch or a picture, and watch it appear on the right.</p>
+            <div class="examples">
+              <button data-prompt="A lava castle with moving platforms">&#127969; A lava castle with moving platforms</button>
+              <button data-prompt="Turn my drawing into a space level">&#128640; Turn my drawing into a space level</button>
+              <button data-prompt="A jungle level for kids, easy">&#127796; A jungle level for kids, easy</button>
+            </div>
+          </div>
+        </div>
+        <div class="composer">
+          <div id="attachments"></div>
+          <div class="box">
+            <button class="ib" id="attachBtn" title="Attach an image, sketch, sprite or 3D model"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.5l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l9-9a3.5 3.5 0 0 1 5 5l-9 9a1.5 1.5 0 0 1-2.1-2.1l8-8"/></svg></button>
+            <input type="file" id="attachInput" multiple accept="image/*,.png,.webp,.glb,.gltf">
+            <button class="ib" id="cameraBtn" title="Live camera from your phone (arrives in step 3)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+            <textarea id="composer" rows="1" placeholder="Describe your game..."></textarea>
+            <button class="ib" id="sendBtn" title="Send (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          </div>
+          <div class="chips" id="chips">
+            <button class="chip">Make it harder</button><button class="chip">Add more coins</button><button class="chip">Change theme</button><button class="chip">Generate art</button><button class="chip">Make it 3D</button><button class="chip">Playtest it</button><button class="chip">Share</button>
+          </div>
+        </div>
+      </section>
+      <section class="preview">
+        <iframe id="preview" src="game.html?embed=1" title="Game preview" allow="autoplay"></iframe>
+        <div id="previewStatus">no game yet</div>
+      </section>
+    </div>
+    <nav class="mtabs"><button class="on" id="mtabChat">Chat</button><button id="mtabPreview">Preview</button></nav>
+  </main>
+</div>
+<div class="overlay" id="overlay"></div>
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const owner = (() => { try { let o = localStorage.getItem("playlab.owner"); if (!o) { o = "u-" + crypto.randomUUID().replace(/-/g, "").slice(0, 24); localStorage.setItem("playlab.owner", o); } return o; } catch { return "u-" + Math.random().toString(36).slice(2, 20); } })();
+const S = { project: null, messages: [], versions: [], level: null, attachments: [], busy: false, previewReady: false, dbOk: true };
+const EMPTY_HTML = $("emptyState").outerHTML;   // the empty state leaves the DOM on the first message; keep a copy to bring it back
+
+async function api(path, { method = "GET", body } = {}) {
+  const r = await fetch(path, { method, headers: { "Content-Type": "application/json", "x-owner": owner }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.error || `${method} ${path} failed (${r.status})`); e.status = r.status; throw e; }
+  return data;
+}
+function toast(text, ms = 2500) { const t = $("toast"); t.textContent = text; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), ms); }
+
+// ---------------------------------------------------------------------------
+// Preview (game.html?embed=1 in an iframe)
+// ---------------------------------------------------------------------------
+const preview = () => $("preview").contentWindow;
+window.addEventListener("message", (e) => {
+  const m = e.data; if (!m || typeof m !== "object") return;
+  if (m.type === "playlab:ready") { S.previewReady = true; if (S.level) pushLevel(S.level, { quiet: true }); }
+  if (m.type === "playlab:event" && m.name === "goal") toast("Level complete on the preview!");
+});
+function pushLevel(level, { name = "studio", thumb = null, keepPlayer = false, toastText = null, quiet = false } = {}) {
+  S.level = level;
+  const n = level?.objects?.length || 0;
+  $("previewStatus").textContent = `${n} objects${S.versions[0] ? ` · v${S.versions[0].n}` : ""}${level?.theme ? ` · ${level.theme}` : ""}`;
+  if (S.previewReady) preview().postMessage({ type: "playlab:level", level, name, thumb: thumb || S.project?.photo || null, keepPlayer, toast: quiet ? null : toastText }, "*");
+}
+
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+async function loadProjects() {
+  try {
+    const { projects } = await api("api/projects");
+    S.dbOk = true;
+    renderProjects(projects);
+    return projects;
+  } catch (err) {
+    S.dbOk = false;
+    $("projectsList").innerHTML = `<div class="side-foot" style="border:0">Could not load your games: ${esc(err.message)}</div>`;
+    return [];
+  }
+}
+function renderProjects(projects) {
+  const list = $("projectsList"); list.innerHTML = "";
+  if (!projects.length) { list.innerHTML = `<div class="side-foot" style="border:0">No games yet. Start chatting!</div>`; return; }
+  for (const p of projects) {
+    const b = document.createElement("button"); b.className = "proj" + (S.project?.id === p.id ? " active" : ""); b.dataset.id = p.id;
+    b.innerHTML = `${p.photo ? `<img src="${p.photo}" alt="">` : `<span class="ph">&#127918;</span>`}<span class="t"><b>${esc(p.title)}</b><small>${timeAgo(p.updated_at)}${p.share_id ? " · shared" : ""}</small></span>`;
+    b.addEventListener("click", () => { openProject(p.id); $("sidebar").classList.remove("open"); $("overlay").classList.remove("show"); });
+    list.appendChild(b);
+  }
+}
+function timeAgo(iso) { const s = (Date.now() - new Date(iso).getTime()) / 1000; if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} h ago`; return `${Math.floor(s / 86400)} d ago`; }
+
+async function openProject(id) {
+  try {
+    const { project, messages, versions } = await api(`api/projects?id=${encodeURIComponent(id)}`);
+    S.project = project; S.messages = messages; S.versions = versions;
+    try { localStorage.setItem("playlab.studio.project", id); } catch {}
+    $("title").value = project.title;
+    renderMessages();
+    renderHistory();
+    if (project.level) pushLevel(project.level, { quiet: true }); else { S.level = null; $("previewStatus").textContent = "no game yet"; }
+    document.querySelectorAll(".proj").forEach((b) => b.classList.toggle("active", b.dataset.id === id));
+  } catch (err) { toast("Could not open that game: " + err.message); }
+}
+function newProjectUI() {
+  S.project = null; S.messages = []; S.versions = []; S.level = null;
+  $("title").value = "Untitled game";
+  try { localStorage.removeItem("playlab.studio.project"); } catch {}
+  renderMessages(); renderHistory();
+  $("previewStatus").textContent = "no game yet";
+  document.querySelectorAll(".proj").forEach((b) => b.classList.remove("active"));
+  $("composer").focus();
+}
+async function ensureProject(firstText) {
+  if (S.project) return S.project;
+  const title = (firstText || "New game").replace(/\s+/g, " ").trim().slice(0, 40) || "New game";
+  const { project } = await api("api/projects", { method: "POST", body: { title } });
+  S.project = project; $("title").value = project.title;
+  try { localStorage.setItem("playlab.studio.project", project.id); } catch {}
+  loadProjects();
+  return project;
+}
+$("newGameBtn").addEventListener("click", newProjectUI);
+$("title").addEventListener("change", async () => {
+  const t = $("title").value.trim().slice(0, 80) || "Untitled game"; $("title").value = t;
+  if (!S.project) return;
+  try { await api("api/projects", { method: "PATCH", body: { id: S.project.id, title: t } }); S.project.title = t; loadProjects(); } catch (err) { toast(err.message); }
+});
+$("title").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
+
+// ---------------------------------------------------------------------------
+// Messages
+// ---------------------------------------------------------------------------
+function renderMessages() {
+  const box = $("messages");
+  box.innerHTML = "";
+  if (!S.messages.length) { box.innerHTML = EMPTY_HTML; bindExamples(); return; }
+  for (const m of S.messages) appendMessage(m, false);
+  box.scrollTop = box.scrollHeight;
+}
+function bindExamples() { document.querySelectorAll(".examples button").forEach((b) => b.addEventListener("click", () => { $("composer").value = b.dataset.prompt; send(); })); }
+function appendMessage(m, scroll = true) {
+  const box = $("messages");
+  const empty = box.querySelector(".empty-state"); if (empty) empty.remove();
+  let el;
+  if (m.role === "tool") {
+    el = document.createElement("div"); el.className = "card";
+    const c = m.meta?.card || {};
+    el.innerHTML = `<span class="ic">${c.icon || "&#9998;"}</span><div><b>${esc(c.title || "Change")}</b> ${esc(c.text || m.content || "")}</div>`;
+  } else {
+    el = document.createElement("div"); el.className = "msg " + m.role;
+    const atts = (m.meta?.attachments || []).map((a) => a.thumb ? `<img src="${a.thumb}" alt="">` : `<span>${esc(a.name || a.type)}</span>`).join("");
+    el.innerHTML = `<div class="av">${m.role === "user" ? "&#128100;" : "&#9998;"}</div><div class="bubble">${esc(m.content)}${atts ? `<div class="att">${atts}</div>` : ""}</div>`;
+  }
+  box.appendChild(el);
+  if (scroll) box.scrollTop = box.scrollHeight;
+  return el;
+}
+function showTyping() { const box = $("messages"); const el = document.createElement("div"); el.className = "msg assistant"; el.id = "typing"; el.innerHTML = `<div class="av">&#9998;</div><div class="bubble"><span class="typing"><i></i><i></i><i></i></span></div>`; box.appendChild(el); box.scrollTop = box.scrollHeight; }
+function hideTyping() { $("typing")?.remove(); }
+/** Reveal the assistant reply word by word. */
+async function streamAssistant(text) {
+  hideTyping();
+  const el = appendMessage({ role: "assistant", content: "" });
+  const bubble = el.querySelector(".bubble");
+  const words = text.split(/(\s+)/);
+  let out = "";
+  for (const w of words) { out += w; bubble.textContent = out; $("messages").scrollTop = $("messages").scrollHeight; if (w.trim()) await new Promise((r) => setTimeout(r, 28)); }
+}
+async function saveMessage(role, content, meta = null) {
+  S.messages.push({ role, content, meta });
+  if (!S.project) return;
+  try { await api("api/messages", { method: "POST", body: { project_id: S.project.id, role, content, meta } }); } catch (err) { console.warn("message not saved:", err.message); }
+}
+async function addCard(card) {
+  appendMessage({ role: "tool", content: card.text, meta: { card } });
+  await saveMessage("tool", card.text, { card });
+}
+
+// ---------------------------------------------------------------------------
+// Levels, versions, history
+// ---------------------------------------------------------------------------
+async function applyLevel(level, { note = "edited", thumb = null, keepPlayer = false, toastText = null } = {}) {
+  const project = await ensureProject(note);
+  const body = { id: project.id, level, note };
+  if (thumb) body.photo = thumb;
+  const { project: updated, version } = await api("api/projects", { method: "PATCH", body });
+  S.project = updated;
+  if (version) S.versions.unshift(version);
+  renderHistory();
+  pushLevel(updated.level, { thumb: thumb || updated.photo, keepPlayer, toastText });
+  loadProjects();
+  return updated.level;
+}
+function renderHistory() {
+  const pop = $("historyPop");
+  if (!S.versions.length) { pop.innerHTML = `<div class="empty">No versions yet</div>`; $("undoBtn").disabled = true; return; }
+  $("undoBtn").disabled = S.versions.length < 2;
+  pop.innerHTML = S.versions.map((v, i) => `<div class="v${i === 0 ? " cur" : ""}" data-n="${v.n}"><span class="n">v${v.n}</span><div><b>${esc(v.note || "edit")}</b><small>${new Date(v.created_at).toLocaleString()}</small></div></div>`).join("");
+  pop.querySelectorAll(".v").forEach((el) => el.addEventListener("click", (e) => { e.stopPropagation(); restoreVersion(Number(el.dataset.n)); pop.classList.remove("show"); }));
+}
+async function restoreVersion(n) {
+  if (!S.project) return;
+  try {
+    const { version } = await api(`api/version?project_id=${encodeURIComponent(S.project.id)}&n=${n}`);
+    await applyLevel(version.level, { note: `restored v${n}`, toastText: `Restored v${n}` });
+    await addCard({ icon: "&#8634;", title: `Restored v${n}`, text: `${version.level.objects.length} objects` });
+  } catch (err) { toast(err.message); }
+}
+$("historyBtn").addEventListener("click", (e) => { if (e.target.closest(".pop")) return; $("historyPop").classList.toggle("show"); });
+document.addEventListener("click", (e) => { if (!e.target.closest("#historyBtn")) $("historyPop").classList.remove("show"); });
+$("undoBtn").addEventListener("click", () => { const prev = S.versions[1]; if (prev) restoreVersion(prev.n); });
+$("phoneBtn").addEventListener("click", () => { if (!S.previewReady) return toast("The preview is still loading"); preview().postMessage({ type: "playlab:phone" }, "*"); document.body.classList.add("tab-preview"); setTab("preview"); });
+
+// ---------------------------------------------------------------------------
+// Composer: attachments, chips, send
+// ---------------------------------------------------------------------------
+$("attachBtn").addEventListener("click", () => $("attachInput").click());
+$("attachInput").addEventListener("change", async (e) => { for (const f of e.target.files) await addAttachment(f); e.target.value = ""; });
+$("cameraBtn").addEventListener("click", () => toast("Live camera inside the chat arrives in step 3. Big screen: index.html > PRESS START."));
+async function addAttachment(file) {
+  const a = { name: file.name, type: file.type || (file.name.endsWith(".glb") || file.name.endsWith(".gltf") ? "model/gltf-binary" : "application/octet-stream"), size: file.size };
+  if (a.type.startsWith("image/")) {
+    try { const img = await PhotoUtil.loadImage(file); a.upload = PhotoUtil.toJpeg(img, PhotoUtil.UPLOAD_SIDE, 0.85); a.thumb = PhotoUtil.toJpeg(img, 320, 0.7); } catch { toast("Could not read that image"); return; }
+  }
+  S.attachments.push(a);
+  renderAttachments();
+}
+function renderAttachments() {
+  $("attachments").innerHTML = S.attachments.map((a, i) => `<div class="attach">${a.thumb ? `<img src="${a.thumb}" alt="">` : `<span>&#128230;</span>`}<span>${esc(a.name)}</span><button class="x" data-i="${i}" title="Remove">&times;</button></div>`).join("");
+  $("attachments").querySelectorAll(".x").forEach((b) => b.addEventListener("click", () => { S.attachments.splice(Number(b.dataset.i), 1); renderAttachments(); }));
+}
+$("chips").addEventListener("click", (e) => { const c = e.target.closest(".chip"); if (!c) return; $("composer").value = c.textContent; send(); });
+$("composer").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+$("composer").addEventListener("input", () => { const c = $("composer"); c.style.height = "auto"; c.style.height = Math.min(140, c.scrollHeight) + "px"; });
+$("sendBtn").addEventListener("click", send);
+
+async function send() {
+  if (S.busy) return;
+  const text = $("composer").value.trim();
+  const atts = S.attachments.splice(0);
+  if (!text && !atts.length) return;
+  S.busy = true; $("sendBtn").disabled = true;
+  $("composer").value = ""; $("composer").style.height = "auto"; renderAttachments();
+  const attMeta = atts.map((a) => ({ name: a.name, type: a.type, thumb: a.thumb || null }));
+  appendMessage({ role: "user", content: text, meta: { attachments: attMeta } });
+  try {
+    await ensureProject(text || (atts[0] && "Level from " + atts[0].name));
+    await saveMessage("user", text, { attachments: attMeta });
+    showTyping();
+    const res = await api("api/agent", { method: "POST", body: { project_id: S.project.id, message: text, level: S.level, attachments: attMeta } });
+    await streamAssistant(res.reply || "...");
+    await saveMessage("assistant", res.reply || "");
+    for (const action of res.actions || []) await runAction(action, atts);
+  } catch (err) {
+    hideTyping();
+    await streamAssistant("Something went wrong: " + err.message);
+  }
+  S.busy = false; $("sendBtn").disabled = false; $("composer").focus();
+}
+
+/** Actions the page runs itself with the existing endpoints. */
+async function runAction(action, atts) {
+  if (action.type === "scan") {
+    const img = atts.find((a) => a.upload);
+    if (!img) return;
+    showTyping();
+    try {
+      const data = await api("api/scan", { method: "POST", body: { image: img.upload, previous: S.level ? strip(S.level) : undefined } });
+      hideTyping();
+      const lvl = data.level, problems = data.meta?.playtest?.before?.problems || [];
+      await applyLevel(lvl, { note: "from picture", thumb: img.thumb, toastText: `Built from your picture: ${lvl.objects.length} objects` });
+      const d = lvl.diff?.short;
+      await addCard({ icon: "&#128444;", title: "Level from your picture", text: `${lvl.objects.length} objects · ${lvl.theme}${d ? ` · ${d}` : ""}${problems.length ? ` · quick-fixed ${problems.length} impossible part${problems.length > 1 ? "s" : ""}` : " · every jump reachable"}` });
+      await streamAssistant(`Done. I found ${lvl.objects.length} things (${lvl.theme}). It is playable on the right${problems.length ? ", and I fixed what was impossible" : ""}.`);
+      await saveMessage("assistant", `Built ${lvl.objects.length} objects from the picture.`);
+    } catch (err) { hideTyping(); await streamAssistant("I could not read that picture: " + err.message); }
+  } else if (action.type === "playtest") {
+    if (!S.level) return;
+    showTyping();
+    try {
+      const { level, report } = await api("api/fix", { method: "POST", body: { level: strip(S.level) } });
+      hideTyping();
+      if (report.before.ok) { await addCard({ icon: "&#9989;", title: "Playtest", text: "every platform, coin and goal is reachable" }); await streamAssistant("All good: every platform, coin and goal is reachable."); }
+      else {
+        await applyLevel(level, { note: "playtest fix", keepPlayer: true, toastText: "Playtest agent fixed the level" });
+        await addCard({ icon: "&#128295;", title: `Playtest: fixed ${report.before.problems.length} impossible part${report.before.problems.length > 1 ? "s" : ""}`, text: (report.fixes || []).join(" · ") });
+        await streamAssistant(`I found ${report.before.problems.length} impossible part${report.before.problems.length > 1 ? "s" : ""} and fixed ${report.fixedBy === "ai" ? "them with the AI" : "them"}. ${report.after.ok ? "Everything is reachable now." : "A few spots are still tricky."}`);
+      }
+      await saveMessage("assistant", "Playtest done.");
+    } catch (err) { hideTyping(); await streamAssistant("Playtest failed: " + err.message); }
+  }
+}
+const strip = (l) => ({ theme: l.theme, aspect: l.aspect, objects: l.objects.map(({ type, label, x, y, w, h }) => ({ type, label, x, y, w, h })) });
+
+// ---------------------------------------------------------------------------
+// Mobile tabs + sidebar
+// ---------------------------------------------------------------------------
+function setTab(t) { document.body.classList.toggle("tab-preview", t === "preview"); $("mtabChat").classList.toggle("on", t !== "preview"); $("mtabPreview").classList.toggle("on", t === "preview"); }
+$("mtabChat").addEventListener("click", () => setTab("chat"));
+$("mtabPreview").addEventListener("click", () => setTab("preview"));
+$("menuBtn").addEventListener("click", () => { $("sidebar").classList.add("open"); $("overlay").classList.add("show"); });
+$("overlay").addEventListener("click", () => { $("sidebar").classList.remove("open"); $("overlay").classList.remove("show"); });
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+(async () => {
+  bindExamples();
+  const projects = await loadProjects();
+  const last = (() => { try { return localStorage.getItem("playlab.studio.project"); } catch { return null; } })();
+  const params = new URLSearchParams(location.search);
+  const wanted = params.get("project") || last;
+  if (wanted && projects.some((p) => p.id === wanted)) openProject(wanted);
+  if (!S.dbOk) toast("Saving is off: the server has no database configured", 5000);
+})();
+</script>
+</body>
+</html>

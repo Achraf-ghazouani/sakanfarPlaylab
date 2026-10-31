@@ -79,6 +79,42 @@ try {
   console.log(`  live video on the studio: ${video ? "yes" : "no (relay or no WebRTC between the two headless browsers)"}`);
   const player = await pc.waitFor(`(() => { try { const f = document.getElementById("preview").contentWindow; return !!(f.document.querySelector("canvas")); } catch { return false; } })()`, 10_000);
   check("preview is running", !!player);
+  // the phone switches to the controller: it drives the main character in the preview; menu + state sync
+  const scene = `document.getElementById("preview").contentWindow.__playlab.scene()`;
+  await phone.evalJS(`window.__padClient.sendMode("pad"); true`);
+  const pads = await pc.waitFor(`(() => { const p = document.getElementById("preview").contentWindow.__playlab.players(); return p.length === 1 && p[0].slot === 1 ? p : null; })()`, 10_000);
+  check("phone in controller mode is player 1 in the preview", !!pads, pads);
+  const x0 = await pc.evalJS(`Math.round(${scene}.player.x)`);
+  await phone.evalJS(`window.__padClient.sendInput({ l: 0, r: 1 }, true); true`); await sleep(600);
+  await phone.evalJS(`window.__padClient.sendInput({ l: 0, r: 0 }, true); true`); await sleep(150);
+  const x1 = await pc.evalJS(`Math.round(${scene}.player.x)`);
+  check("phone input moves the character in the preview", x1 > x0 + 60, { x0, x1 });
+  await phone.evalJS(`window.__padClient.send({ t: "menu", action: "toggle-pause" }); true`);
+  const padState = await phone.waitFor(`window.__padState && window.__padState.state === "paused" && window.__padState`, 10_000);
+  check("pause from the phone reaches the game and the state comes back", !!padState && (await pc.evalJS(`${scene}.state`)) === "paused" && padState.total > 0, padState);
+  await phone.evalJS(`window.__padClient.send({ t: "menu", action: "toggle-pause" }); true`);
+  await pc.waitFor(`${scene}.state === "play"`, 5000);
+  check("resume from the phone", (await pc.evalJS(`${scene}.state`)) === "play");
+
+  // a second phone joins as a controller and gets its own character
+  const phone2 = await browser("phone2", 9345);
+  try {
+    await phone2.send("Page.navigate", { url: `${BASE}/pad.html?room=${code}` });
+    const w2 = await phone2.waitFor(`window.__padWelcome && window.__padWelcome`, 30_000);
+    check("second phone welcomed as a controller in slot 2", !!w2 && w2.slot === 2 && w2.mode === "pad", w2);
+    const two = await pc.waitFor(`(() => { const s = ${scene}; return s.avatars.length === 2 ? s.avatars.map((a) => a.slot) : null; })()`, 10_000);
+    check("preview shows two characters", !!two && two.join() === "1,2", two);
+    const p1 = await pc.evalJS(`Math.round(${scene}.player.x)`), p2 = await pc.evalJS(`Math.round(${scene}.avatars[1].obj.x)`);
+    await phone2.evalJS(`window.__padClient.sendInput({ l: 0, r: 1 }, true); true`); await sleep(600);
+    await phone2.evalJS(`window.__padClient.sendInput({ l: 0, r: 0 }, true); true`); await sleep(150);
+    const q1 = await pc.evalJS(`Math.round(${scene}.player.x)`), q2 = await pc.evalJS(`Math.round(${scene}.avatars[1].obj.x)`);
+    check("second phone moves only its own character", q2 > p2 + 60 && Math.abs(q1 - p1) < 5, { p1, p2, q1, q2 });
+    const listed = await pc.evalJS(`document.getElementById("camPlayers").textContent`);
+    check("studio lists both phones", /player 1/.test(listed) && /player 2/.test(listed), listed);
+    const state2 = await phone2.waitFor(`window.__padState && window.__padState.players && window.__padState.players.length === 2 && window.__padState`, 10_000);
+    check("second phone sees both players in the state", !!state2, state2 && state2.players);
+  } finally { phone2.close(); }
+
   const own = pc.errors.filter((e) => !/Phaser|peerjs|supabase|WebSocket/i.test(e));
   check("no studio exceptions", own.length === 0, own.slice(0, 2));
 } catch (err) {

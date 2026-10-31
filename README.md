@@ -78,7 +78,8 @@ In `viewer.html`, pick a level: unreachable things get a red dashed outline, and
 
 Chat on the left, the live game on the right. The game page runs inside an iframe in embed mode (`game.html?embed=1`) and receives levels and commands by `postMessage`, so the game code is shared with the phone and big-screen flows.
 
-What works today (steps 1-3 of the Studio plan):
+What works today (steps 1-4 of the Studio plan):
+- **Phones as controllers, one room for everything.** "Play with phone" and the camera button open the same QR: the phone that scans after the camera button is the camera, every other phone is a controller. Player 1 drives the main character; players 2 to 4 get their own characters in the preview (their phone's color), and only the one who dies goes back to the start. The phone has restart, pause and sound buttons and shows the level, the coins and whether the game is paused (the game broadcasts a state message on every change). Controller input reaches the game iframe by `postMessage`; `game.html` on its own (big screen, `?screen=1`) uses the same code with its own room.
 - **Sketch pad in the chat** (pencil button): draw a level like on paper (pen sizes, eraser, undo, "Last picture" to draw over the game's previous picture), "Use drawing" sends it through the scanner. With an existing level the scan is a re-draw: the diff shows what changed.
 - **Camera in the chat**: on a phone the camera button takes a picture with the device camera and builds it. On a computer it opens the phone link: a QR code, the phone (`pad.html`) runs the live paper detection and auto-capture from the big-screen flow, the ink layer previews in the modal, and every scan lands in the chat as a version ("from phone camera", then "redrawn on paper"). Closing the modal keeps the link: the live video shrinks to a corner.
 - **Build and change the game by chat.** Muse Spark gets the brief (level format, jump physics, design rules), the last chat turns and the current level, and answers with a function tool: `create_level`, `edit_level` (full updated level, unchanged things keep their coordinates) or `playtest_level`. The server validates the objects, runs the instant reachability fix and the page saves the result as a version with the model's own note ("harder: two more spikes"). Per the Meta Model API docs, `tool_choice` is left on `auto` (the only accepted value) and `parallel_tool_calls:false` keeps it to one call per turn. If the Meta API fails, Muse Spark Open on Baseten gets the same brief and answers with a JSON object instead.
@@ -100,7 +101,7 @@ Endpoints (all keyed by the `x-owner` header, keys stay on the server):
 
 Schema: `db/schema.sql` (run it in the Supabase SQL editor once). Uses the same `SUPABASE_URL` / `SUPABASE_ANON_KEY` as the phone relay.
 
-Still to come: the full phone controller, art and UI kits (Muse Image + SAM 3.1), 3D modes, share links and remix.
+Still to come: art and UI kits (Muse Image + SAM 3.1), 3D modes, share links and remix.
 
 ## Run it locally
 

@@ -229,11 +229,44 @@ const PHONE_VIEW_H = 520;     // on touch devices show at most this many world u
 // Touch control state (set by the on-screen buttons, read by the scene)
 const touch = { left: false, right: false };
 // Phone controller state (set by messages from pad.html, read by the scene)
-const remote = { left: false, right: false };
+// Phone controllers, one input state per slot: slot 1 drives the main character, slots 2-4 their own characters.
+const remote = { 1: { left: false, right: false }, 2: { left: false, right: false }, 3: { left: false, right: false }, 4: { left: false, right: false } };
+let remotePlayers = [];                            // [{ slot, color, name }] phones in controller mode
+let lastState = null;                              // last state snapshot sent to the phones / the Studio
+function remoteInput(slot, input) { const r = remote[slot]; if (r) { r.left = !!(input.l ?? input.left); r.right = !!(input.r ?? input.right); } }
+function remoteJump(slot, down) { const s = playScene(); if (s) (down ? s.pressJump(slot) : s.releaseJump(slot)); }
+function setRemotePlayers(list) {
+  remotePlayers = (Array.isArray(list) ? list : []).filter((p) => p && p.slot >= 1 && p.slot <= 4).map(({ slot, color, name }) => ({ slot, color, name }));
+  for (const slot of [1, 2, 3, 4]) if (!remotePlayers.some((p) => p.slot === slot)) remoteInput(slot, { l: 0, r: 0 });
+  playScene()?.syncAvatars();
+  publishState();
+}
+/** Menu actions from a phone or the Studio: restart | pause | resume | toggle-pause | mute. */
+function menuAction(action) {
+  const s = playScene();
+  if (action === "restart") restartScene();
+  else if (action === "pause") s?.pause();
+  else if (action === "resume") s?.resume();
+  else if (action === "toggle-pause") { if (s?.state === "paused") s.resume(); else s?.pause(); }
+  else if (action === "mute") SFX.setMuted(!SFX.muted);
+  publishState();
+}
+function stateSnapshot() {
+  const s = playScene();
+  return { t: "state", level: currentLevelName, theme: currentLevel?.theme || null, state: s?.state || "none", coins: s?.coins || 0, total: s?.totalCoins || 0, muted: !!SFX.muted, players: remotePlayers, layout: "2d" };
+}
+/** Tell the phones (and the Studio, in embed mode) what the game is doing: level, coins, paused, who plays. */
+function publishState() {
+  lastState = stateSnapshot();
+  if (host) host.broadcast(lastState);
+  if (isEmbed) { try { parent.postMessage({ type: "playlab:state", state: lastState }, "*"); } catch {} }
+}
+window.__playlab = { scene: () => playScene(), state: () => lastState, players: () => remotePlayers, remote };   // tests
 let host = null;                                   // PhoneLink.Host once "Play with your phone" is opened
-function gameEvent(name) {
-  if (host) host.event(name);
-  if (isEmbed) { try { parent.postMessage({ type: "playlab:event", name }, "*"); } catch {} }
+function gameEvent(name, slot) {
+  if (host) host.event(name, slot);
+  if (isEmbed) { try { parent.postMessage({ type: "playlab:event", name, slot }, "*"); } catch {} }
+  if (name !== "jump") publishState();
 }
 // Big screen mode (game.html?screen=1): the PC shows a QR, the first phone becomes the camera.
 const PARAMS = new URLSearchParams(location.search);
@@ -258,6 +291,7 @@ const DEFAULT_PAL = { sky: 0x7fc8ec, paper: 0xc6e9f8 };
 const $ = (id) => document.getElementById(id);
 const hex = (n) => "#" + n.toString(16).padStart(6, "0");
 let currentLevel = null;   // level JSON currently loaded
+let currentLevelName = null;
 let game = null;
 
 // ---------------------------------------------------------------------------
@@ -346,10 +380,8 @@ class PlayScene extends Phaser.Scene {
     this.W = Math.round(1000 * this.ax);
     this.H = 1000;
     this.state = "play";
-    this.coins = 0; this.totalCoins = 0; this.facing = 1;
-    // Jump feel bookkeeping (timestamps in ms from this.time.now)
-    this.lastGroundedAt = -1e9; this.jumpPressedAt = -1e9; this.jumpHeld = false;
-    this.wasGrounded = false; this.prevVy = 0; this.lookAhead = 0;
+    this.coins = 0; this.totalCoins = 0; this.lookAhead = 0;
+    this.avatars = [];                 // characters: slot 1 = keyboard/touch/phone 1, slots 2-4 = extra phones
 
     // Background
     const pal = PALETTES.find((p) => p.re.test((L.theme || "").toLowerCase())) || DEFAULT_PAL;
@@ -500,40 +532,32 @@ class PlayScene extends Phaser.Scene {
       if (g) { px = sx; feetY = g.top; }
       pendingSpawn = null;
     }
-    // Physics body is an invisible rectangle; the visible "skin" squashes and stretches
-    // without touching the collision size.
-    this.player = this.add.rectangle(px, feetY - PLAYER_H / 2 - 1, PLAYER_W, PLAYER_H).setVisible(false);
-    this.physics.add.existing(this.player);
-    this.player.body.setCollideWorldBounds(true);
-    this.skin = this.add.rectangle(px, feetY, PLAYER_W, PLAYER_H, COLORS.player)
-      .setOrigin(0.5, 1).setStrokeStyle(3, 0x14532d).setDepth(5);
-    this.playerEyes = this.makeEyes(7);
-
-    // Collisions
-    this.physics.add.collider(this.player, this.platforms);
-    this.physics.add.collider(this.player, this.movers);
+    // Each character is an invisible physics rectangle plus a visible "skin" that squashes and stretches
+    // without touching the collision size. Slot 1 is the main character; phones 2-4 get their own.
+    this.spawn = { x: px, feetY };
+    const main = this.makeAvatar(1, COLORS.player, px, feetY);
+    this.player = main.obj; this.skin = main.skin;   // aliases used by the rest of the page (re-scan spawn, tests)
     this.physics.add.collider(this.enemies, this.platforms);
     this.physics.add.collider(this.enemies, this.movers);
-    this.physics.add.overlap(this.player, this.coinGroup, (p, c) => this.collectCoin(c));
-    this.physics.add.overlap(this.player, this.enemies, (p, e) => this.hitEnemy(e));
-    this.physics.add.overlap(this.player, this.hazards, () => this.die("spikes"));
-    this.physics.add.overlap(this.player, this.goals, () => this.win());
+    this.syncAvatars();
 
     // Input. Jump presses are recorded as timestamps so they can be buffered.
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys("A,D");
-    const onJumpDown = (e) => { if (e.repeat) return; this.jumpPressedAt = this.time.now; this.jumpHeld = true; };
-    const onJumpUp = () => { this.jumpHeld = false; this.cutJump(); };
+    const onJumpDown = (e) => { if (e.repeat) return; this.pressJump(1); };
+    const onJumpUp = () => this.releaseJump(1);
     for (const k of ["SPACE", "W", "UP"]) {
       this.input.keyboard.on("keydown-" + k, onJumpDown);
       this.input.keyboard.on("keyup-" + k, onJumpUp);
     }
     this.input.keyboard.on("keydown-R", () => this.scene.restart());
+    this.input.keyboard.on("keydown-P", () => { if (this.state === "paused") this.resume(); else this.pause(); });
     this.input.keyboard.on("keydown-M", () => SFX.setMuted(!SFX.muted));
 
     // Camera: slightly zoomed in, follows the player smoothly, clamped to the level.
     this.layout();
     this.cameras.main.startFollow(this.player, false, 0.1, 0.1);
+    publishState();                                  // phones and the Studio learn about the new level
     this.scale.on("resize", this.layout, this);
     this.events.once("shutdown", () => this.scale.off("resize", this.layout, this));
 
@@ -574,22 +598,55 @@ class PlayScene extends Phaser.Scene {
     cam.setBounds(bx, by, Math.max(this.W, dw), Math.max(this.H, dh));
   }
 
-  // Squash/stretch the skin, then ease back to normal.
-  squash(sx, sy) {
-    this.tweens.killTweensOf(this.skin);
-    this.skin.setScale(sx, sy);
-    this.tweens.add({ targets: this.skin, scaleX: 1, scaleY: 1, duration: 180, ease: "Quad.Out" });
+  // Squash/stretch a character's skin, then ease back to normal.
+  squash(av, sx, sy) {
+    this.tweens.killTweensOf(av.skin);
+    av.skin.setScale(sx, sy);
+    this.tweens.add({ targets: av.skin, scaleX: 1, scaleY: 1, duration: 180, ease: "Quad.Out" });
   }
 
-  // Touch buttons call these (same path as the keyboard).
-  pressJump() { if (this.state === "play") { this.jumpPressedAt = this.time.now; this.jumpHeld = true; } }
-  releaseJump() { this.jumpHeld = false; this.cutJump(); }
+  avatarOf(slot) { return this.avatars?.find((a) => a.slot === slot); }
+  // Touch buttons and phones call these (same path as the keyboard). Slot 1 is the main character.
+  pressJump(slot = 1) { const av = this.avatarOf(slot); if (av && this.state === "play") { av.jumpPressedAt = this.time.now; av.jumpHeld = true; } }
+  releaseJump(slot = 1) { const av = this.avatarOf(slot); if (av) { av.jumpHeld = false; this.cutJump(av); } }
 
   // Variable jump height: letting go early shortens the jump.
-  cutJump() {
-    const b = this.player?.body;
+  cutJump(av) {
+    const b = av?.obj?.body;
     if (this.state === "play" && b && b.velocity.y < -150) b.setVelocityY(b.velocity.y * JUMP_CUT);
   }
+
+  makeAvatar(slot, color, x, feetY) {
+    const obj = this.add.rectangle(x, feetY - PLAYER_H / 2 - 1, PLAYER_W, PLAYER_H).setVisible(false);
+    this.physics.add.existing(obj);
+    obj.body.setCollideWorldBounds(true);
+    const skin = this.add.rectangle(x, feetY, PLAYER_W, PLAYER_H, color).setOrigin(0.5, 1).setStrokeStyle(3, Phaser.Display.Color.IntegerToColor(color).darken(45).color).setDepth(5);
+    const av = { slot, color, obj, skin, eyes: this.makeEyes(7), facing: 1, lastGroundedAt: -1e9, jumpPressedAt: -1e9, jumpHeld: false, wasGrounded: false, prevVy: 0, dead: false };
+    this.physics.add.collider(obj, this.platforms);
+    this.physics.add.collider(obj, this.movers);
+    this.physics.add.overlap(obj, this.coinGroup, (p, c) => this.collectCoin(c, av));
+    this.physics.add.overlap(obj, this.enemies, (p, e) => this.hitEnemy(e, av));
+    this.physics.add.overlap(obj, this.hazards, () => this.die("spikes", av));
+    this.physics.add.overlap(obj, this.goals, () => this.win());
+    this.avatars.push(av);
+    return av;
+  }
+  removeAvatar(av) {
+    this.avatars = this.avatars.filter((a) => a !== av);
+    av.obj.destroy(); av.skin.destroy(); for (const e of av.eyes) e.destroy();
+  }
+  /** One extra character per phone in controller mode (slots 2-4), added or removed as phones come and go. */
+  syncAvatars() {
+    if (!this.avatars || !this.spawn) return;
+    const want = new Map(remotePlayers.filter((p) => p.slot >= 2).map((p) => [p.slot, p]));
+    for (const av of [...this.avatars]) if (av.slot >= 2 && !want.has(av.slot)) this.removeAvatar(av);
+    for (const [slot, p] of want) if (!this.avatarOf(slot)) {
+      const color = Phaser.Display.Color.HexStringToColor(p.color || "#3b82f6").color;
+      this.makeAvatar(slot, color, this.spawn.x + (slot - 1) * 22 * this.ax, this.spawn.feetY);
+    }
+  }
+  pause() { if (this.state !== "play") return; this.state = "paused"; this.physics.pause(); showMsg("Paused", "press P or tap to continue"); publishState(); }
+  resume() { if (this.state !== "paused") return; this.state = "play"; this.physics.resume(); hideMsg(); publishState(); }
 
   makeEyes(size) {
     const mk = (s, c) => this.add.rectangle(0, 0, s, s, c).setDepth(7);
@@ -604,41 +661,18 @@ class PlayScene extends Phaser.Scene {
 
   update() {
     if (this.state !== "play") return;
-
-    const b = this.player.body;
     const now = this.time.now;
-    const left = this.cursors.left.isDown || this.keys.A.isDown || touch.left || remote.left;
-    const right = this.cursors.right.isDown || this.keys.D.isDown || touch.right || remote.right;
-    const onGround = b.blocked.down || b.touching.down;
-
-    if (left && !right) { b.setVelocityX(-RUN_SPEED * this.ax); this.facing = -1; }
-    else if (right && !left) { b.setVelocityX(RUN_SPEED * this.ax); this.facing = 1; }
-    else b.setVelocityX(0);
-
-    // Landing: squash + thud (only after a real fall)
-    if (onGround && !this.wasGrounded && this.prevVy > 250) { this.squash(1.3, 0.72); SFX.land(); }
-    this.wasGrounded = onGround;
-    if (onGround) this.lastGroundedAt = now;
-
-    // Jump with coyote time + input buffer. Grounded time is consumed on jump so no double jumps.
-    const wantsJump = now - this.jumpPressedAt <= JUMP_BUFFER_MS;
-    const canJump = now - this.lastGroundedAt <= COYOTE_MS;
-    if (wantsJump && canJump) {
-      b.setVelocityY(-JUMP_VEL);
-      this.jumpPressedAt = -1e9; this.lastGroundedAt = -1e9;
-      this.squash(0.75, 1.3);
-      SFX.jump();
-      gameEvent("jump");
-      if (!this.jumpHeld) this.cutJump();   // buffered tap that was already released = short hop
+    for (const av of this.avatars) {
+      if (av.dead) continue;
+      const r = remote[av.slot] || {};
+      const kb = av.slot === 1;                      // keyboard and touch drive the main character only
+      const left = (kb && (this.cursors.left.isDown || this.keys.A.isDown || touch.left)) || r.left;
+      const right = (kb && (this.cursors.right.isDown || this.keys.D.isDown || touch.right)) || r.right;
+      this.moveAvatar(av, left, right, now);
     }
-    this.prevVy = b.velocity.y;
-
-    // Skin + eyes follow the body; camera looks a little ahead of where you face.
-    this.skin.setPosition(this.player.x, b.bottom);
-    const top = this.skin.y - PLAYER_H * this.skin.scaleY;
-    this.placeEyes(this.playerEyes, this.player.x, top + 14 * this.skin.scaleY, this.facing, 7 * this.skin.scaleX);
-    this.lookAhead += (this.facing * 60 * this.ax - this.lookAhead) * 0.04;
-    this.cameras.main.setFollowOffset(-this.lookAhead, 40);
+    // The camera looks a little ahead of where the main character faces.
+    const main = this.avatars[0];
+    if (main) { this.lookAhead += (main.facing * 60 * this.ax - this.lookAhead) * 0.04; this.cameras.main.setFollowOffset(-this.lookAhead, 40); }
 
     // Enemies patrol their platform.
     for (const e of this.enemies.getChildren()) {
@@ -656,7 +690,7 @@ class PlayScene extends Phaser.Scene {
     }
 
     // Moving platforms: bounce between their bounds and carry whoever stands on them.
-    const riders = [this.player, ...this.enemies.getChildren()];
+    const riders = [...this.avatars.map((a) => a.obj), ...this.enemies.getChildren()];
     for (const m of this.movers.getChildren()) {
       const mb = m.body;
       const dx = mb.x - m.getData("lastX");
@@ -672,41 +706,86 @@ class PlayScene extends Phaser.Scene {
       else if (mb.velocity.x < 0 && m.x <= m.getData("minX")) mb.setVelocityX(MOVER_SPEED * this.ax);
     }
 
-    if (this.player.y - PLAYER_H / 2 > this.H + 60) this.die("fell");
+    for (const av of this.avatars) if (!av.dead && av.obj.y - PLAYER_H / 2 > this.H + 60) this.die("fell", av);
   }
 
-  collectCoin(c) {
-    if (this.state !== "play") return;
+  moveAvatar(av, left, right, now) {
+    const b = av.obj.body;
+    const onGround = b.blocked.down || b.touching.down;
+    if (left && !right) { b.setVelocityX(-RUN_SPEED * this.ax); av.facing = -1; }
+    else if (right && !left) { b.setVelocityX(RUN_SPEED * this.ax); av.facing = 1; }
+    else b.setVelocityX(0);
+
+    // Landing: squash + thud (only after a real fall)
+    if (onGround && !av.wasGrounded && av.prevVy > 250) { this.squash(av, 1.3, 0.72); SFX.land(); }
+    av.wasGrounded = onGround;
+    if (onGround) av.lastGroundedAt = now;
+
+    // Jump with coyote time + input buffer. Grounded time is consumed on jump so no double jumps.
+    const wantsJump = now - av.jumpPressedAt <= JUMP_BUFFER_MS;
+    const canJump = now - av.lastGroundedAt <= COYOTE_MS;
+    if (wantsJump && canJump) {
+      b.setVelocityY(-JUMP_VEL);
+      av.jumpPressedAt = -1e9; av.lastGroundedAt = -1e9;
+      this.squash(av, 0.75, 1.3);
+      SFX.jump();
+      gameEvent("jump", av.slot);
+      if (!av.jumpHeld) this.cutJump(av);   // buffered tap that was already released = short hop
+    }
+    av.prevVy = b.velocity.y;
+
+    // Skin + eyes follow the body.
+    av.skin.setPosition(av.obj.x, b.bottom);
+    const top = av.skin.y - PLAYER_H * av.skin.scaleY;
+    this.placeEyes(av.eyes, av.obj.x, top + 14 * av.skin.scaleY, av.facing, 7 * av.skin.scaleX);
+  }
+
+  collectCoin(c, av) {
+    if (this.state !== "play" || !c.active) return;
     c.destroy();
     this.coins++;
     updateScore(this);
     SFX.coin();
-    gameEvent("coin");
+    gameEvent("coin", av?.slot);
   }
 
-  hitEnemy(e) {
-    if (this.state !== "play" || !e.active || !e.body.enable) return;
-    const pb = this.player.body, eb = e.body;
+  hitEnemy(e, av = this.avatars[0]) {
+    if (this.state !== "play" || !e.active || !e.body.enable || !av || av.dead) return;
+    const pb = av.obj.body, eb = e.body;
     const stomp = pb.velocity.y > 0 && pb.bottom <= eb.top + 18;
-    if (!stomp) { this.die("enemy"); return; }
+    if (!stomp) { this.die("enemy", av); return; }
     // Squash it and bounce.
     eb.enable = false;
     for (const g of e.getData("eyes")) g.destroy();
     this.tweens.add({ targets: e, scaleY: 0.15, y: eb.bottom - 4, duration: 120, onComplete: () => e.destroy() });
     pb.setVelocityY(-JUMP_VEL * 0.6);
-    this.lastGroundedAt = -1e9;
-    this.squash(0.8, 1.25);
+    av.lastGroundedAt = -1e9;
+    this.squash(av, 0.8, 1.25);
     SFX.stomp();
   }
 
-  die(reason) {
-    if (this.state !== "play") return;
+  die(reason, av = this.avatars[0]) {
+    if (this.state !== "play" || !av || av.dead) return;
+    if (this.avatars.length > 1) {
+      // Several characters: only this one goes back to the start, the others keep playing.
+      av.dead = true; av.skin.setFillStyle(0xef4444);
+      av.obj.body.setVelocity(0, 0); av.obj.body.enable = false;
+      SFX.hurt(); gameEvent("hit", av.slot);
+      this.cameras.main.shake(150, 0.004);
+      this.time.delayedCall(900, () => {
+        if (!av.obj.active || !this.avatars.includes(av)) return;
+        av.obj.body.reset(this.spawn.x + (av.slot - 1) * 22 * this.ax, this.spawn.feetY - PLAYER_H / 2 - 1);
+        av.obj.body.enable = true; av.skin.setFillStyle(av.color); av.dead = false;
+        av.lastGroundedAt = -1e9; av.jumpPressedAt = -1e9; av.prevVy = 0;
+      });
+      return;
+    }
     this.state = "dead";
-    this.skin.setFillStyle(0xef4444);
+    av.skin.setFillStyle(0xef4444);
     this.physics.pause();
     this.cameras.main.shake(220, 0.006);
     SFX.hurt();
-    gameEvent("hit");
+    gameEvent("hit", av.slot);
     showMsg(reason === "fell" ? "Fell off!" : "Ouch!", "restarting...");
     this.time.delayedCall(800, () => this.scene.restart());
   }
@@ -714,9 +793,9 @@ class PlayScene extends Phaser.Scene {
   win() {
     if (this.state !== "play") return;
     this.state = "won";
-    this.player.body.setVelocity(0, 0);
+    for (const av of this.avatars) av.obj.body.setVelocity(0, 0);
     this.physics.pause();
-    this.squash(0.8, 1.25);
+    if (this.avatars[0]) this.squash(this.avatars[0], 0.8, 1.25);
     SFX.win();
     gameEvent("goal");
     showMsg("Level complete!", `Coins ${this.coins}/${this.totalCoins} · press R or tap to play again`);
@@ -749,7 +828,7 @@ function showThumb(src) {
 
 function startLevel(level, name, thumbSrc) {
   if (!level || !Array.isArray(level.objects)) { showMsg("Invalid level JSON", "expected { theme, objects: [...] }"); return; }
-  currentLevel = level;
+  currentLevel = level; currentLevelName = name || null;
   $("theme").textContent = (name ? name + " · " : "") + (level.theme || "");
   showThumb(thumbSrc);
   if (Array.isArray(level.fixes) && level.fixes.length) {
@@ -982,6 +1061,10 @@ function refreshPlayers() {
   const via = relayed ? ` · ${relayed} via relay` : "";
   $("phonePlayers").innerHTML = `${n}/${PhoneLink.MAX_PLAYERS} player${n === 1 ? "" : "s"} connected${via} ${dots}`;
 }
+/** Phones in controller mode become characters in the game (slot 1 = the main one). */
+function syncRemotePlayers() {
+  setRemotePlayers(host ? [...host.players.values()].filter((p) => p.mode === "pad").map(({ slot, color, name }) => ({ slot, color, name })) : []);
+}
 let hostWaits = 0;
 function startHost() {
   if (host) return;
@@ -1009,7 +1092,7 @@ function startHost() {
         cameraPlayer = p;
         stageStatus(p.transport === "relay" ? "phone connected through the relay: controls work, but live video needs a direct connection" : "phone connected, starting its camera...", "connected");
       }
-      refreshPlayers();
+      refreshPlayers(); syncRemotePlayers();
       if (!isScreen || p.mode !== "camera") showToast(`<b>&#128241; Phone connected</b> as player ${p.slot} (${p.name}${p.transport === "relay" ? ", via relay" : ""})`, 4000);
     },
     onStream: (p, stream) => {
@@ -1027,15 +1110,15 @@ function startHost() {
         if (!cameraPlayer) cameraPlayer = p;
         if (p === cameraPlayer) { if (p.stream) { if (currentLevel) showPip(p.stream); else showStageVideo(p, p.stream); } else stageStatus("phone switching to camera...", "connected"); }
       }
-      refreshPlayers();
+      refreshPlayers(); syncRemotePlayers();
     },
     onLeave: (p) => {
       if (p === cameraPlayer) { cameraPlayer = null; hidePip(); if (!currentLevel) clearStageVideo("phone disconnected. Scan the code again."); }
-      refreshPlayers(); remote.left = remote.right = false; playScene()?.releaseJump();
+      refreshPlayers(); remoteInput(p.slot, { l: 0, r: 0 }); playScene()?.releaseJump(p.slot); syncRemotePlayers();
     },
-    onMessage: (p, msg) => { if (msg.t === "ink") onInk(p, msg); else if (msg.t === "level") onPhoneLevel(p, msg); },
-    onInput: (p, input) => { remote.left = !!input.l; remote.right = !!input.r; },
-    onJump: (p, down) => { const s = playScene(); if (s) (down ? s.pressJump() : s.releaseJump()); },
+    onMessage: (p, msg) => { if (msg.t === "ink") onInk(p, msg); else if (msg.t === "level") onPhoneLevel(p, msg); else if (msg.t === "menu") menuAction(msg.action); },
+    onInput: (p, input) => remoteInput(p.slot, input),
+    onJump: (p, down) => remoteJump(p.slot, down),
   });
   $("phoneChip").classList.add("show");
   if (relayCfg) host.startRelay(relayCfg);         // listen on the Supabase relay too (phones that cannot do WebRTC)
@@ -1148,7 +1231,7 @@ async function init() {
   // Browsers only allow audio after a user gesture: unlock on the first key or tap.
   window.addEventListener("keydown", () => SFX.ensure());
   window.addEventListener("pointerdown", () => SFX.ensure());
-  $("msg").addEventListener("click", () => { if (game) { const s = game.scene.getScene("play"); if (s.state !== "play") s.scene.restart(); } });
+  $("msg").addEventListener("click", () => { if (game) { const s = game.scene.getScene("play"); if (s.state === "paused") s.resume(); else if (s.state !== "play") s.scene.restart(); } });
 
   if (isEmbed) {
     // Studio preview: the parent page pushes levels and commands through postMessage.
@@ -1163,6 +1246,11 @@ async function init() {
       } else if (m.type === "playlab:restart") restartScene();
       else if (m.type === "playlab:phone") openPhonePanel();
       else if (m.type === "playlab:mute") SFX.setMuted(!!m.muted);
+      else if (m.type === "playlab:input") remoteInput(m.slot, m);
+      else if (m.type === "playlab:jump") remoteJump(m.slot, !!m.down);
+      else if (m.type === "playlab:players") setRemotePlayers(m.players);
+      else if (m.type === "playlab:menu") menuAction(m.action);
+      else if (m.type === "playlab:state") publishState();
     });
     try { parent.postMessage({ type: "playlab:ready" }, "*"); } catch {}
     showMsg("No game yet", "describe one in the chat, or attach a drawing");

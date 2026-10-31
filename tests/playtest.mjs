@@ -224,6 +224,37 @@ try {
   const theme = await evalJS(`document.getElementById("theme").textContent`);
   check("dropdown switches level", theme.includes("level1") && s.total === 0, { theme, total: s.total });
 
+  // 13. phone controllers: a second character for slot 2, independent input, respawn without restart, menu + state
+  await evalJS(`(() => { const sel = document.getElementById("levelSelect"); sel.value = "levels/sample.json"; sel.dispatchEvent(new Event("change")); return true; })()`);
+  await sleep(1000);
+  await evalJS(`setRemotePlayers([{ slot: 2, color: "#3b82f6", name: "blue" }]); true`);
+  await sleep(200);
+  const av = await evalJS(`(() => { const s = ${S}; return { n: s.avatars.length, slots: s.avatars.map((a) => a.slot), x2: Math.round(s.avatars[1].obj.x), x1: Math.round(s.player.x) }; })()`);
+  check("a phone in slot 2 gets its own character", av.n === 2 && av.slots.join() === "1,2", av);
+  await evalJS(`remoteInput(2, { l: 0, r: 1 }); true`); await sleep(500); await evalJS(`remoteInput(2, { l: 0, r: 0 }); true`); await sleep(100);
+  const moved = await evalJS(`(() => { const s = ${S}; return { x2: Math.round(s.avatars[1].obj.x), x1: Math.round(s.player.x) }; })()`);
+  check("slot 2 input moves only character 2", moved.x2 > av.x2 + 60 && Math.abs(moved.x1 - av.x1) < 5, { before: av, moved });
+  const y0 = await evalJS(`Math.round(${S}.avatars[1].obj.y)`);
+  const minVy = await evalJS(`new Promise((res) => { const s = ${S}; let m = 0; remoteJump(2, true); const t0 = performance.now(); const tick = () => { m = Math.min(m, s.avatars[1].obj.body.velocity.y); if (performance.now() - t0 < 300) requestAnimationFrame(tick); else { remoteJump(2, false); res(Math.round(m)); } }; tick(); })`);
+  const y1 = await evalJS(`Math.round(${S}.avatars[1].obj.y)`);
+  check("slot 2 jump lifts character 2", minVy < -600, { minVy, y0, y1 });
+  await sleep(900);
+  await evalJS(`(() => { const s = ${S}; s.avatars[1].obj.body.reset(s.W / 2, s.H + 100); return true; })()`); await sleep(300);
+  check("character 2 dying does not restart the level", (await evalJS(`${S}.state`)) === "play" && (await evalJS(`${S}.avatars[1].dead`)) === true);
+  await sleep(1100);
+  const back = await evalJS(`(() => { const s = ${S}; return { dead: s.avatars[1].dead, y: Math.round(s.avatars[1].obj.y), spawnY: Math.round(s.spawn.feetY) }; })()`);
+  check("character 2 respawns at the start", back.dead === false && back.y < back.spawnY, back);
+  await evalJS(`menuAction("toggle-pause"); true`); await sleep(100);
+  const paused = await evalJS(`({ state: ${S}.state, snap: window.__playlab.state() })`);
+  check("menu pause pauses the scene and publishes the state", paused.state === "paused" && paused.snap.state === "paused" && paused.snap.players.length === 1 && paused.snap.total > 0, paused.snap);
+  await evalJS(`menuAction("toggle-pause"); true`); await sleep(100);
+  check("menu resume", (await evalJS(`${S}.state`)) === "play");
+  await evalJS(`menuAction("mute"); true`);
+  check("menu mute toggles sound", (await evalJS(`window.__playlab.state().muted`)) === true);
+  await evalJS(`menuAction("mute"); true`);
+  await evalJS(`setRemotePlayers([]); true`); await sleep(100);
+  check("character 2 leaves with its phone", (await evalJS(`${S}.avatars.length`)) === 1);
+
   // Screenshot of the sample level for a visual check
   await evalJS(`(() => { const sel = document.getElementById("levelSelect"); sel.value = "levels/sample.json"; sel.dispatchEvent(new Event("change")); return true; })()`);
   await sleep(1200);

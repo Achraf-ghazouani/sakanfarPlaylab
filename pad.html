@@ -43,6 +43,10 @@
   #jump.pressed { background:var(--player); color:#fff; }
   .hint { position:absolute; left:50%; top:38%; transform:translate(-50%, -50%); text-align:center; color:var(--muted); font-size:14px; max-width:60vw; }
   .hint b { display:block; font-family:"Fredoka", system-ui, sans-serif; font-size:22px; color:var(--ink); margin-bottom:4px; }
+  .menu { position:absolute; top:10px; left:50%; transform:translateX(-50%); display:flex; gap:8px; align-items:center; max-width:96vw; }
+  .menu button { border:2px solid var(--lav-2); background:#fff; border-radius:999px; padding:7px 13px; font-size:13px; font-weight:700; color:var(--purple-deep); white-space:nowrap; touch-action:manipulation; }
+  .menu button.on { background:var(--purple); color:#fff; border-color:var(--purple); }
+  #gameState { font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:40vw; }
 
   /* camera */
   #cam { position:fixed; inset:48px 0 0 0; background:#1b1535; }
@@ -89,6 +93,7 @@
 </div>
 
 <div id="pad" class="mode">
+  <div class="menu"><button id="mRestart">&#8635; Restart</button><button id="mPause">&#10074;&#10074; Pause</button><button id="mMute">&#128266; Sound</button><span id="gameState">no level yet</span></div>
   <div class="hint" id="hint"><b>Room <span id="roomCode">----</span></b>Keep the game open on the computer.</div>
   <div class="btn" id="left">&#9664;</div>
   <div class="btn" id="right">&#9654;</div>
@@ -149,6 +154,7 @@ async function join(code) {
       if (w.mode === "camera") setMode("camera", false); else if (mode !== "camera") setMode("pad", false);
     },
     onEvent: (name) => { window.__padLastEvent = name; window.__padLastEventAt = performance.now(); (window.__padEvents ||= []).push(name); if (EVENT_BUZZ[name]) buzz(EVENT_BUZZ[name]); },
+    onState: showState,
   }, opts);
   client.start();
   window.__padClient = client;
@@ -385,6 +391,21 @@ const sendInput = () => client?.sendInput(state);
 bind("left", () => { state.l = 1; sendInput(); }, () => { state.l = 0; sendInput(); });
 bind("right", () => { state.r = 1; sendInput(); }, () => { state.r = 0; sendInput(); });
 bind("jump", () => { window.__padPressAt = performance.now(); client?.sendJump(true); buzz(10); }, () => client?.sendJump(false));
+
+// Menu buttons: the game answers with a state message (level, coins, paused, who plays).
+const menu = (action) => { buzz(15); client?.send({ t: "menu", action }); };
+$("mRestart").addEventListener("click", () => menu("restart"));
+$("mPause").addEventListener("click", () => menu("toggle-pause"));
+$("mMute").addEventListener("click", () => menu("mute"));
+function showState(s) {
+  window.__padState = s;
+  const label = { play: "playing", paused: "paused", dead: "ouch!", won: "level complete!", none: "no level yet" }[s.state] || s.state;
+  $("gameState").textContent = s.level || s.theme ? (s.level || s.theme) + " \u00B7 coins " + s.coins + "/" + s.total + " \u00B7 " + label : label;
+  $("mPause").textContent = s.state === "paused" ? "\u25B6 Resume" : "\u2759\u2759 Pause";
+  $("mPause").classList.toggle("on", s.state === "paused");
+  $("mMute").textContent = s.muted ? "\uD83D\uDD07 Muted" : "\uD83D\uDD0A Sound";
+  $("mMute").classList.toggle("on", !!s.muted);
+}
 
 // Keyboard too (handy on a laptop for testing)
 const KEYS = { ArrowLeft: "l", KeyA: "l", ArrowRight: "r", KeyD: "r" };

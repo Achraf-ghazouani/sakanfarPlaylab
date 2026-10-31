@@ -9,7 +9,9 @@
 //
 // Data messages (JSON):
 //   phone -> game : { t:"hello" } (relay only)  { t:"input", l:0|1, r:0|1 }  { t:"jump", down:bool }  { t:"ping" }  { t:"mode", mode:"camera"|"pad" }
+//                   { t:"menu", action:"restart"|"toggle-pause"|"mute" }  { t:"ink" | "level", ... } (camera mode, via sendLarge)
 //   game  -> phone: { t:"welcome", slot, color, name, mode, transport }  { t:"event", name }  { t:"pong" }  { t:"full" }
+//                   { t:"state", level, theme, state, coins, total, muted, players, layout }
 window.PhoneLink = (() => {
   const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";          // no 0/O/1/I confusion
   const COLORS = [["green", "#22c55e"], ["blue", "#3b82f6"], ["orange", "#f97316"], ["pink", "#ec4899"]];
@@ -264,6 +266,8 @@ window.PhoneLink = (() => {
       }
       else if (msg.t === "event") this.h.onEvent?.(msg.name);
       else if (msg.t === "full") { this.setStatus("error", "room is full (4 players)"); this.stop(); }
+      else if (msg.t === "state") this.h.onState?.(msg);
+      else if (msg.t !== "pong") this.h.onMessage?.(msg);
     }
     retry() {
       clearTimeout(this.retryTimer);

@@ -159,6 +159,7 @@
   #camPip video { width:100%; height:100%; object-fit:cover; }
   #cameraBtn { position:relative; }
   body.phone #phoneBtn { display:none; }   /* the phone is the device: nothing to link */
+  #phoneBtn.live { border-color:var(--green); box-shadow:0 0 0 2px rgba(34,197,94,.25); }
   #cameraBtn.live::after { content:""; position:absolute; right:5px; top:5px; width:8px; height:8px; border-radius:50%; background:var(--green); }
 
   @media (max-width: 980px) {
@@ -265,10 +266,10 @@
 
 <div class="modal" id="camModal">
   <div class="sheet">
-    <header><b>&#128247; Phone camera</b><span id="camStatus">starting the link...</span><button class="tool" id="camClose">Close</button></header>
+    <header><b>&#128241; Phone</b><span id="camStatus">starting the link...</span><button class="tool" id="camClose">Close</button></header>
     <div class="body">
       <div class="cam-grid">
-        <div><div class="qr" id="camQr"></div><div class="code" id="camCode">....</div><div class="url" id="camUrl"></div><p class="hint">Scan the code with your phone (same Wi-Fi is best). Point the phone at a drawing: it captures by itself and the level appears here. Keep drawing and it re-scans.</p></div>
+        <div><div class="qr" id="camQr"></div><div class="code" id="camCode">....</div><div class="url" id="camUrl"></div><p class="hint" id="camHint">Scan the code with your phone (same Wi-Fi is best). Point the phone at a drawing: it captures by itself and the level appears here. Keep drawing and it re-scans.</p><div class="hint" id="camPlayers"></div></div>
         <div class="cam-view" id="camView"><video id="camVideo" autoplay playsinline muted></video><canvas id="camInk" width="600" height="450"></canvas><span class="tag" id="camTag">waiting for the phone</span></div>
       </div>
     </div>
@@ -297,8 +298,9 @@ function toast(text, ms = 2500) { const t = $("toast"); t.textContent = text; t.
 const preview = () => $("preview").contentWindow;
 window.addEventListener("message", (e) => {
   const m = e.data; if (!m || typeof m !== "object") return;
-  if (m.type === "playlab:ready") { S.previewReady = true; if (S.level) pushLevel(S.level, { quiet: true }); }
-  if (m.type === "playlab:event" && m.name === "goal") toast("Level complete on the preview!");
+  if (m.type === "playlab:ready") { S.previewReady = true; if (S.level) pushLevel(S.level, { quiet: true }); if (Cam.host) syncPlayers(); }
+  if (m.type === "playlab:event") { if (m.name === "goal") toast("Level complete on the preview!"); Cam.host?.event(m.name, m.slot); }   // phones vibrate
+  if (m.type === "playlab:state" && m.state) Cam.host?.broadcast(m.state);                                                            // phones show level, coins, paused
 });
 function pushLevel(level, { name = "studio", thumb = null, keepPlayer = false, toastText = null, quiet = false } = {}) {
   S.level = level;
@@ -454,7 +456,7 @@ async function restoreVersion(n) {
 $("historyBtn").addEventListener("click", (e) => { if (e.target.closest(".pop")) return; $("historyPop").classList.toggle("show"); });
 document.addEventListener("click", (e) => { if (!e.target.closest("#historyBtn")) $("historyPop").classList.remove("show"); });
 $("undoBtn").addEventListener("click", () => { const prev = S.versions[1]; if (prev) restoreVersion(prev.n); });
-$("phoneBtn").addEventListener("click", () => { if (!S.previewReady) return toast("The preview is still loading"); preview().postMessage({ type: "playlab:phone" }, "*"); document.body.classList.add("tab-preview"); setTab("preview"); });
+$("phoneBtn").addEventListener("click", () => openPhoneLink("pad"));
 
 // ---------------------------------------------------------------------------
 // Composer: attachments, chips, send
@@ -505,13 +507,30 @@ $("sketchUse").addEventListener("click", () => {
 // Camera: on a phone the device camera; on a computer the phone camera over the phone link (QR)
 // ---------------------------------------------------------------------------
 const isPhoneNow = () => matchMedia("(pointer: coarse)").matches || (navigator.maxTouchPoints > 0 && innerWidth < 900);
-$("cameraBtn").addEventListener("click", () => { if (isPhoneNow()) $("cameraInput").click(); else openCamLink(); });
+$("cameraBtn").addEventListener("click", () => { if (isPhoneNow()) $("cameraInput").click(); else openPhoneLink("camera"); });
 $("cameraInput").addEventListener("change", async (e) => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; await addAttachment(f); if (!$("composer").value.trim()) send(); });
 
-const Cam = { host: null, player: null, stream: null, relay: null, waits: 0 };
+// One room for everything: the phone that scans after the camera button becomes the camera, every other phone
+// is a controller with its own character in the preview (the game iframe gets the input by postMessage).
+const Cam = { host: null, player: null, stream: null, relay: null, waits: 0, wantMode: "camera" };
 const camConfig = fetch("api/config", { cache: "no-store" }).then((r) => r.json()).then((c) => (Cam.relay = c.relay || null)).catch(() => null);
 function camStatus(text, cls = "") { const el = $("camStatus"); el.textContent = text; el.className = cls; }
-function openCamLink() { $("camModal").classList.add("show"); $("camPip").classList.remove("show"); startCamHost(); }
+function openPhoneLink(mode = "camera") {
+  Cam.wantMode = mode;
+  $("camHint").textContent = mode === "pad"
+    ? "Scan the code with your phone to play with it: left, right, jump, plus restart, pause and sound. Up to 4 phones, each gets its own character. Tap Camera on the phone to scan drawings instead."
+    : "Scan the code with your phone (same Wi-Fi is best). Point the phone at a drawing: it captures by itself and the level appears here. Keep drawing and it re-scans. Tap PLAY on the phone to use it as a controller.";
+  $("camModal").classList.add("show"); $("camPip").classList.remove("show"); startCamHost();
+}
+const openCamLink = () => openPhoneLink("camera");
+const toPreview = (msg) => { if (S.previewReady) preview().postMessage(msg, "*"); };
+function syncPlayers() {
+  const all = Cam.host ? [...Cam.host.players.values()] : [];
+  const pads = all.filter((p) => p.mode === "pad").map(({ slot, color, name }) => ({ slot, color, name }));
+  toPreview({ type: "playlab:players", players: pads });
+  $("camPlayers").innerHTML = all.map((p) => `<span style="display:inline-flex;align-items:center;gap:5px;margin:6px 12px 0 0"><i style="width:10px;height:10px;border-radius:3px;background:${p.color};display:inline-block"></i>player ${p.slot} · ${p.mode === "camera" ? "camera" : "controller"}${p.transport === "relay" ? " (relay)" : ""}</span>`).join("");
+  $("phoneBtn").classList.toggle("live", pads.length > 0);
+}
 $("camClose").addEventListener("click", () => { $("camModal").classList.remove("show"); if (Cam.stream) { $("camPipVideo").srcObject = Cam.stream; $("camPip").classList.add("show"); } });
 $("camPip").addEventListener("click", openCamLink);
 function startCamHost() {
@@ -530,15 +549,31 @@ function startCamHost() {
       const text = { connecting: "starting the link...", waiting: "waiting for your phone to scan the code", connected: "phone connected", reconnecting: "reconnecting...", error: "link error" + (detail ? ": " + detail : "") }[s] || s;
       camStatus(text, s === "connected" ? "ok" : s === "error" ? "err" : "");
     },
-    welcome: () => ({ mode: "camera" }),                               // every phone that joins here is a camera (the controller is the next step)
-    onJoin: (p) => { Cam.player = p; camStatus(p.transport === "relay" ? "phone connected through the relay: scans work, live video needs the same Wi-Fi" : "phone connected, starting its camera...", "ok"); $("camTag").textContent = "phone connected"; $("cameraBtn").classList.add("live"); },
+    welcome: () => ({ mode: Cam.wantMode === "camera" && !Cam.player ? "camera" : "pad" }),   // first phone after the camera button = camera, the others = controllers
+    onJoin: (p) => {
+      if (p.mode === "camera") { Cam.player = p; Cam.wantMode = "pad"; camStatus(p.transport === "relay" ? "phone connected through the relay: scans work, live video needs the same Wi-Fi" : "phone connected, starting its camera...", "ok"); $("camTag").textContent = "phone connected"; $("cameraBtn").classList.add("live"); }
+      else camStatus(`${p.name} phone connected as player ${p.slot}`, "ok");
+      syncPlayers();
+    },
+    onMode: (p, mode) => {
+      if (mode === "camera") { if (!Cam.player) Cam.player = p; if (p === Cam.player) { $("camTag").textContent = "phone switching to camera..."; $("cameraBtn").classList.add("live"); } }
+      else if (p === Cam.player) { Cam.player = null; Cam.stream = null; $("camVideo").srcObject = null; $("camPip").classList.remove("show"); $("cameraBtn").classList.remove("live"); $("camTag").textContent = `${p.name} phone is now a controller`; }
+      syncPlayers();
+    },
+    onInput: (p, input) => toPreview({ type: "playlab:input", slot: p.slot, l: input.l, r: input.r }),
+    onJump: (p, down) => toPreview({ type: "playlab:jump", slot: p.slot, down }),
     onStream: (p, stream) => {
       Cam.stream = stream; $("camVideo").srcObject = stream; $("camVideo").play?.().catch(() => {}); $("camTag").textContent = "live from your phone";
       if (!$("camModal").classList.contains("show")) { $("camPipVideo").srcObject = stream; $("camPip").classList.add("show"); }
     },
     onStreamEnd: () => { Cam.stream = null; $("camVideo").srcObject = null; $("camPip").classList.remove("show"); $("camTag").textContent = "camera stopped"; },
-    onLeave: (p) => { if (p === Cam.player) { Cam.player = null; Cam.stream = null; $("camVideo").srcObject = null; $("camPip").classList.remove("show"); $("cameraBtn").classList.remove("live"); $("camTag").textContent = "phone disconnected, scan again"; camStatus("phone disconnected", ""); } },
-    onMessage: (p, msg) => { if (msg.t === "ink") onCamInk(msg); else if (msg.t === "level") onCamLevel(msg); },
+    onLeave: (p) => {
+      if (p === Cam.player) { Cam.player = null; Cam.stream = null; $("camVideo").srcObject = null; $("camPip").classList.remove("show"); $("cameraBtn").classList.remove("live"); $("camTag").textContent = "phone disconnected, scan again"; camStatus("phone disconnected", ""); }
+      else camStatus(`${p.name} phone left`, "");
+      toPreview({ type: "playlab:input", slot: p.slot, l: 0, r: 0 }); toPreview({ type: "playlab:jump", slot: p.slot, down: false });
+      syncPlayers();
+    },
+    onMessage: (p, msg) => { if (msg.t === "ink") onCamInk(msg); else if (msg.t === "level") onCamLevel(msg); else if (msg.t === "menu") toPreview({ type: "playlab:menu", action: msg.action }); },
   });
   camConfig.then(() => { if (Cam.relay && Cam.host) Cam.host.startRelay(Cam.relay); });
   Cam.host.start(sessionStorage.getItem("playlab.studio.room") || undefined);

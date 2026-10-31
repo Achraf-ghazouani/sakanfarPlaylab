@@ -77,7 +77,9 @@ In `viewer.html`, pick a level: unreachable things get a red dashed outline, and
 
 Chat on the left, the live game on the right. The game page runs inside an iframe in embed mode (`game.html?embed=1`) and receives levels and commands by `postMessage`, so the game code is shared with the phone and big-screen flows.
 
-What works today (steps 1-2 of the Studio plan):
+What works today (steps 1-3 of the Studio plan):
+- **Sketch pad in the chat** (pencil button): draw a level like on paper (pen sizes, eraser, undo, "Last picture" to draw over the game's previous picture), "Use drawing" sends it through the scanner. With an existing level the scan is a re-draw: the diff shows what changed.
+- **Camera in the chat**: on a phone the camera button takes a picture with the device camera and builds it. On a computer it opens the phone link: a QR code, the phone (`pad.html`) runs the live paper detection and auto-capture from the big-screen flow, the ink layer previews in the modal, and every scan lands in the chat as a version ("from phone camera", then "redrawn on paper"). Closing the modal keeps the link: the live video shrinks to a corner.
 - **Build and change the game by chat.** Muse Spark gets the brief (level format, jump physics, design rules), the last chat turns and the current level, and answers with a function tool: `create_level`, `edit_level` (full updated level, unchanged things keep their coordinates) or `playtest_level`. The server validates the objects, runs the instant reachability fix and the page saves the result as a version with the model's own note ("harder: two more spikes"). Per the Meta Model API docs, `tool_choice` is left on `auto` (the only accepted value) and `parallel_tool_calls:false` keeps it to one call per turn. If the Meta API fails, Muse Spark Open on Baseten gets the same brief and answers with a JSON object instead.
 - Projects are saved in Supabase (`projects`, `messages`, `versions`). Each browser gets an anonymous owner id (localStorage) sent as the `x-owner` header; row-level security keeps every owner to their own rows. Shared projects (later step) are readable by anyone with the link.
 - "My games" sidebar, auto-created project on the first message, rename by clicking the title, reload reopens the last game.
@@ -97,7 +99,7 @@ Endpoints (all keyed by the `x-owner` header, keys stay on the server):
 
 Schema: `db/schema.sql` (run it in the Supabase SQL editor once). Uses the same `SUPABASE_URL` / `SUPABASE_ANON_KEY` as the phone relay.
 
-Still to come: sketch and camera inside the chat, the full phone controller, art and UI kits (Muse Image + SAM 3.1), 3D modes, share links and remix.
+Still to come: the full phone controller, art and UI kits (Muse Image + SAM 3.1), 3D modes, share links and remix.
 
 ## Run it locally
 
@@ -121,7 +123,8 @@ Other commands:
 | `npm test` | Unit checks: level normalizer, image parsing, reachability and auto-fix |
 | `npm run playtest` | Headless Chrome drives the game through 36 checks (needs `npm run dev` running) |
 | `npm run test:db` | Round trip against the real Supabase tables, including the row-level security checks (needs the Supabase values in `.env`) |
-| `npm run test:studio` | Headless Chrome drives `studio.html`: chat, saved projects, versions, undo, reload, mobile tabs (needs `npm run dev` and Supabase) |
+| `npm run test:studio` | Headless Chrome drives `studio.html`: chat, saved projects, versions, undo, sketch pad, reload, mobile tabs (needs `npm run dev` and Supabase) |
+| `node tests/studio-camera.test.mjs` | Two headless Chromes: the Studio camera link and a phone with the synthetic sheet, level lands in the chat (needs the dev server and the PeerServer or the relay) |
 
 Controls: arrows / WASD to move, space / up / W to jump (hold for a higher jump), stomp enemies from above, R restarts, M toggles sound. Phones get on-screen buttons in landscape.
 

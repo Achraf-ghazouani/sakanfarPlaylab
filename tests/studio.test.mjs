@@ -97,7 +97,7 @@ const inject = `
       if (b.level) return json({ reply: "Changed it.", level: { ...b.level, theme: "edited " + b.level.theme }, kind: "edit", note: "edited by chat", diff: "theme changed", playtest: { ok: true, fixed: 0 }, actions: [] });
       return json({ reply: "Built a lava castle with a ledge and a guard.", level: { ...LA, checked: true, fixes: [] }, kind: "create", note: "lava castle, one ledge", playtest: { ok: true, fixed: 0 }, actions: [] });
     }
-    if (/api\\/scan$/.test(u)) { window.__scanCalls++; const lvl = window.__scanCalls === 1 ? LB : LC; return json({ level: { ...lvl, checked: true, fixes: [] }, original: lvl, meta: { provider: "mock", playtest: { before: { ok: true, problems: [] } } } }); }
+    if (/api\\/scan$/.test(u)) { window.__scanCalls++; try { window.__lastScanImage = JSON.parse(init.body).image; } catch {} const lvl = window.__scanCalls === 1 ? LB : LC; return json({ level: { ...lvl, checked: true, fixes: [] }, original: lvl, meta: { provider: "mock", playtest: { before: { ok: true, problems: [] } } } }); }
     if (/api\\/fix$/.test(u)) { window.__fixCalls++; const lvl = JSON.parse(init.body).level; return json({ level: { ...lvl, checked: true, fixes: [] }, report: { before: { ok: true, problems: [] }, after: { ok: true, problems: [] }, fixes: [], fixedBy: null } }); }
     return realFetch(url, init);
   };
@@ -181,13 +181,45 @@ try {
   saved = await api(`api/projects?id=${pid}`);
   check("rename saved", saved.project?.title === "Lava Castle", saved.project?.title);
 
+  // 5b. sketch pad: draw, use the drawing -> scanner -> version 6
+  const darkCount = `(() => { const d = Sketch.ctx.getImageData(0, 0, 1200, 900).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] < 100) n++; return n; })()`;
+  await click("#sketchBtn");
+  check("sketch modal opens", await evalJS(`document.getElementById("sketchModal").classList.contains("show")`));
+  const dark0 = await evalJS(darkCount);
+  await evalJS(`(() => { const c = document.getElementById("sketchCanvas"); const r = c.getBoundingClientRect();
+    const ev = (type, fx, fy) => c.dispatchEvent(new PointerEvent(type, { pointerId: 1, pointerType: "mouse", isPrimary: true, buttons: 1, bubbles: true, clientX: r.left + r.width * fx, clientY: r.top + r.height * fy }));
+    ev("pointerdown", 0.05, 0.9); for (let i = 1; i <= 20; i++) ev("pointermove", 0.05 + 0.9 * i / 20, 0.9); ev("pointerup", 0.95, 0.9);
+    ev("pointerdown", 0.4, 0.7); ev("pointermove", 0.55, 0.7); ev("pointermove", 0.55, 0.76); ev("pointermove", 0.4, 0.76); ev("pointermove", 0.4, 0.7); ev("pointerup", 0.4, 0.7);
+    return true; })()`);
+  const dark1 = await evalJS(darkCount);
+  check("strokes drawn on the canvas", dark1 > dark0 + 2000, { dark0, dark1 });
+  await click("#sketchUndo");
+  const dark2 = await evalJS(darkCount);
+  check("undo removes the last stroke", dark2 < dark1 && dark2 > dark0, { dark1, dark2 });
+  await click("#sketchUse");
+  check("drawing sends itself when the composer is empty", await evalJS(`S.busy || S.versions[0].n === 6`));
+  await idle();
+  check("sketch went through the scanner as version 6", await evalJS(`window.__scanCalls === 3 && S.versions[0].n === 6 && S.versions[0].note === "from sketch" && S.level.objects.length === 8`), await evalJS(`({ scans: window.__scanCalls, v: S.versions.map((v) => v.n + ":" + v.note) })`));
+  check("scanner received a JPEG of the sketch", /^data:image\/jpeg;base64,/.test(await evalJS(`window.__lastScanImage || ""`)) && (await evalJS(`(window.__lastScanImage || "").length`)) > 20000, await evalJS(`(window.__lastScanImage || "").length`));
+  check("sketch card in the chat", /Level from your sketch/.test(await evalJS(`document.body.innerText`)));
+  await click("#sketchBtn");
+  check("drawing is kept when the pad reopens", (await evalJS(darkCount)) === dark2);
+  await click("#sketchClose");
+
+  // 5c. camera button on a computer: the phone link modal with a room code
+  await click("#cameraBtn");
+  check("camera modal opens on a computer", await evalJS(`document.getElementById("camModal").classList.contains("show")`));
+  const code = await waitFor(`/^[A-Z2-9]{4}$/.test(document.getElementById("camCode").textContent) && document.getElementById("camCode").textContent`, { timeout: 20_000 });
+  check("room code and QR rendered", !!code && (await evalJS(`document.querySelector("#camQr svg") !== null && /pad\\.html\\?room=/.test(document.getElementById("camUrl").textContent)`)), code);
+  await click("#camClose");
+
   // 6. reload -> last project reopens with its history and level
   await send("Page.navigate", { url: `${BASE}/studio.html` });
   await waitFor(`typeof S === "object" && S.project && S.project.id === ${JSON.stringify(pid)}`, { timeout: 15_000 });
   await waitFor(`S.previewReady`, { timeout: 20_000 });
   check("reload reopens the last project", await evalJS(`S.project.id`) === pid);
-  check("messages restored", (await evalJS(`document.querySelectorAll(".msg, .card").length`)) >= 12, await evalJS(`document.querySelectorAll(".msg, .card").length`));
-  check("versions restored", await evalJS(`S.versions.length`) === 5);
+  check("messages restored", (await evalJS(`document.querySelectorAll(".msg, .card").length`)) >= 15, await evalJS(`document.querySelectorAll(".msg, .card").length`));
+  check("versions restored", await evalJS(`S.versions.length`) === 6);
   const again = await waitFor(`(() => { try { const s = game.scene.getScene("play"); return !!(s && s.player); } catch { return false; } })()`, { contextId: iframeCtx(), timeout: 15_000 });
   check("preview restarts the saved level after reload", !!again);
 
@@ -207,6 +239,12 @@ try {
   await click("#mtabPreview"); await sleep(200);
   const mobile2 = await evalJS(`({ preview: getComputedStyle(document.querySelector(".preview")).display, chat: getComputedStyle(document.querySelector(".chat")).display })`);
   check("preview tab swaps panes", mobile2.preview !== "none" && mobile2.chat === "none", mobile2);
+  await click("#mtabChat");
+  await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+  await evalJS(`window.__capClicked = 0; document.getElementById("cameraInput").click = () => { window.__capClicked++; }; true`);
+  await click("#cameraBtn");
+  check("camera button on a phone opens the device camera", (await evalJS(`window.__capClicked`)) === 1 && (await evalJS(`document.getElementById("cameraInput").getAttribute("capture")`)) === "environment" && !(await evalJS(`document.getElementById("camModal").classList.contains("show")`)));
+  await send("Emulation.setTouchEmulationEnabled", { enabled: false });
   await send("Emulation.clearDeviceMetricsOverride");
 
   // 9. another owner cannot see the project through the API

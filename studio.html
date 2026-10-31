@@ -9,6 +9,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
 <script src="shared/photo.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js" defer></script>
+<script src="shared/phonelink.js" defer></script>
 <style>
   :root { --bg:#fbfaff; --panel:#ffffff; --lav:#efeaff; --lav-2:#e2d9ff; --lav-3:#cdbdff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --line:#ebe6f7; --green:#22c55e; --shadow:0 10px 30px rgba(91,33,182,.08); }
   * { box-sizing:border-box; }
@@ -123,8 +127,44 @@
   .overlay { position:fixed; inset:0; background:rgba(27,21,53,.4); display:none; z-index:4; }
   .overlay.show { display:block; }
 
+  /* sketch pad + phone camera modals */
+  .modal { position:fixed; inset:0; background:rgba(27,21,53,.55); display:none; align-items:center; justify-content:center; z-index:8; padding:12px; }
+  .modal.show { display:flex; }
+  .sheet { background:#fff; border-radius:18px; box-shadow:var(--shadow); width:min(96vw, 900px); max-height:96vh; display:flex; flex-direction:column; overflow:hidden; }
+  .sheet header { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .sheet header b { font-family:Fredoka, system-ui, sans-serif; font-size:17px; margin-right:auto; }
+  .sheet .body { padding:12px; display:flex; flex-direction:column; gap:10px; min-height:0; overflow:auto; }
+  .tool { border:1px solid var(--lav-2); background:#fff; color:var(--purple-deep); border-radius:999px; padding:6px 11px; font-size:13px; font-weight:600; display:inline-flex; align-items:center; gap:6px; }
+  .tool.on { background:var(--purple); color:#fff; border-color:var(--purple); }
+  .pen-sizes { display:inline-flex; gap:4px; }
+  .pen-sizes button { width:30px; height:30px; border-radius:50%; border:1px solid var(--lav-2); background:#fff; display:grid; place-items:center; padding:0; }
+  .pen-sizes button i { display:block; border-radius:50%; background:var(--ink); }
+  .pen-sizes button.on { border-color:var(--purple); background:var(--lav); }
+  #sketchCanvas { width:100%; aspect-ratio:4/3; max-height:62vh; background:#fffdf8; border:1px solid var(--lav-2); border-radius:12px; touch-action:none; cursor:crosshair; display:block; margin:0 auto; }
+  .hint { font-size:12px; color:var(--muted); }
+  .cam-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; }
+  .cam-grid .qr svg { width:100%; max-width:240px; height:auto; display:block; margin:0 auto; }
+  .cam-grid .code { font-family:Fredoka, system-ui, sans-serif; font-size:34px; letter-spacing:.2em; text-align:center; color:var(--purple-deep); }
+  .cam-grid .url { font-size:12px; color:var(--muted); text-align:center; word-break:break-all; }
+  .cam-view { position:relative; background:#1b1535; border-radius:12px; aspect-ratio:4/3; overflow:hidden; }
+  .cam-view video, .cam-view canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .cam-view canvas { object-fit:contain; background:#fffdf8; display:none; }
+  .cam-view.ink canvas { display:block; }
+  .cam-view .tag { position:absolute; left:8px; top:8px; background:rgba(255,255,255,.9); color:var(--purple-deep); font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; }
+  #camStatus { font-size:13px; color:var(--muted); }
+  #camStatus.ok { color:#15803d; }
+  #camStatus.err { color:#b91c1c; }
+  #camPip { position:fixed; right:14px; bottom:140px; width:150px; aspect-ratio:4/3; border-radius:12px; overflow:hidden; background:#1b1535; border:3px solid #fff; box-shadow:var(--shadow); display:none; z-index:3; cursor:pointer; }
+  #camPip.show { display:block; }
+  #camPip video { width:100%; height:100%; object-fit:cover; }
+  #cameraBtn { position:relative; }
+  #cameraBtn.live::after { content:""; position:absolute; right:5px; top:5px; width:8px; height:8px; border-radius:50%; background:var(--green); }
+
   @media (max-width: 980px) {
     .app { grid-template-columns:1fr; }
+    .modal { padding:0; }
+    .sheet { width:100vw; height:100vh; max-height:none; border-radius:0; }
+    .cam-grid { grid-template-columns:1fr; }
     aside { position:fixed; inset:0 auto 0 0; width:280px; z-index:6; transform:translateX(-100%); transition:transform .2s; }
     aside.open { transform:none; }
     .top .menu { display:block; }
@@ -185,7 +225,8 @@
           <div class="box">
             <button class="ib" id="attachBtn" title="Attach an image, sketch, sprite or 3D model"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.5l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l9-9a3.5 3.5 0 0 1 5 5l-9 9a1.5 1.5 0 0 1-2.1-2.1l8-8"/></svg></button>
             <input type="file" id="attachInput" multiple accept="image/*,.png,.webp,.glb,.gltf">
-            <button class="ib" id="cameraBtn" title="Live camera from your phone (arrives in step 3)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+            <button class="ib" id="sketchBtn" title="Sketch a level"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg></button>
+            <button class="ib" id="cameraBtn" title="Camera: take a picture on a phone, or link your phone camera from a computer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
             <textarea id="composer" rows="1" placeholder="Describe your game..."></textarea>
             <button class="ib" id="sendBtn" title="Send (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
           </div>
@@ -204,6 +245,35 @@
 </div>
 <div class="overlay" id="overlay"></div>
 <div id="toast"></div>
+<input type="file" id="cameraInput" accept="image/*" capture="environment">
+
+<div class="modal" id="sketchModal">
+  <div class="sheet">
+    <header><b>&#9998; Sketch a level</b>
+      <button class="tool on" id="penTool">Pen</button><button class="tool" id="eraserTool">Eraser</button>
+      <span class="pen-sizes" id="penSizes"><button data-size="4" title="Thin"><i style="width:6px;height:6px"></i></button><button class="on" data-size="8" title="Medium"><i style="width:10px;height:10px"></i></button><button data-size="16" title="Thick"><i style="width:16px;height:16px"></i></button></span>
+      <button class="tool" id="sketchUndo">Undo</button><button class="tool" id="sketchClear">Clear</button><button class="tool" id="sketchPhoto" title="Draw over the last picture of this game">Last picture</button>
+      <button class="tool" id="sketchClose">Close</button>
+    </header>
+    <div class="body">
+      <canvas id="sketchCanvas" width="1200" height="900"></canvas>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="hint">Draw like on paper: a ground line, boxes to stand on, circles for coins, a monster, a flag at the end.</span><span class="spacer"></span><button class="tb primary" id="sketchUse">Use drawing</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="camModal">
+  <div class="sheet">
+    <header><b>&#128247; Phone camera</b><span id="camStatus">starting the link...</span><button class="tool" id="camClose">Close</button></header>
+    <div class="body">
+      <div class="cam-grid">
+        <div><div class="qr" id="camQr"></div><div class="code" id="camCode">....</div><div class="url" id="camUrl"></div><p class="hint">Scan the code with your phone (same Wi-Fi is best). Point the phone at a drawing: it captures by itself and the level appears here. Keep drawing and it re-scans.</p></div>
+        <div class="cam-view" id="camView"><video id="camVideo" autoplay playsinline muted></video><canvas id="camInk" width="600" height="450"></canvas><span class="tag" id="camTag">waiting for the phone</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="camPip" title="Phone camera (click to open)"><video id="camPipVideo" autoplay playsinline muted></video></div>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -390,7 +460,113 @@ $("phoneBtn").addEventListener("click", () => { if (!S.previewReady) return toas
 // ---------------------------------------------------------------------------
 $("attachBtn").addEventListener("click", () => $("attachInput").click());
 $("attachInput").addEventListener("change", async (e) => { for (const f of e.target.files) await addAttachment(f); e.target.value = ""; });
-$("cameraBtn").addEventListener("click", () => toast("Live camera inside the chat arrives in step 3. Big screen: index.html > PRESS START."));
+// ---------------------------------------------------------------------------
+// Sketch pad: draw a level like on paper, it goes through the scanner
+// ---------------------------------------------------------------------------
+const Sketch = { canvas: $("sketchCanvas"), tool: "pen", size: 8, drawing: false, undo: [], dirty: false, last: null };
+Sketch.ctx = Sketch.canvas.getContext("2d", { willReadFrequently: true });
+function paperBg(ctx, w, h) { ctx.fillStyle = "#fffdf8"; ctx.fillRect(0, 0, w, h); ctx.strokeStyle = "#ece6fb"; ctx.lineWidth = 2; for (let y = 60; y < h; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); } }
+function sketchReset() { paperBg(Sketch.ctx, 1200, 900); Sketch.undo = []; Sketch.dirty = false; }
+sketchReset();
+function sketchSnapshot() { Sketch.undo.push(Sketch.ctx.getImageData(0, 0, 1200, 900)); if (Sketch.undo.length > 25) Sketch.undo.shift(); }
+function sketchPos(e) { const r = Sketch.canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) * 1200 / r.width, y: (e.clientY - r.top) * 900 / r.height }; }
+function penStyle() { const c = Sketch.ctx; c.lineCap = "round"; c.lineJoin = "round"; if (Sketch.tool === "eraser") { c.strokeStyle = c.fillStyle = "#fffdf8"; c.lineWidth = Sketch.size * 4; } else { c.strokeStyle = c.fillStyle = "#1b1535"; c.lineWidth = Sketch.size; } }
+function sketchDot(p) { penStyle(); Sketch.ctx.beginPath(); Sketch.ctx.arc(p.x, p.y, Sketch.ctx.lineWidth / 2, 0, Math.PI * 2); Sketch.ctx.fill(); }
+function sketchLine(a, b) { penStyle(); Sketch.ctx.beginPath(); Sketch.ctx.moveTo(a.x, a.y); Sketch.ctx.lineTo(b.x, b.y); Sketch.ctx.stroke(); }
+Sketch.canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); try { Sketch.canvas.setPointerCapture(e.pointerId); } catch {} sketchSnapshot(); Sketch.drawing = true; Sketch.last = sketchPos(e); sketchDot(Sketch.last); });
+Sketch.canvas.addEventListener("pointermove", (e) => { if (!Sketch.drawing) return; const p = sketchPos(e); sketchLine(Sketch.last, p); Sketch.last = p; });
+const sketchEnd = () => { if (!Sketch.drawing) return; Sketch.drawing = false; Sketch.dirty = true; };
+Sketch.canvas.addEventListener("pointerup", sketchEnd); Sketch.canvas.addEventListener("pointercancel", sketchEnd); Sketch.canvas.addEventListener("pointerleave", sketchEnd);
+function setSketchTool(t) { Sketch.tool = t; $("penTool").classList.toggle("on", t === "pen"); $("eraserTool").classList.toggle("on", t === "eraser"); }
+$("penTool").addEventListener("click", () => setSketchTool("pen"));
+$("eraserTool").addEventListener("click", () => setSketchTool("eraser"));
+$("penSizes").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; Sketch.size = Number(b.dataset.size); $("penSizes").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); });
+$("sketchUndo").addEventListener("click", () => { const im = Sketch.undo.pop(); if (im) Sketch.ctx.putImageData(im, 0, 0); });
+$("sketchClear").addEventListener("click", () => { sketchSnapshot(); paperBg(Sketch.ctx, 1200, 900); });
+$("sketchPhoto").addEventListener("click", async () => {
+  const src = S.project?.photo; if (!src) return toast("This game has no picture yet");
+  const img = new Image(); img.src = src;
+  try { await img.decode(); } catch { return toast("Could not load the picture"); }
+  sketchSnapshot(); Sketch.ctx.drawImage(img, 0, 0, 1200, 900); Sketch.dirty = true;
+});
+$("sketchBtn").addEventListener("click", () => $("sketchModal").classList.add("show"));
+$("sketchClose").addEventListener("click", () => $("sketchModal").classList.remove("show"));
+$("sketchUse").addEventListener("click", () => {
+  const upload = Sketch.canvas.toDataURL("image/jpeg", 0.85);
+  const tc = document.createElement("canvas"); tc.width = 320; tc.height = 240; tc.getContext("2d").drawImage(Sketch.canvas, 0, 0, 320, 240);
+  S.attachments.push({ name: "sketch.jpg", type: "image/jpeg", size: upload.length, upload, thumb: tc.toDataURL("image/jpeg", 0.7), sketch: true });
+  renderAttachments();
+  $("sketchModal").classList.remove("show");
+  if ($("composer").value.trim()) $("composer").focus(); else send();     // a drawing alone: build it right away
+});
+
+// ---------------------------------------------------------------------------
+// Camera: on a phone the device camera; on a computer the phone camera over the phone link (QR)
+// ---------------------------------------------------------------------------
+const isPhoneNow = () => matchMedia("(pointer: coarse)").matches || (navigator.maxTouchPoints > 0 && innerWidth < 900);
+$("cameraBtn").addEventListener("click", () => { if (isPhoneNow()) $("cameraInput").click(); else openCamLink(); });
+$("cameraInput").addEventListener("change", async (e) => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; await addAttachment(f); if (!$("composer").value.trim()) send(); });
+
+const Cam = { host: null, player: null, stream: null, relay: null, waits: 0 };
+const camConfig = fetch("api/config", { cache: "no-store" }).then((r) => r.json()).then((c) => (Cam.relay = c.relay || null)).catch(() => null);
+function camStatus(text, cls = "") { const el = $("camStatus"); el.textContent = text; el.className = cls; }
+function openCamLink() { $("camModal").classList.add("show"); $("camPip").classList.remove("show"); startCamHost(); }
+$("camClose").addEventListener("click", () => { $("camModal").classList.remove("show"); if (Cam.stream) { $("camPipVideo").srcObject = Cam.stream; $("camPip").classList.add("show"); } });
+$("camPip").addEventListener("click", openCamLink);
+function startCamHost() {
+  if (Cam.host) return;
+  if (!window.PhoneLink || !window.Peer || !window.qrcode) {           // the link scripts are deferred: wait for them
+    if (Cam.waits++ < 50) { setTimeout(startCamHost, 300); return; }
+    camStatus("the phone link scripts did not load (check the connection)", "err"); return;
+  }
+  Cam.host = new PhoneLink.Host({
+    onCode: (code) => {
+      sessionStorage.setItem("playlab.studio.room", code);
+      const url = Cam.host.url(); const qr = qrcode(0, "M"); qr.addData(url); qr.make();
+      $("camQr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }); $("camCode").textContent = code; $("camUrl").textContent = url;
+    },
+    onStatus: (s, detail) => {
+      const text = { connecting: "starting the link...", waiting: "waiting for your phone to scan the code", connected: "phone connected", reconnecting: "reconnecting...", error: "link error" + (detail ? ": " + detail : "") }[s] || s;
+      camStatus(text, s === "connected" ? "ok" : s === "error" ? "err" : "");
+    },
+    welcome: () => ({ mode: "camera" }),                               // every phone that joins here is a camera (the controller is the next step)
+    onJoin: (p) => { Cam.player = p; camStatus(p.transport === "relay" ? "phone connected through the relay: scans work, live video needs the same Wi-Fi" : "phone connected, starting its camera...", "ok"); $("camTag").textContent = "phone connected"; $("cameraBtn").classList.add("live"); },
+    onStream: (p, stream) => {
+      Cam.stream = stream; $("camVideo").srcObject = stream; $("camVideo").play?.().catch(() => {}); $("camTag").textContent = "live from your phone";
+      if (!$("camModal").classList.contains("show")) { $("camPipVideo").srcObject = stream; $("camPip").classList.add("show"); }
+    },
+    onStreamEnd: () => { Cam.stream = null; $("camVideo").srcObject = null; $("camPip").classList.remove("show"); $("camTag").textContent = "camera stopped"; },
+    onLeave: (p) => { if (p === Cam.player) { Cam.player = null; Cam.stream = null; $("camVideo").srcObject = null; $("camPip").classList.remove("show"); $("cameraBtn").classList.remove("live"); $("camTag").textContent = "phone disconnected, scan again"; camStatus("phone disconnected", ""); } },
+    onMessage: (p, msg) => { if (msg.t === "ink") onCamInk(msg); else if (msg.t === "level") onCamLevel(msg); },
+  });
+  camConfig.then(() => { if (Cam.relay && Cam.host) Cam.host.startRelay(Cam.relay); });
+  Cam.host.start(sessionStorage.getItem("playlab.studio.room") || undefined);
+}
+window.addEventListener("pagehide", () => { try { Cam.host?.destroy(); } catch {} });
+async function onCamInk(msg) {
+  const img = new Image(); img.src = msg.png;
+  try { await img.decode(); } catch { return; }
+  const c = $("camInk"), ctx = c.getContext("2d"); paperBg(ctx, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+  $("camView").classList.add("ink"); $("camTag").textContent = "reading your drawing...";
+  clearTimeout(onCamInk.t); onCamInk.t = setTimeout(() => $("camView").classList.remove("ink"), 8000);
+  window.__studioInkSeq = msg.seq;
+}
+async function onCamLevel(msg) {
+  if (!msg.level || !Array.isArray(msg.level.objects)) return;
+  window.__studioPhoneLevelSeq = msg.seq;
+  $("camView").classList.remove("ink"); $("camTag").textContent = "level built";
+  const lvl = msg.level, d = lvl.diff?.short || null, redrawn = !!S.level && !!d;
+  const att = [{ name: "phone camera", type: "image/jpeg", thumb: msg.thumb || null }];
+  try {
+    await ensureProject("Drawing from the phone");
+    appendMessage({ role: "user", content: "", meta: { attachments: att } });
+    await saveMessage("user", "", { attachments: att });
+    await applyLevel(lvl, { note: redrawn ? "redrawn on paper" : "from phone camera", thumb: msg.thumb || null, keepPlayer: !!S.level, toastText: redrawn ? `Redrawn: ${d}` : `Built from your drawing: ${lvl.objects.length} objects` });
+    await addCard({ icon: "&#128247;", title: redrawn ? "Redrawn on paper" : "Level from the phone camera", text: `${lvl.objects.length} objects · ${lvl.theme}${d ? ` · ${d}` : ""}` });
+    await streamAssistant(redrawn ? `I saw your changes: ${d}. Keep drawing!` : `I found ${lvl.objects.length} things in your drawing (${lvl.theme}). It is playable on the right. Keep drawing and I will update it.`);
+    await saveMessage("assistant", `Built ${lvl.objects.length} objects from the phone camera.`);
+  } catch (err) { toast("Could not save the level: " + err.message); }
+}
 async function addAttachment(file) {
   const a = { name: file.name, type: file.type || (file.name.endsWith(".glb") || file.name.endsWith(".gltf") ? "model/gltf-binary" : "application/octet-stream"), size: file.size };
   if (a.type.startsWith("image/")) {
@@ -441,9 +617,10 @@ async function runScan(img) {
     const data = await api("api/scan", { method: "POST", body: { image: img.upload, previous: S.level ? strip(S.level) : undefined } });
     hideTyping();
     const lvl = data.level, problems = data.meta?.playtest?.before?.problems || [];
-    await applyLevel(lvl, { note: "from picture", thumb: img.thumb, toastText: `Built from your picture: ${lvl.objects.length} objects` });
+    const what = img.sketch ? "sketch" : "picture";
+    await applyLevel(lvl, { note: `from ${what}`, thumb: img.thumb, toastText: `Built from your ${what}: ${lvl.objects.length} objects` });
     const d = lvl.diff?.short;
-    await addCard({ icon: "&#128444;", title: "Level from your picture", text: `${lvl.objects.length} objects · ${lvl.theme}${d ? ` · ${d}` : ""}${problems.length ? ` · quick-fixed ${problems.length} impossible part${problems.length > 1 ? "s" : ""}` : " · every jump reachable"}` });
+    await addCard({ icon: img.sketch ? "&#9998;" : "&#128444;", title: `Level from your ${what}`, text: `${lvl.objects.length} objects · ${lvl.theme}${d ? ` · ${d}` : ""}${problems.length ? ` · quick-fixed ${problems.length} impossible part${problems.length > 1 ? "s" : ""}` : " · every jump reachable"}` });
     await streamAssistant(`Done. I found ${lvl.objects.length} things (${lvl.theme}). It is playable on the right${problems.length ? ", and I fixed what was impossible" : ""}.`);
     await saveMessage("assistant", `Built ${lvl.objects.length} objects from the picture.`);
   } catch (err) { hideTyping(); await streamAssistant("I could not read that picture: " + err.message); }

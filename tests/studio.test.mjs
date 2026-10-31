@@ -107,6 +107,15 @@ try {
   await send("Page.enable"); await send("Runtime.enable"); await send("DOM.enable");
   await send("Page.addScriptToEvaluateOnNewDocument", { source: inject });
   const { frameTree } = await send("Page.getFrameTree"); mainFrameId = frameTree.frame.id;
+
+  // 0. landing page: PRESS START opens the Studio; ?camera=1 opens the phone camera link right away
+  await send("Page.navigate", { url: `${BASE}/index.html` });
+  await waitFor(`document.readyState === "complete" && typeof TABS === "object"`);   // the page script has run
+  check("landing page has no leftover photo inputs", await evalJS(`document.querySelectorAll("input[type=file]").length`) === 0);
+  await click("#startBtn");
+  check("PRESS START opens the Studio", !!(await waitFor(`/studio\\.html$/.test(location.pathname) && typeof S === "object"`, { timeout: 15_000 })), await evalJS(`location.pathname`));
+  await send("Page.navigate", { url: `${BASE}/studio.html?camera=1` });
+  check("studio.html?camera=1 opens the camera link", !!(await waitFor(`typeof S === "object" && document.getElementById("camModal").classList.contains("show")`, { timeout: 15_000 })));
   await send("Page.navigate", { url: `${BASE}/studio.html` });
   await waitFor(`typeof S === "object" && document.querySelector(".empty-state") !== null`);
   check("studio loads with the empty state", await evalJS(`!!document.querySelector(".empty-state h2")`));

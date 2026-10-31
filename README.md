@@ -1,6 +1,6 @@
 # Sakanfar PlayLab
 
-Draw a 2D platformer level on paper, take a photo with your phone, and Meta's Muse Spark turns it into a playable browser game.
+Draw a 2D platformer level on paper, or describe it in a chat, and Meta's Muse Spark turns it into a playable browser game.
 Free drawings, not strict symbols: a cactus becomes an enemy, a cloud becomes a moving platform.
 A playtest agent then checks every jump and repairs impossible parts, so the level is always beatable.
 
@@ -8,11 +8,12 @@ Built solo for the Meta hackathon (Oct 30 - Nov 4, 2026). Plain HTML/JS + Phaser
 
 ## The flow
 
-1. `index.html` (phone): take a photo of the drawing. The browser resizes it to 1600px JPEG.
-2. `POST /api/scan`: Muse Spark reads the photo and returns level JSON. The playtest agent checks reachability and applies an instant fix if needed.
-3. If something was impossible, the page calls `POST /api/fix`: Muse Spark repairs the drawn level with minimal edits (add a step, lower a ledge). A "play now" button lets you skip the wait.
-4. `game.html`: plays the level with touch controls, shows the original drawing in a corner, and a toast lists what the agent changed.
-5. **Live edit by redrawing**: change the paper (add a bridge, erase a spike), tap **Redraw** in the game and snap it again. The scan gets the earlier level as context, `shared/diff.mjs` works out what changed, new things pop into the running level, the player stays where they were, and a toast says "added 1 platform, 1 coin".
+1. `index.html`: the landing page. **PRESS START** opens the Studio.
+2. `studio.html`, the Studio: a chat next to the live game. Describe a game and Muse Spark builds it (`POST /api/agent`). Attach a drawing, sketch one on the pad, or take a picture with the phone camera, and the scanner reads it. On a computer, link your phone camera with the QR code and point it at the paper: live detection, auto-capture, re-scans while you draw. Every change is a saved version with undo.
+3. `POST /api/scan`: Muse Spark reads the picture (the browser resizes it to a 1600px JPEG) and returns level JSON. The playtest agent checks reachability and applies an instant fix if needed.
+4. "Playtest it" calls `POST /api/fix`: Muse Spark repairs the level with minimal edits (add a step, lower a ledge).
+5. `game.html`: plays the level, inside the Studio preview or full screen with touch controls, the phone controller and the big-screen mode (`game.html?screen=1`).
+6. **Live edit by redrawing**: change the paper (add a bridge, erase a spike) and scan it again. The scan gets the earlier level as context, `shared/diff.mjs` works out what changed, new things pop into the running level, the player stays where they were, and the chat says "+1 platform, +1 coin".
 
 ## Big screen mode (PC + phone, one QR)
 
@@ -160,7 +161,7 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 
 | File | Purpose |
 | --- | --- |
-| `index.html` | Mobile home page: camera/gallery input, resize, scanning animation, AI-fix phase, opens the game |
+| `index.html` | Landing page (retro arcade, code-drawn pixel world): PRESS START opens the Studio, Discover shows the demo levels |
 | `game.html` | The game (Phaser 3 arcade physics, colored shapes, touch controls, drawing thumbnail, agent toast); `?embed=1` for the Studio preview |
 | `studio.html` | PlayLab Studio: chat + live preview, My games, versions, history, undo |
 | `api/projects.js`, `api/messages.js`, `api/version.js` | Vercel functions for saved games (Supabase through PostgREST, `lib/db.mjs`) |

@@ -158,6 +158,7 @@
   #camPip.show { display:block; }
   #camPip video { width:100%; height:100%; object-fit:cover; }
   #cameraBtn { position:relative; }
+  body.phone #phoneBtn { display:none; }   /* the phone is the device: nothing to link */
   #cameraBtn.live::after { content:""; position:absolute; right:5px; top:5px; width:8px; height:8px; border-radius:50%; background:var(--green); }
 
   @media (max-width: 980px) {
@@ -686,6 +687,10 @@ $("overlay").addEventListener("click", () => { $("sidebar").classList.remove("op
   const wanted = params.get("project") || last;
   if (wanted && projects.some((p) => p.id === wanted)) openProject(wanted);
   if (!S.dbOk) toast("Saving is off: the server has no database configured", 5000);
+  document.body.classList.toggle("phone", isPhoneNow());
+  if (params.get("new") === "1") newProjectUI();
+  if (params.get("camera") === "1") { if (isPhoneNow()) toast("Tap the camera button to take a picture of your drawing", 4000); else openCamLink(); }
+  if (params.get("sketch") === "1") $("sketchModal").classList.add("show");
 })();
 </script>
 </body>

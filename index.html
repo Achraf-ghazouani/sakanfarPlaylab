@@ -85,21 +85,6 @@
   .card .meta p { margin:8px 0 0; font-family:"Press Start 2P", monospace; font-size:8px; color:#ccc; line-height:1.7; }
 
   /* scanning card (phone flow) */
-  #scan { display:none; max-width:560px; margin:0 auto; background:#111; border:1px solid #2a2a33; border-radius:22px; padding:18px; }
-  #scan.show { display:block; }
-  .shot { position:relative; border-radius:14px; overflow:hidden; background:#000; aspect-ratio:4/3; }
-  .shot img { width:100%; height:100%; object-fit:contain; display:block; }
-  .shot .beam { position:absolute; left:0; right:0; height:26%; top:-30%; background:linear-gradient(180deg, rgba(198,255,61,0) 0%, rgba(198,255,61,.45) 50%, rgba(139,92,246,0) 100%); border-bottom:3px solid var(--green); box-shadow:0 0 24px var(--green); animation:sweep 1.6s ease-in-out infinite; }
-  .shot .grid { position:absolute; inset:0; background-image:linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px); background-size:10% 10%; pointer-events:none; }
-  @keyframes sweep { 0% { top:-30%; } 100% { top:104%; } }
-  .status { display:flex; align-items:center; gap:12px; margin-top:14px; font-family:"Press Start 2P", monospace; font-size:11px; line-height:1.7; color:var(--green); min-height:30px; }
-  .spinner { width:18px; height:18px; border:3px solid #333; border-top-color:var(--green); border-radius:50%; animation:spin .8s linear infinite; flex:none; }
-  @keyframes spin { to { transform:rotate(360deg); } }
-  .status.error { color:#ff6b6b; }
-  .status.error .spinner { display:none; }
-  .sub { font-size:14px; color:var(--muted); margin-top:8px; }
-  #playNow, #retry { display:none; width:100%; margin-top:14px; justify-content:center; }
-  #retry.show { display:inline-flex; }
 
   /* footer */
   footer { padding:40px 24px 30px; border-top:1px solid #222; }
@@ -117,7 +102,6 @@
     section.block { padding:56px 16px; }
   }
   @media (pointer: coarse) { .desktop-only { display:none !important; } }
-  @media (pointer: fine) { .phone-only { display:none !important; } }
 </style>
 </head>
 <body>
@@ -132,30 +116,17 @@
   </div>
   <div class="hero-center">
     <div class="logo px" aria-label="PlayLab">PLAYLAB<span class="g g1" aria-hidden="true">PLAYLAB</span><span class="g g2" aria-hidden="true">PLAYLAB</span></div>
-    <h1 class="tag">Draw a level on paper. Snap it. Play it.</h1>
+    <h1 class="tag">Draw a level on paper, or just describe it. Play it in seconds.</h1>
     <button class="start" id="startBtn">PRESS START</button>
-    <input type="file" id="cameraInput" accept="image/*" capture="environment">
-    <input type="file" id="galleryInput" accept="image/*">
   </div>
   <div class="scroll-hint">&#9660;</div>
 </header>
-
-<!-- ============ SCANNING (phone flow) ============ -->
-<section class="block lines" id="scanBlock" style="display:none">
-  <div id="scan">
-    <div class="shot"><img id="preview" alt="your drawing"><div class="grid"></div><div class="beam" id="beam"></div></div>
-    <div class="status" id="status"><div class="spinner"></div><span id="statusText">Reading your drawing...</span></div>
-    <div class="sub" id="statusSub">The AI usually needs about 10 seconds.</div>
-    <button class="btn primary" id="playNow">PLAY NOW WITH THE QUICK FIX</button>
-    <button class="btn" id="retry">TRY ANOTHER PHOTO</button>
-  </div>
-</section>
 
 <!-- ============ MANIFESTO ============ -->
 <section class="block lines" id="how">
   <div class="wrap">
     <h2 class="big">IF YOU CAN DRAW IT,<br>YOU CAN PLAY IT.</h2>
-    <p class="lead">Introducing Sakanfar PlayLab, an experimental game lab where a pen and a sheet of paper are the level editor. Sketch, snap, play. No coding, no symbols to learn.</p>
+    <p class="lead">Introducing Sakanfar PlayLab, an experimental game lab where a pen, a sheet of paper and a chat are the level editor. Sketch it, say it, play it. No coding, no symbols to learn.</p>
   </div>
 </section>
 
@@ -169,7 +140,7 @@
     </div>
     <div class="tab-body" id="tabBody">
       <p id="tabText">Stop dreaming of levels and start drawing them. A ground line, a stick figure where you start, a flag at the end, then anything goes: a cactus becomes an enemy, a cloud becomes a moving platform, circles become coins. It is your paper, you make the rules.</p>
-      <a class="cta" id="tabCta" href="#start">Start drawing</a>
+      <a class="cta" id="tabCta" href="studio.html">Open the Studio</a>
     </div>
     <div class="console">
       <div class="inner">
@@ -209,15 +180,15 @@
         </div>
         <div>
           <h3>HI MAKER,<br>WHAT ARE WE DRAWING TODAY?</h3>
-          <p>Point your phone at the paper. Muse Spark reads what you meant, a playtest agent fixes every impossible jump, and the level builds itself on the big screen while you keep drawing.</p>
+          <p>Describe a game, or point your phone at the paper. Muse Spark reads what you meant, a playtest agent fixes every impossible jump, and the level builds itself next to the chat while you keep drawing.</p>
           <div class="chips"><span class="chip"><b>stick figure</b> start</span><span class="chip"><b>flag</b> goal</span><span class="chip"><b>cloud</b> moving platform</span><span class="chip"><b>cactus</b> enemy</span><span class="chip"><b>circles</b> coins</span><span class="chip"><b>triangles</b> spikes</span></div>
           <div class="btnrow" id="start">
-            <a class="btn primary desktop-only" href="game.html?screen=1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>BIG SCREEN + PHONE</a>
-            <label class="btn primary phone-only" for="cameraInput"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>TAKE A PHOTO</label>
-            <label class="btn" for="galleryInput">CHOOSE A PHOTO</label>
+            <a class="btn primary" href="studio.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg>OPEN THE STUDIO</a>
+            <a class="btn desktop-only" href="studio.html?camera=1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>PHONE CAMERA</a>
+            <a class="btn" href="studio.html?sketch=1">SKETCH A LEVEL</a>
             <a class="btn" href="game.html?level=levels/sample.json">SAMPLE LEVEL</a>
           </div>
-          <p class="desktop-only" style="margin-top:14px;font-size:13px">On a laptop you can also drag a photo anywhere on this page, or open <b id="hostName">this page</b> on your phone.</p>
+          <p style="margin-top:14px;font-size:13px">The Studio is a chat next to the live game: describe a level, attach a drawing, sketch one on the pad, or link your phone camera with a QR code. On a phone, open <b id="hostName">this page</b>, press start and tap the camera in the chat.</p>
         </div>
       </div>
     </div>
@@ -234,15 +205,13 @@
 
 <!-- ============ FOOTER ============ -->
 <footer>
-  <div class="links"><span>Other pages</span><span><a href="game.html">Game</a><a href="viewer.html">Debug viewer</a><a href="https://github.com/Achraf-ghazouani/sakanfarPlaylab" target="_blank" rel="noopener">GitHub</a></span></div>
+  <div class="links"><span>Other pages</span><span><a href="studio.html">Studio</a><a href="game.html">Game</a><a href="game.html?screen=1">Big screen</a><a href="viewer.html">Debug viewer</a><a href="https://github.com/Achraf-ghazouani/sakanfarPlaylab" target="_blank" rel="noopener">GitHub</a></span></div>
   <div class="word">SAKANFAR<br>PLAYLAB</div>
   <div class="bottom"><span>META HACKATHON 2026</span><span>MUSE SPARK</span><span>PHASER 3</span><a href="viewer.html">VIEWER</a></div>
 </footer>
 
-<script src="shared/photo.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
-const isTouch = window.matchMedia && matchMedia("(pointer: coarse)").matches;
 
 // ---------------------------------------------------------------------------
 // Pixel world: drawn by code at 384x216 and upscaled with crisp pixels.
@@ -332,15 +301,15 @@ const isTouch = window.matchMedia && matchMedia("(pointer: coarse)").matches;
 })();
 
 // ---------------------------------------------------------------------------
-// PRESS START: big screen on a computer, camera on a phone
+// PRESS START: the Studio (chat + live game)
 // ---------------------------------------------------------------------------
-$("startBtn").addEventListener("click", () => { if (isTouch) $("cameraInput").click(); else location.href = "game.html?screen=1"; });
+$("startBtn").addEventListener("click", () => { location.href = "studio.html"; });
 $("hostName").textContent = location.host || "this page";
 
 // tabs
 const TABS = {
-  draw: ["Stop dreaming of levels and start drawing them. A ground line, a stick figure where you start, a flag at the end, then anything goes: a cactus becomes an enemy, a cloud becomes a moving platform, circles become coins. It is your paper, you make the rules.", "Start drawing", "#start"],
-  snap: ["Press start on the computer, scan the QR with your phone, and point the camera at the paper. The sheet is detected live, captured when you hold still, flattened and read by Muse Spark. Keep drawing: every change rebuilds the level on the big screen.", "Open the big screen", isTouch ? "#start" : "game.html?screen=1"],
+  draw: ["Stop dreaming of levels and start drawing them. A ground line, a stick figure where you start, a flag at the end, then anything goes: a cactus becomes an enemy, a cloud becomes a moving platform, circles become coins. Or skip the paper and tell the chat what you want. It is your game, you make the rules.", "Open the Studio", "studio.html"],
+  snap: ["Press start, then scan the QR with your phone and point the camera at the paper. The sheet is detected live, captured when you hold still, flattened and read by Muse Spark. Keep drawing: every change rebuilds the level next to the chat. No phone at hand? Sketch on the pad or attach a picture.", "Link your phone camera", "studio.html?camera=1"],
   play: ["Your phone becomes the controller: left, right, jump, with vibration on coins and hits. Friends scan the same code to join as players two to four. A playtest agent makes sure every jump is possible before you even try.", "Play the sample level", "game.html?level=levels/sample.json"],
 };
 $("tabs").addEventListener("click", (e) => {
@@ -388,70 +357,6 @@ async function discover() {
 }
 discover();
 
-// ---------------------------------------------------------------------------
-// Phone flow: take a photo -> /api/scan -> AI fix phase -> game.html
-// ---------------------------------------------------------------------------
-const MAX_SIDE = PhotoUtil.UPLOAD_SIDE, THUMB_SIDE = PhotoUtil.THUMB_SIDE;
-const MESSAGES = ["READING YOUR DRAWING...", "FINDING THE GROUND...", "BUILDING PLATFORMS...", "SPOTTING ENEMIES...", "COUNTING COINS...", "PLACING THE FLAG...", "CHECKING EVERY JUMP...", "ALMOST THERE..."];
-const FIX_MESSAGES = ["THE AI IS FIXING THE IMPOSSIBLE PARTS...", "ADDING STEPPING STONES...", "LOWERING A LEDGE OR TWO...", "RE-CHECKING EVERY JUMP...", "STILL THINKING..."];
-$("cameraInput").addEventListener("change", (e) => handleFile(e.target.files[0]));
-$("galleryInput").addEventListener("change", (e) => handleFile(e.target.files[0]));
-$("retry").addEventListener("click", () => { $("scan").classList.remove("show"); $("scanBlock").style.display = "none"; $("cameraInput").value = ""; $("galleryInput").value = ""; });
-$("playNow").addEventListener("click", () => go());
-window.addEventListener("dragover", (e) => e.preventDefault());
-window.addEventListener("drop", (e) => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (f && f.type.startsWith("image/")) handleFile(f); });
-
-let msgTimer = null, navigated = false;
-function setStatus(text, sub, isError) {
-  $("statusText").textContent = text; $("statusSub").textContent = sub || "";
-  $("status").classList.toggle("error", !!isError); $("beam").style.display = isError ? "none" : "";
-  $("retry").classList.toggle("show", !!isError); if (isError) $("playNow").style.display = "none";
-}
-function startMessages(list = MESSAGES) { let i = 0; clearInterval(msgTimer); msgTimer = setInterval(() => { i = (i + 1) % list.length; $("statusText").textContent = list[i]; }, 1500); }
-function saveLevel(level) { localStorage.setItem("playlab.level", JSON.stringify(level)); localStorage.setItem("playlab.levelName", "your drawing"); }
-function go() { if (navigated) return; navigated = true; location.href = "game.html?source=storage"; }
-
-async function handleFile(file) {
-  if (!file) return;
-  $("scanBlock").style.display = ""; $("scan").classList.add("show");
-  $("scanBlock").scrollIntoView({ behavior: "smooth", block: "center" });
-  setStatus(MESSAGES[0], "The AI usually needs about 10 seconds.");
-  startMessages();
-  let img;
-  try { img = await PhotoUtil.loadImage(file); }
-  catch { clearInterval(msgTimer); setStatus("COULD NOT READ THAT IMAGE.", "Try taking a photo instead of picking a file.", true); return; }
-  const upload = PhotoUtil.toJpeg(img, MAX_SIDE, 0.85), thumb = PhotoUtil.toJpeg(img, THUMB_SIDE, 0.7);
-  $("preview").src = thumb;
-  try { localStorage.setItem("playlab.photo", thumb); } catch {}
-  try {
-    const r = await fetch("api/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: upload }), signal: AbortSignal.timeout(95_000) });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok || !data.level) throw new Error(data.error || `Server error ${r.status}`);
-    clearInterval(msgTimer);
-    saveLevel(data.level);
-    const problems = data.meta?.playtest?.before?.problems || [];
-    const found = `${data.level.theme} · ${data.level.objects.length} things found`;
-    if (!data.original || !problems.length) { setStatus("LEVEL READY!", `${found} · every jump checked`); setTimeout(go, 600); return; }
-    const n = problems.length;
-    setStatus(`FOUND ${n} IMPOSSIBLE PART${n > 1 ? "S" : ""}. ${FIX_MESSAGES[0]}`, "This can take up to a minute. You can also play the quick fix right away.");
-    $("playNow").style.display = "inline-flex";
-    startMessages(FIX_MESSAGES);
-    let fixedBy = "quick fix";
-    try {
-      const r2 = await fetch("api/fix", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ level: data.original }), signal: AbortSignal.timeout(75_000) });
-      const d2 = await r2.json().catch(() => ({}));
-      if (r2.ok && d2.level && d2.report?.after?.ok) { saveLevel(d2.level); fixedBy = d2.report.fixedBy === "ai" ? "the AI" : "the AI + quick fix"; }
-    } catch {}
-    clearInterval(msgTimer);
-    if (navigated) return;
-    $("playNow").style.display = "none";
-    setStatus("LEVEL READY!", `${found} · ${n} impossible part${n > 1 ? "s" : ""} fixed by ${fixedBy}`);
-    setTimeout(go, 1400);
-  } catch (err) {
-    clearInterval(msgTimer);
-    setStatus(err.name === "TimeoutError" ? "THE AI TOOK TOO LONG." : err.message.toUpperCase(), "Good light, the whole page in frame, and a clear ground line help a lot.", true);
-  }
-}
 </script>
 </body>
 </html>

@@ -13,6 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js" defer></script>
 <script src="shared/phonelink.js" defer></script>
+<script src="shared/auth.js"></script>
 <style>
   :root { --bg:#fbfaff; --panel:#ffffff; --lav:#efeaff; --lav-2:#e2d9ff; --lav-3:#cdbdff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --line:#ebe6f7; --green:#22c55e; --shadow:0 10px 30px rgba(91,33,182,.08); }
   * { box-sizing:border-box; }
@@ -158,6 +159,12 @@
   #camPip.show { display:block; }
   #camPip video { width:100%; height:100%; object-fit:cover; }
   #cameraBtn { position:relative; }
+  .user { position:relative; }
+  .user .av { width:24px; height:24px; border-radius:50%; background:linear-gradient(135deg, var(--purple), #c084fc); color:#fff; display:grid; place-items:center; font-size:12px; font-weight:700; overflow:hidden; flex:none; }
+  .user .av img { width:100%; height:100%; object-fit:cover; }
+  .user .credits { background:var(--lav); color:var(--purple-deep); border-radius:999px; padding:2px 8px; font-size:12px; }
+  .user .pop a { text-decoration:none; color:var(--ink); }
+  .demo-badge { background:#fef3c7; color:#92400e; border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700; }
   body.phone #phoneBtn { display:none; }   /* the phone is the device: nothing to link */
   #phoneBtn.live { border-color:var(--green); box-shadow:0 0 0 2px rgba(34,197,94,.25); }
   #cameraBtn.live::after { content:""; position:absolute; right:5px; top:5px; width:8px; height:8px; border-radius:50%; background:var(--green); }
@@ -206,6 +213,8 @@
         <div class="pop" id="historyPop"><div class="empty">No versions yet</div></div>
       </button>
       <button class="tb" id="phoneBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg><span class="lbl">Play with phone</span></button>
+      <div class="user" id="userBox"><button class="tb" id="userBtn" title="Your account"><span class="av" id="userAv"></span><span class="lbl" id="userName">...</span><span class="credits" id="creditBadge" title="Credits">&#9679; <b id="creditNum">0</b></span></button>
+        <div class="pop" id="userPop"><a class="v" href="profile.html"><b>Profile and credits</b></a><a class="v" href="admin.html" id="adminLink" hidden><b>Admin panel</b></a><a class="v" href="#" id="logoutBtn"><b>Log out</b></a></div></div>
       <button class="tb primary" id="shareBtn" disabled title="Share links arrive in a later step"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 15V3M8 7l4-4 4 4"/></svg><span class="lbl">Share</span></button>
     </header>
 
@@ -280,12 +289,11 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const owner = (() => { try { let o = localStorage.getItem("playlab.owner"); if (!o) { o = "u-" + crypto.randomUUID().replace(/-/g, "").slice(0, 24); localStorage.setItem("playlab.owner", o); } return o; } catch { return "u-" + Math.random().toString(36).slice(2, 20); } })();
 const S = { project: null, messages: [], versions: [], level: null, attachments: [], busy: false, previewReady: false, dbOk: true };
 const EMPTY_HTML = $("emptyState").outerHTML;   // the empty state leaves the DOM on the first message; keep a copy to bring it back
 
 async function api(path, { method = "GET", body } = {}) {
-  const r = await fetch(path, { method, headers: { "Content-Type": "application/json", "x-owner": owner }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const r = await PlayAuth.api(path, { method, body });   // adds the login token; 401/403 send the user to the login page
   const data = await r.json().catch(() => ({}));
   if (!r.ok) { const e = new Error(data.error || `${method} ${path} failed (${r.status})`); e.status = r.status; throw e; }
   return data;
@@ -573,7 +581,7 @@ function startCamHost() {
       toPreview({ type: "playlab:input", slot: p.slot, l: 0, r: 0 }); toPreview({ type: "playlab:jump", slot: p.slot, down: false });
       syncPlayers();
     },
-    onMessage: (p, msg) => { if (msg.t === "ink") onCamInk(msg); else if (msg.t === "level") onCamLevel(msg); else if (msg.t === "menu") toPreview({ type: "playlab:menu", action: msg.action }); },
+    onMessage: (p, msg) => { if (msg.t === "ink") onCamInk(msg); else if (msg.t === "scan") runPhoneScan(p, msg); else if (msg.t === "menu") toPreview({ type: "playlab:menu", action: msg.action }); },
   });
   camConfig.then(() => { if (Cam.relay && Cam.host) Cam.host.startRelay(Cam.relay); });
   Cam.host.start(sessionStorage.getItem("playlab.studio.room") || undefined);
@@ -586,6 +594,19 @@ async function onCamInk(msg) {
   $("camView").classList.add("ink"); $("camTag").textContent = "reading your drawing...";
   clearTimeout(onCamInk.t); onCamInk.t = setTimeout(() => $("camView").classList.remove("ink"), 8000);
   window.__studioInkSeq = msg.seq;
+}
+/** A picture from the phone camera: scanned here with this account, the result goes back to the phone. */
+let phoneScanChain = Promise.resolve();
+function runPhoneScan(p, msg) {
+  const reply = (o) => { try { if (p.conn.open) p.conn.send({ t: "scan-result", seq: msg.seq, ...o }); } catch {} };
+  phoneScanChain = phoneScanChain.then(async () => {
+    try {
+      const prev = S.level ? strip(S.level) : undefined;
+      const data = await api("api/scan", { method: "POST", body: { image: msg.image, previous: prev, provider: prev ? "baseten" : "meta" } });
+      reply({ ok: true, level: data.level });
+      await onCamLevel({ seq: msg.seq, level: data.level, thumb: msg.thumb });
+    } catch (err) { reply({ ok: false, error: err.message }); camStatus("scan failed: " + err.message, "err"); }
+  });
 }
 async function onCamLevel(msg) {
   if (!msg.level || !Array.isArray(msg.level.objects)) return;
@@ -712,9 +733,27 @@ $("menuBtn").addEventListener("click", () => { $("sidebar").classList.add("open"
 $("overlay").addEventListener("click", () => { $("sidebar").classList.remove("open"); $("overlay").classList.remove("show"); });
 
 // ---------------------------------------------------------------------------
+// Account: name, avatar, credits, menu
+// ---------------------------------------------------------------------------
+function renderUser() {
+  const p = S.me; if (!p) return;
+  const name = p.display_name || p.username || p.email.split("@")[0];
+  $("userName").textContent = name;
+  $("userAv").innerHTML = p.avatar_url ? `<img src="${p.avatar_url}" alt="">` : esc(name.slice(0, 1).toUpperCase());
+  $("creditNum").textContent = p.balance;
+  $("adminLink").hidden = p.role !== "admin";
+  if (p.is_demo && !$("demoBadge")) $("userName").insertAdjacentHTML("afterend", `<span class="demo-badge" id="demoBadge">Demo${p.demo_tag ? " · " + esc(p.demo_tag) : ""}</span>`);
+}
+$("userBtn").addEventListener("click", (e) => { e.stopPropagation(); $("userPop").classList.toggle("show"); });
+document.addEventListener("click", (e) => { if (!e.target.closest("#userBox")) $("userPop").classList.remove("show"); });
+$("logoutBtn").addEventListener("click", async (e) => { e.preventDefault(); try { Cam.host?.destroy(); } catch {} await PlayAuth.signOut(); location.href = "login.html?signedout=1"; });
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 (async () => {
+  S.me = await PlayAuth.requireLogin();   // not logged in or blocked -> login page
+  renderUser();
   bindExamples();
   const projects = await loadProjects();
   const last = (() => { try { return localStorage.getItem("playlab.studio.project"); } catch { return null; } })();

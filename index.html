@@ -84,6 +84,27 @@
   .card .meta b { display:block; font-family:"Press Start 2P", monospace; font-size:13px; letter-spacing:.06em; line-height:1.5; }
   .card .meta p { margin:8px 0 0; font-family:"Press Start 2P", monospace; font-size:8px; color:#ccc; line-height:1.7; }
 
+  /* waitlist */
+  #waitlist { scroll-margin-top:20px; }
+  .wl { max-width:760px; margin:0 auto; background:#17151f; border:1px solid #2b2838; border-radius:28px; padding:clamp(14px, 3vw, 36px); box-shadow:0 30px 80px rgba(0,0,0,.6); }
+  .wl .inner { background:#0f0e14; border-radius:18px; padding:clamp(18px, 3vw, 36px); }
+  .wl h2 { font-family:"Press Start 2P", monospace; font-size:clamp(15px, 2.2vw, 26px); line-height:1.5; margin:0 0 10px; text-align:center; }
+  .wl p.lead2 { color:var(--muted); text-align:center; margin:0 0 24px; }
+  .wl form { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .wl .full { grid-column:1 / -1; }
+  .wl label { display:block; font-family:"Press Start 2P", monospace; font-size:9px; letter-spacing:.12em; color:#ccc; margin-bottom:8px; }
+  .wl input, .wl textarea, .wl select { width:100%; background:#1b1924; color:#fff; border:1px solid #34303f; border-radius:14px; padding:13px 14px; font:15px Inter, sans-serif; outline:none; }
+  .wl textarea { min-height:96px; resize:vertical; }
+  .wl input:focus, .wl textarea:focus, .wl select:focus { border-color:var(--green); box-shadow:0 0 0 3px rgba(198,255,61,.15); }
+  .wl .err { color:#ff7b7b; font-size:13px; min-height:18px; grid-column:1 / -1; }
+  .wl .hp { position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden; }
+  .wl button[type=submit] { justify-self:center; grid-column:1 / -1; }
+  .wl .done { display:none; text-align:center; padding:12px 0; }
+  .wl .done.show { display:block; animation:pop .4s ease-out; }
+  .wl .done .rank { font-family:"Press Start 2P", monospace; font-size:clamp(34px, 7vw, 72px); color:var(--green); margin:18px 0; text-shadow:0 0 30px rgba(198,255,61,.35); }
+  @keyframes pop { from { opacity:0; transform:scale(.92); } }
+  @media (max-width: 640px) { .wl form { grid-template-columns:1fr; } }
+
   /* scanning card (phone flow) */
 
   /* footer */
@@ -112,15 +133,40 @@
   <div class="top">
     <a class="brand" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg>Sakanfar Productions</a>
     <div class="title">PlayLab <span class="badge">HACKATHON</span></div>
-    <nav><a href="#how">How it works</a><a href="#discover">Discover</a><a href="studio.html">Studio</a><a href="viewer.html" class="desktop-only">Viewer</a></nav>
+    <nav><a href="#how">How it works</a><a href="#discover">Discover</a><a href="#waitlist" id="navWaitlist">Waitlist</a><a href="login.html" id="navLogin">Log in</a></nav>
   </div>
   <div class="hero-center">
     <div class="logo px" aria-label="PlayLab">PLAYLAB<span class="g g1" aria-hidden="true">PLAYLAB</span><span class="g g2" aria-hidden="true">PLAYLAB</span></div>
     <h1 class="tag">Draw a level on paper, or just describe it. Play it in seconds.</h1>
-    <button class="start" id="startBtn">PRESS START</button>
+    <button class="start" id="startBtn">JOIN THE WAITLIST</button>
   </div>
   <div class="scroll-hint">&#9660;</div>
 </header>
+
+<!-- ============ WAITLIST ============ -->
+<section class="block lines" id="waitlist">
+  <div class="wl"><div class="inner">
+    <div id="wlFormBox">
+      <h2>JOIN THE WAITLIST</h2>
+      <p class="lead2">PlayLab is in private beta. Tell us what you want to make and we will send you an invite.</p>
+      <form id="wlForm" novalidate>
+        <div><label for="wlName">NAME</label><input id="wlName" name="name" autocomplete="name" maxlength="80" required></div>
+        <div><label for="wlEmail">EMAIL</label><input id="wlEmail" name="email" type="email" autocomplete="email" maxlength="254" required></div>
+        <div class="full"><label for="wlMessage">WHAT GAME DO YOU WANT TO CREATE?</label><textarea id="wlMessage" name="message" maxlength="1000" placeholder="A lava castle my kids drew, a co-op platformer for my classroom..."></textarea></div>
+        <div class="full"><label for="wlSource">HOW DID YOU HEAR ABOUT US? (OPTIONAL)</label><input id="wlSource" name="source" maxlength="120" placeholder="A friend, the hackathon, social media..."></div>
+        <div class="hp" aria-hidden="true"><label for="wlWebsite">Website</label><input id="wlWebsite" name="website" tabindex="-1" autocomplete="off"></div>
+        <div class="err" id="wlErr" role="alert"></div>
+        <button class="btn primary" type="submit" id="wlBtn">JOIN THE WAITLIST</button>
+      </form>
+    </div>
+    <div class="done" id="wlDone">
+      <h2 id="wlDoneTitle">YOU'RE ON THE LIST!</h2>
+      <div class="rank" id="wlRank">#1</div>
+      <p class="lead2" id="wlDoneText">We will email you as soon as your spot opens. Meanwhile, play the sample level.</p>
+      <div class="btnrow" style="justify-content:center"><a class="btn" href="game.html?level=levels/sample.json">SAMPLE LEVEL</a><a class="btn" href="login.html">LOG IN</a></div>
+    </div>
+  </div></div>
+</section>
 
 <!-- ============ MANIFESTO ============ -->
 <section class="block lines" id="how">
@@ -140,7 +186,7 @@
     </div>
     <div class="tab-body" id="tabBody">
       <p id="tabText">Stop dreaming of levels and start drawing them. A ground line, a stick figure where you start, a flag at the end, then anything goes: a cactus becomes an enemy, a cloud becomes a moving platform, circles become coins. It is your paper, you make the rules.</p>
-      <a class="cta" id="tabCta" href="studio.html">Open the Studio</a>
+      <a class="cta" id="tabCta" href="#waitlist">Join the waitlist</a>
     </div>
     <div class="console">
       <div class="inner">
@@ -184,11 +230,10 @@
           <div class="chips"><span class="chip"><b>stick figure</b> start</span><span class="chip"><b>flag</b> goal</span><span class="chip"><b>cloud</b> moving platform</span><span class="chip"><b>cactus</b> enemy</span><span class="chip"><b>circles</b> coins</span><span class="chip"><b>triangles</b> spikes</span></div>
           <div class="btnrow" id="start">
             <a class="btn primary" href="studio.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg>OPEN THE STUDIO</a>
-            <a class="btn desktop-only" href="studio.html?camera=1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>PHONE CAMERA</a>
-            <a class="btn" href="studio.html?sketch=1">SKETCH A LEVEL</a>
+            <a class="btn" href="#waitlist" id="consoleWaitlist">JOIN THE WAITLIST</a>
             <a class="btn" href="game.html?level=levels/sample.json">SAMPLE LEVEL</a>
           </div>
-          <p style="margin-top:14px;font-size:13px">The Studio is a chat next to the live game: describe a level, attach a drawing, sketch one on the pad, or link your phone camera with a QR code. On a phone, open <b id="hostName">this page</b>, press start and tap the camera in the chat.</p>
+          <p style="margin-top:14px;font-size:13px">The Studio is a chat next to the live game: describe a level, attach a drawing, sketch one on the pad, or link your phone camera with a QR code. It is open to approved beta players; anyone can play the games they share.</p>
         </div>
       </div>
     </div>
@@ -210,6 +255,7 @@
   <div class="bottom"><span>META HACKATHON 2026</span><span>MUSE SPARK</span><span>PHASER 3</span><a href="viewer.html">VIEWER</a></div>
 </footer>
 
+<script src="shared/auth.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 
@@ -301,15 +347,44 @@ const $ = (id) => document.getElementById(id);
 })();
 
 // ---------------------------------------------------------------------------
-// PRESS START: the Studio (chat + live game)
+// Main button: Join the waitlist (visitors) or Open the Studio (logged in)
 // ---------------------------------------------------------------------------
-$("startBtn").addEventListener("click", () => { location.href = "studio.html"; });
-$("hostName").textContent = location.host || "this page";
+const loggedIn = PlayAuth.hasStoredSession();
+if (loggedIn) {
+  $("startBtn").textContent = "OPEN THE STUDIO";
+  $("navLogin").textContent = "Studio"; $("navLogin").href = "studio.html";
+}
+$("startBtn").addEventListener("click", () => {
+  if (loggedIn) { location.href = "studio.html"; return; }
+  $("waitlist").scrollIntoView({ behavior: "smooth" });
+  setTimeout(() => $("wlName").focus({ preventScroll: true }), 500);
+});
+
+// Waitlist form -> api/waitlist (validation, honeypot, rate limit and duplicates are checked on the server too)
+$("wlForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target.elements, err = $("wlErr"), btn = $("wlBtn");
+  const body = { name: f.name.value.trim(), email: f.email.value.trim(), message: f.message.value.trim(), source: f.source.value.trim(), website: f.website.value };
+  if (!body.name) { err.textContent = "Please tell us your name."; f.name.focus(); return; }
+  if (!/^\S+@\S+\.\S{2,}$/.test(body.email)) { err.textContent = "That email does not look right."; f.email.focus(); return; }
+  err.textContent = ""; btn.disabled = true; btn.textContent = "SAVING...";
+  try {
+    const r = await fetch("api/waitlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { err.textContent = data.error || "Could not save that. Try again."; if (data.field && f[data.field]) f[data.field].focus(); return; }
+    $("wlFormBox").style.display = "none";
+    $("wlDone").classList.add("show");
+    $("wlRank").textContent = data.position ? "#" + data.position : "\u2713";
+    if (data.already && data.status === "approved") { $("wlDoneTitle").textContent = "YOU'RE APPROVED!"; $("wlDoneText").textContent = "Your spot is open. Log in with this email to start building."; }
+    else if (data.already) { $("wlDoneTitle").textContent = "YOU'RE ALREADY ON THE LIST"; $("wlDoneText").textContent = "Same email, same spot. We will email you as soon as it opens."; }
+  } catch { err.textContent = "Network error. Try again."; }
+  finally { btn.disabled = false; btn.textContent = "JOIN THE WAITLIST"; }
+});
 
 // tabs
 const TABS = {
-  draw: ["Stop dreaming of levels and start drawing them. A ground line, a stick figure where you start, a flag at the end, then anything goes: a cactus becomes an enemy, a cloud becomes a moving platform, circles become coins. Or skip the paper and tell the chat what you want. It is your game, you make the rules.", "Open the Studio", "studio.html"],
-  snap: ["Press start, then scan the QR with your phone and point the camera at the paper. The sheet is detected live, captured when you hold still, flattened and read by Muse Spark. Keep drawing: every change rebuilds the level next to the chat. No phone at hand? Sketch on the pad or attach a picture.", "Link your phone camera", "studio.html?camera=1"],
+  draw: ["Stop dreaming of levels and start drawing them. A ground line, a stick figure where you start, a flag at the end, then anything goes: a cactus becomes an enemy, a cloud becomes a moving platform, circles become coins. Or skip the paper and tell the chat what you want. It is your game, you make the rules.", "Join the waitlist", "#waitlist"],
+  snap: ["In the Studio, scan the QR with your phone and point the camera at the paper. The sheet is detected live, captured when you hold still, flattened and read by Muse Spark. Keep drawing: every change rebuilds the level next to the chat. No phone at hand? Sketch on the pad or attach a picture.", "Join the waitlist", "#waitlist"],
   play: ["Your phone becomes the controller: left, right, jump, with vibration on coins and hits. Friends scan the same code to join as players two to four. A playtest agent makes sure every jump is possible before you even try.", "Play the sample level", "game.html?level=levels/sample.json"],
 };
 $("tabs").addEventListener("click", (e) => {

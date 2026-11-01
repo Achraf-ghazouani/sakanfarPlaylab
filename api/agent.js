@@ -6,10 +6,13 @@
 
 import { runAgent } from "../lib/agent.mjs";
 import { normalizeLevel } from "../lib/scan-level.mjs";
+import { requireUser } from "../lib/auth.mjs";
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") return res.status(405).json({ error: "Use POST." });
+  const user = await requireUser(req, res);   // AI costs money: logged-in, approved accounts only
+  if (!user) return;
   const body = typeof req.body === "string" ? safeJson(req.body) : (req.body || {});
 
   const message = String(body.message || "").slice(0, 2000);

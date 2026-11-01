@@ -3,11 +3,12 @@
 //   POST /api/messages {project_id, role, content, meta?} -> { message }
 
 import * as db from "../lib/db.mjs";
+import { requireUser } from "../lib/auth.mjs";
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
-  const owner = String(req.headers["x-owner"] || "").trim();
-  if (!/^[a-zA-Z0-9_-]{8,64}$/.test(owner)) return res.status(400).json({ error: "Missing or invalid x-owner header." });
+  const owner = await requireUser(req, res);   // the logged-in caller (ctx: token, uid, profile)
+  if (!owner) return;
   if (!db.dbConfigured()) return res.status(503).json({ error: "Database not configured on the server." });
   const body = typeof req.body === "string" ? safeJson(req.body) : (req.body || {});
   try {

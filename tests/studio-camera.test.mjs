@@ -13,7 +13,15 @@ const BASE = process.argv[2] || "http://localhost:3000";
 const OUT = path.join(os.tmpdir(), "playlab-studio-camera-test");
 await fs.mkdir(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const OWNER = "test-studiocam-" + Math.random().toString(36).slice(2, 10);
+try { process.loadEnvFile(".env"); } catch {}
+// A throwaway demo account (needs db/003_server_users.sql and PLAYLAB_SERVER_KEY); deleted at the end.
+const SB = (process.env.SUPABASE_URL || "").replace(/\/+$/, ""), ANON = process.env.SUPABASE_ANON_KEY, SKEY = process.env.PLAYLAB_SERVER_KEY;
+const srv = async (fn, args) => { const r = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method: "POST", headers: { apikey: ANON, Authorization: "Bearer " + ANON, "Content-Type": "application/json" }, body: JSON.stringify({ p_key: SKEY, ...args }) }); return { status: r.status, data: await r.json().catch(() => null) }; };
+const USERNAME = "cam_" + Math.random().toString(36).slice(2, 10), PASSWORD = "Test-" + Math.random().toString(36).slice(2) + "-x";
+const made = await srv("srv_create_user", { p_email: null, p_password: PASSWORD, p_username: USERNAME, p_display_name: "Camera Tester", p_credits: 200, p_role: "user", p_is_demo: true, p_tag: "Tester", p_expires_at: null, p_daily_limit: null });
+if (made.status !== 200) { console.log("SKIP  this test needs a throwaway account: run db/003_server_users.sql (" + made.status + ")"); process.exit(0); }
+const USER_ID = made.data;
+let TOKEN = "";
 const LEVEL = { theme: "fake paper", aspect: 1.333, objects: [{ type: "platform", label: "ground", x: 0, y: 900, w: 1000, h: 60 }, { type: "start", x: 40, y: 840, w: 40, h: 60 }, { type: "goal", x: 900, y: 840, w: 40, h: 60 }, { type: "platform", label: "ledge", x: 300, y: 760, w: 200, h: 30 }, { type: "coin", x: 380, y: 700, w: 30, h: 30 }, { type: "enemy", x: 600, y: 850, w: 40, h: 50 }] };
 
 let fails = 0;
@@ -37,11 +45,22 @@ async function browser(name, port, extraFlags = []) {
 
 const pc = await browser("pc", 9343);
 const phone = await browser("phone", 9344, ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"]);
-const api = async (p, init = {}) => (await fetch(`${BASE}/${p}`, { ...init, headers: { "Content-Type": "application/json", "x-owner": OWNER } })).json();
+const api = async (p, init = {}) => (await fetch(`${BASE}/${p}`, { ...init, headers: { "Content-Type": "application/json", Authorization: "Bearer " + TOKEN } })).json();
 
 try {
-  await pc.send("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem("playlab.owner", ${JSON.stringify(OWNER)}); sessionStorage.removeItem("playlab.studio.room"); } catch {}` });
-  await pc.send("Page.navigate", { url: `${BASE}/studio.html` });
+  // the computer: logged in; its scans are mocked (the phone hands its pictures to the computer, which calls api/scan)
+  await pc.send("Page.addScriptToEvaluateOnNewDocument", { source: `
+    try { sessionStorage.removeItem("playlab.studio.room"); } catch {}
+    window.__pcScans = 0;
+    const LEVEL = ${JSON.stringify(LEVEL)}; const realFetch = window.fetch.bind(window);
+    window.fetch = (url, init) => { if (/api\\/scan$/.test(String(url))) { window.__pcScans++; return Promise.resolve(new Response(JSON.stringify({ level: { ...LEVEL, checked: true, fixes: [] }, meta: { provider: "mock", ms: 1, playtest: { before: { ok: true, problems: [] } } } }), { status: 200, headers: { "Content-Type": "application/json" } })); } return realFetch(url, init); };` });
+  await pc.send("Page.navigate", { url: `${BASE}/index.html` }); await pc.waitFor(`document.readyState === "complete"`);
+  await pc.evalJS(`localStorage.clear(); sessionStorage.clear(); true`);   // the browser profile is reused between runs: drop old sessions
+  await pc.send("Page.navigate", { url: `${BASE}/login.html?next=studio.html` });
+  await pc.waitFor(`typeof PlayAuth === "object" && !!document.getElementById("passwordBtn")`);
+  await pc.evalJS(`document.querySelector('[data-tab="password"]').click(); document.getElementById("user").value = ${JSON.stringify(USERNAME)}; document.getElementById("password").value = ${JSON.stringify(PASSWORD)}; document.getElementById("passwordBtn").click(); true`);
+  check("computer logs in", !!(await pc.waitFor(`/studio\\.html$/.test(location.pathname) && typeof S === "object" && !!S.me`, 20_000)));
+  TOKEN = await pc.evalJS(`PlayAuth.token()`);
   await pc.waitFor(`typeof S === "object" && S.previewReady`, 20_000);
   await pc.evalJS(`document.getElementById("cameraBtn").click(); true`);
   const code = await pc.waitFor(`/^[A-Z2-9]{4}$/.test(document.getElementById("camCode").textContent) && document.getElementById("camCode").textContent`, 20_000);
@@ -49,12 +68,8 @@ try {
   const status = await pc.waitFor(`/waiting|connected/.test(document.getElementById("camStatus").textContent) && document.getElementById("camStatus").textContent`, 20_000);
   check("link is up (PeerServer or relay)", !!status, status);
 
-  // the phone: synthetic sheet, scan mocked so the test is fast and free
-  await phone.send("Page.addScriptToEvaluateOnNewDocument", { source: `
-    const LEVEL = ${JSON.stringify(LEVEL)}; const realFetch = window.fetch.bind(window);
-    window.fetch = (url, init) => /api\\/scan$/.test(String(url))
-      ? Promise.resolve(new Response(JSON.stringify({ level: { ...LEVEL, checked: true, fixes: [] }, meta: { provider: "mock", ms: 1, playtest: { before: { ok: true, problems: [] } } } }), { status: 200, headers: { "Content-Type": "application/json" } }))
-      : realFetch(url, init);` });
+  // the phone: synthetic sheet, no account and no API calls of its own
+  await phone.send("Page.addScriptToEvaluateOnNewDocument", { source: `window.__phoneApiCalls = 0; const realFetch = window.fetch.bind(window); window.fetch = (url, init) => { if (/api\\/(scan|fix|agent)/.test(String(url))) window.__phoneApiCalls++; return realFetch(url, init); };` });
   await phone.send("Page.navigate", { url: `${BASE}/pad.html?room=${code}&fakepaper=1` });
   const welcome = await phone.waitFor(`window.__padWelcome && window.__padWelcome.mode`, 30_000);
   check("phone welcomed as a camera", welcome === "camera", welcome);
@@ -64,6 +79,8 @@ try {
   check("phone captured the sheet", !!captures, captures);
   const scans = await phone.waitFor(`window.__camScans >= 1 && window.__camScans`, 15_000);
   check("phone scanned it", !!scans, scans);
+  check("the scan ran on the computer, not on the phone", !!(await pc.waitFor(`window.__pcScans >= 1`, 20_000)) && (await phone.evalJS(`window.__phoneApiCalls`)) === 0);
+  check("the phone got the result back", !!(await phone.waitFor(`window.__camLevel && window.__camLevel.objects.length === 6`, 20_000)));
 
   // the studio: ink arrives first, then the level becomes a version + card + reply
   const ink = await pc.waitFor(`window.__studioInkSeq`, 20_000);
@@ -121,6 +138,7 @@ try {
   console.log("ERROR", err.stack || err.message); fails++;
 } finally {
   try { const { projects } = await api("api/projects"); for (const p of projects || []) await api(`api/projects?id=${p.id}`, { method: "DELETE" }); console.log(`cleaned ${projects?.length || 0} test project(s)`); } catch (e) { console.log("cleanup failed:", e.message); }
+  try { await srv("srv_delete_user", { p_user: USER_ID }); console.log("deleted the test account"); } catch {}
   pc.close(); phone.close();
 }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED");

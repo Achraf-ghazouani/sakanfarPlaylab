@@ -10,6 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js" defer></script>
 <script src="shared/photo.js"></script>
 <script src="shared/phonelink.js" defer></script>
+<script src="shared/auth.js"></script>
 <style>
   html, body { margin:0; height:100%; overflow:hidden; background:#111; font-family: system-ui, sans-serif; color:#eee; touch-action:none; overscroll-behavior:none; }
   #hud { position:fixed; top:0; left:0; right:0; height:44px; box-sizing:border-box; display:flex; gap:12px; align-items:center; padding:0 12px; background:rgba(0,0,0,.6); font-size:14px; z-index:2; }
@@ -875,12 +876,7 @@ async function rescan(file) {
     $("rescanPreview").src = thumb;
     const spawn = scene?.player && scene.state === "play" ? { x: scene.player.x / scene.ax, y: scene.player.body.bottom } : null;
 
-    const r = await fetch("api/scan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: upload, previous: stripLevel(currentLevel) }),
-      signal: AbortSignal.timeout(95_000),
-    });
+    const r = await PlayAuth.api("api/scan", { method: "POST", body: { image: upload, previous: stripLevel(currentLevel) } });   // needs a login
     const data = await r.json().catch(() => ({}));
     if (!r.ok || !data.level) throw new Error(data.error || `Server error ${r.status}`);
 
@@ -977,6 +973,21 @@ async function onInk(p, msg) {
     } else { Build.revealed = true; if (Build.pending) runBuild(); }
   };
   step();
+}
+/** Big screen: the phone's picture is scanned here with this computer's login; the result goes back to the phone. */
+let screenScanChain = Promise.resolve();
+function runScreenScan(p, msg) {
+  const reply = (o) => { try { if (p.conn.open) p.conn.send({ t: "scan-result", seq: msg.seq, ...o }); } catch {} };
+  screenScanChain = screenScanChain.then(async () => {
+    try {
+      const prev = currentLevel ? stripLevel(currentLevel) : undefined;
+      const r = await PlayAuth.api("api/scan", { method: "POST", body: { image: msg.image, previous: prev, provider: prev ? "baseten" : "meta" } });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.level) throw new Error(data.error || `Server error ${r.status}`);
+      reply({ ok: true, level: data.level });
+      onPhoneLevel(p, { seq: msg.seq, level: data.level, thumb: msg.thumb });
+    } catch (err) { reply({ ok: false, error: err.message }); if (isScreen && !currentLevel) stageStatus("scan failed: " + err.message, "error"); }
+  });
 }
 function onPhoneLevel(p, msg) {
   if (!msg.level || !Array.isArray(msg.level.objects)) return;
@@ -1116,7 +1127,7 @@ function startHost() {
       if (p === cameraPlayer) { cameraPlayer = null; hidePip(); if (!currentLevel) clearStageVideo("phone disconnected. Scan the code again."); }
       refreshPlayers(); remoteInput(p.slot, { l: 0, r: 0 }); playScene()?.releaseJump(p.slot); syncRemotePlayers();
     },
-    onMessage: (p, msg) => { if (msg.t === "ink") onInk(p, msg); else if (msg.t === "level") onPhoneLevel(p, msg); else if (msg.t === "menu") menuAction(msg.action); },
+    onMessage: (p, msg) => { if (msg.t === "ink") onInk(p, msg); else if (msg.t === "scan") runScreenScan(p, msg); else if (msg.t === "menu") menuAction(msg.action); },
     onInput: (p, input) => remoteInput(p.slot, input),
     onJump: (p, down) => remoteJump(p.slot, down),
   });
@@ -1259,6 +1270,8 @@ async function init() {
 
   if (isScreen) {
     // Big screen: show the QR stage and wait for the phone. No level is loaded until the phone scans one.
+    // Scans spend this account's credits, so the big screen needs a login (phones do not).
+    await PlayAuth.requireLogin();
     stage("qr");
     $("stSkip").addEventListener("click", () => { hideStage(); const sel = $("levelSelect"); if (!currentLevel && sel.value) loadLevelUrl(sel.value); });
     return;

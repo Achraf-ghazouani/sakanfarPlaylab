@@ -4,9 +4,12 @@
 
 import { normalizeLevel } from "../lib/scan-level.mjs";
 import { playtestAndFix } from "../lib/fix-level.mjs";
+import { requireUser } from "../lib/auth.mjs";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Use POST with a JSON body." });
+  const user = await requireUser(req, res);   // AI costs money: logged-in, approved accounts only
+  if (!user) return;
   const body = typeof req.body === "string" ? safeJson(req.body) : req.body;
   const lvl = body?.level;
   if (!lvl || !Array.isArray(lvl.objects)) return res.status(400).json({ error: "Body must be JSON with a \"level\" object that has an objects array." });

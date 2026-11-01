@@ -13,7 +13,25 @@ const BASE = process.argv[2] || "http://localhost:3000";
 const OUT = path.join(os.tmpdir(), "playlab-studio-test");
 await fs.mkdir(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const OWNER = "test-studio-" + Math.random().toString(36).slice(2, 10);
+try { process.loadEnvFile(".env"); } catch {}
+// A throwaway demo account (needs db/003_server_users.sql and PLAYLAB_SERVER_KEY); deleted at the end.
+const SB = (process.env.SUPABASE_URL || "").replace(/\/+$/, ""), ANON = process.env.SUPABASE_ANON_KEY, SKEY = process.env.PLAYLAB_SERVER_KEY;
+const srv = async (fn, args) => { const r = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method: "POST", headers: { apikey: ANON, Authorization: "Bearer " + ANON, "Content-Type": "application/json" }, body: JSON.stringify({ p_key: SKEY, ...args }) }); return { status: r.status, data: await r.json().catch(() => null) }; };
+const USERNAME = "studio_" + Math.random().toString(36).slice(2, 10), PASSWORD = "Test-" + Math.random().toString(36).slice(2) + "-x";
+const made = await srv("srv_create_user", { p_email: null, p_password: PASSWORD, p_username: USERNAME, p_display_name: "Studio Tester", p_credits: 200, p_role: "user", p_is_demo: true, p_tag: "Tester", p_expires_at: null, p_daily_limit: null });
+if (made.status !== 200) { console.log("SKIP  this test needs a throwaway account: run db/003_server_users.sql (" + made.status + ")"); process.exit(0); }
+const USER_ID = made.data;
+let TOKEN = "";
+/** Log in through login.html (Username tab) in the page driven by evalJS/click/waitFor, then keep the token. */
+async function loginInPage(evalJS, waitFor, nav) {
+  await evalJS(`localStorage.clear(); sessionStorage.clear(); true`);   // the browser profile is reused between runs: drop old sessions
+  await nav(`${BASE}/login.html?next=studio.html`);
+  await waitFor(`typeof PlayAuth === "object" && !!document.getElementById("passwordBtn")`);
+  await evalJS(`document.querySelector('[data-tab="password"]').click(); document.getElementById("user").value = ${JSON.stringify(USERNAME)}; document.getElementById("password").value = ${JSON.stringify(PASSWORD)}; document.getElementById("passwordBtn").click(); true`);
+  const ok = await waitFor(`/studio\\.html$/.test(location.pathname) && typeof S === "object" && !!S.me`, 20_000);
+  TOKEN = ok ? await evalJS(`PlayAuth.token()`) : "";
+  return !!ok;
+}
 const PHOTO = path.resolve("photos/level1.jpg");
 
 const chrome = spawn(CHROME, [
@@ -69,7 +87,7 @@ async function attachPhoto() {
   }
 }
 const idle = () => waitFor(`!S.busy`, { timeout: 30_000 });
-const api = async (p, init = {}) => { const r = await fetch(`${BASE}/${p}`, { ...init, headers: { "Content-Type": "application/json", "x-owner": OWNER, ...(init.headers || {}) } }); return r.json(); };
+const api = async (p, init = {}) => { const r = await fetch(`${BASE}/${p}`, { ...init, headers: { "Content-Type": "application/json", Authorization: "Bearer " + TOKEN, ...(init.headers || {}) } }); return r.json(); };
 
 let fails = 0;
 function check(name, cond, extra) { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${extra !== undefined ? "  -> " + JSON.stringify(extra).slice(0, 220) : ""}`); if (!cond) fails++; }
@@ -81,7 +99,6 @@ const LEVEL_A = { theme: "lava castle", aspect: 1.333, objects: [
 const LEVEL_B = { ...LEVEL_A, theme: "lava castle", objects: [...LEVEL_A.objects, { type: "coin", x: 700, y: 820, w: 30, h: 30 }] };
 const LEVEL_C = { ...LEVEL_B, objects: [...LEVEL_B.objects, { type: "spike", x: 500, y: 870, w: 60, h: 30 }] };
 const inject = `
-  try { localStorage.setItem("playlab.owner", ${JSON.stringify(OWNER)}); } catch {}
   window.__scanCalls = 0; window.__fixCalls = 0; window.__agentCalls = 0; window.__sawTyping = false;
   document.addEventListener("DOMContentLoaded", () => {
     new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.id === "typing") window.__sawTyping = true; }).observe(document.documentElement, { childList: true, subtree: true });
@@ -108,12 +125,20 @@ try {
   await send("Page.addScriptToEvaluateOnNewDocument", { source: inject });
   const { frameTree } = await send("Page.getFrameTree"); mainFrameId = frameTree.frame.id;
 
-  // 0. landing page: PRESS START opens the Studio; ?camera=1 opens the phone camera link right away
+  // 0. landing page: the main button is the waitlist; the Studio needs a login
   await send("Page.navigate", { url: `${BASE}/index.html` });
   await waitFor(`document.readyState === "complete" && typeof TABS === "object"`);   // the page script has run
+  await evalJS(`localStorage.clear(); sessionStorage.clear(); true`);   // a visitor: no old session from an earlier run
+  await send("Page.navigate", { url: `${BASE}/index.html` });
+  await waitFor(`document.readyState === "complete" && typeof TABS === "object"`);
   check("landing page has no leftover photo inputs", await evalJS(`document.querySelectorAll("input[type=file]").length`) === 0);
-  await click("#startBtn");
-  check("PRESS START opens the Studio", !!(await waitFor(`/studio\\.html$/.test(location.pathname) && typeof S === "object"`, { timeout: 15_000 })), await evalJS(`location.pathname`));
+  check("main button says JOIN THE WAITLIST for visitors", (await evalJS(`document.getElementById("startBtn").textContent`)) === "JOIN THE WAITLIST");
+  check("waitlist form with a hidden honeypot", await evalJS(`!!document.getElementById("wlForm") && getComputedStyle(document.querySelector(".wl .hp")).position === "absolute"`));
+  await send("Page.navigate", { url: `${BASE}/studio.html` });
+  check("the Studio sends visitors to the login page", !!(await waitFor(`/login\\.html$/.test(location.pathname) && /next=studio/.test(location.search)`, { timeout: 15_000 })), await evalJS(`location.href`));
+  const loggedIn = await loginInPage(evalJS, (e, t) => waitFor(e, { timeout: t || 10_000 }), (url) => send("Page.navigate", { url }));
+  check("username + password login lands in the Studio", loggedIn, await evalJS(`location.href`));
+  check("top bar shows the name, credits and the demo badge", await evalJS(`document.getElementById("userName").textContent === "Studio Tester" && document.getElementById("creditNum").textContent === "200" && !!document.getElementById("demoBadge")`));
   await send("Page.navigate", { url: `${BASE}/studio.html?camera=1` });
   check("studio.html?camera=1 opens the camera link", !!(await waitFor(`typeof S === "object" && document.getElementById("camModal").classList.contains("show")`, { timeout: 15_000 })));
   await send("Page.navigate", { url: `${BASE}/studio.html` });
@@ -257,8 +282,8 @@ try {
   await send("Emulation.clearDeviceMetricsOverride");
 
   // 9. another owner cannot see the project through the API
-  const foreign = await fetch(`${BASE}/api/projects?id=${pid}`, { headers: { "x-owner": "test-other-owner-1" } });
-  check("other owner gets 404 for the project", foreign.status === 404, foreign.status);
+  const foreign = await fetch(`${BASE}/api/projects?id=${pid}`);
+  check("the project is not reachable without a login", foreign.status === 401, foreign.status);
 
   const own = exceptions.filter((e) => !/Phaser|peerjs|supabase/i.test(e));
   check("no page exceptions", own.length === 0, own.slice(0, 3));
@@ -266,6 +291,7 @@ try {
   console.log("ERROR", err.stack || err.message); fails++;
 } finally {
   try { const { projects } = await api("api/projects"); for (const p of projects || []) await api(`api/projects?id=${p.id}`, { method: "DELETE" }); console.log(`cleaned ${projects?.length || 0} test project(s)`); } catch (e) { console.log("cleanup failed:", e.message); }
+  try { await srv("srv_delete_user", { p_user: USER_ID }); console.log("deleted the test account"); } catch (e) { console.log("account cleanup failed:", e.message); }
   try { ws.close(); } catch {}
   chrome.kill();
 }

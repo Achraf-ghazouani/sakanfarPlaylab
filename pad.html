@@ -155,6 +155,7 @@ async function join(code) {
     },
     onEvent: (name) => { window.__padLastEvent = name; window.__padLastEventAt = performance.now(); (window.__padEvents ||= []).push(name); if (EVENT_BUZZ[name]) buzz(EVENT_BUZZ[name]); },
     onState: showState,
+    onMessage: onHostMessage,
   }, opts);
   client.start();
   window.__padClient = client;
@@ -327,21 +328,30 @@ function capture(kind) {
 
 function queueScan(job) { if (Cam.scanning) { Cam.pending = job; return; } runScan(job); }
 const strip = (l) => ({ theme: l.theme, aspect: l.aspect, objects: l.objects.map(({ type, label, x, y, w, h }) => ({ type, label, x, y, w, h })) });
+// The phone never calls the AI itself: it hands the picture to the computer, which scans it with the logged-in
+// account (and its credits) and answers with "scan-result". Phones need no account.
+const pendingScans = new Map();   // seq -> { resolve, reject }
+function onHostMessage(msg) {
+  if (msg.t !== "scan-result") return;
+  const p = pendingScans.get(msg.seq); if (!p) return;
+  pendingScans.delete(msg.seq);
+  if (msg.ok && msg.level) p.resolve(msg); else p.reject(new Error(msg.error || "scan failed"));
+}
+function requestScan(job) {
+  return new Promise((resolve, reject) => {
+    if (!client?.connected) return reject(new Error("not connected to the computer"));
+    pendingScans.set(job.seq, { resolve, reject });
+    client.sendLarge({ t: "scan", seq: job.seq, image: job.jpeg, thumb: job.thumb });
+    setTimeout(() => { if (pendingScans.delete(job.seq)) { const e = new Error("the computer did not answer"); e.name = "TimeoutError"; reject(e); } }, 100_000);
+  });
+}
 async function runScan(job) {
   Cam.scanning = true;
   window.__camScans = (window.__camScans || 0) + 1;
   try {
-    const previous = Cam.level ? strip(Cam.level) : undefined;
-    const r = await fetch("api/scan", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: job.jpeg, previous, provider: previous ? "baseten" : "meta" }),
-      signal: AbortSignal.timeout(95_000),
-    });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok || !data.level) throw new Error(data.error || `Server error ${r.status}`);
+    const data = await requestScan(job);
     Cam.level = data.level;
     window.__camLevel = data.level;
-    client?.sendLarge({ t: "level", seq: job.seq, level: data.level, thumb: job.thumb, meta: { provider: data.meta?.provider, ms: data.meta?.ms, playtest: data.meta?.playtest } });
     const d = data.level.diff;
     camStatus(d && d.short ? `Level updated: ${d.short}` : d ? "No changes spotted" : `${data.level.objects.length} objects found! Building on the big screen...`, "live", 4500);
     if (mode === "camera") $("playBtn").style.display = "";

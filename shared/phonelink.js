@@ -312,10 +312,11 @@ window.PhoneLink = (() => {
     sendJump(down) { if (this.conn?.open) this.conn.send({ t: "jump", down: !!down }); }
     sendMode(mode) { if (this.conn?.open) this.conn.send({ t: "mode", mode }); }
     send(msg) { if (this.conn?.open) this.conn.send(msg); }
-    /** Send a big message (ink PNG, level + thumbnail) in 40 KB chunks so every browser and the relay accept it. */
+    /** Send a big message (ink PNG, camera picture) in 12 KB chunks. PeerJS splits binary messages above ~16 KB itself and
+     *  those internal pieces get lost in practice, so every piece we send stays below that size. */
     sendLarge(msg) {
       if (!this.conn?.open) return false;
-      const text = JSON.stringify(msg), SIZE = 40000;
+      const text = JSON.stringify(msg), SIZE = 12000;
       if (text.length <= SIZE) { this.conn.send(msg); return true; }
       const id = Math.random().toString(36).slice(2, 10), n = Math.ceil(text.length / SIZE);
       for (let i = 0; i < n; i++) this.conn.send({ t: "chunk", id, i, n, part: text.slice(i * SIZE, (i + 1) * SIZE) });

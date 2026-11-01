@@ -51,6 +51,8 @@
     <div id="list"></div>
   </section>
 </main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js"></script>
+<script src="shared/auth.js"></script>
 <script type="module">
 import { checkLevel } from "./shared/reach.mjs";
 
@@ -103,7 +105,7 @@ $("fixBtn").addEventListener("click", async () => {
   if (report?.ok) { $("status").textContent = "Nothing to fix: everything is reachable."; return; }
   $("fixBtn").disabled = true; $("status").textContent = "Asking the playtest agent (AI)...";
   try {
-    const r = await fetch("api/fix", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ level }), signal: AbortSignal.timeout(90_000) });
+    const r = await PlayAuth.api("api/fix", { method: "POST", body: { level } });   // needs a login
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || r.status);
     level = data.level;

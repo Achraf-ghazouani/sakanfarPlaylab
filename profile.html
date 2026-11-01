@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fbfaff">
+<title>Your profile · Sakanfar PlayLab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js"></script>
+<script src="shared/auth.js"></script>
+<script src="shared/photo.js"></script>
+<style>
+  :root { --bg:#fbfaff; --lav:#efeaff; --lav-2:#e2d9ff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --line:#ebe6f7; --green:#15803d; --red:#b91c1c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter, system-ui, sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:14px 20px; background:#fff; border-bottom:1px solid var(--line); }
+  header .brand { display:flex; align-items:center; gap:10px; font-family:Fredoka, system-ui, sans-serif; font-weight:700; font-size:19px; color:var(--purple-deep); text-decoration:none; }
+  header .brand .logo { width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg, var(--purple), #c084fc); display:grid; place-items:center; }
+  header .spacer { flex:1; }
+  .tb { border:1px solid var(--lav-2); background:#fff; color:var(--purple-deep); border-radius:999px; padding:8px 14px; font:600 13px Inter, sans-serif; text-decoration:none; cursor:pointer; }
+  .tb.primary { background:var(--purple); color:#fff; border-color:var(--purple); }
+  main { width:min(980px, 100%); margin:0 auto; padding:24px 16px 60px; display:grid; grid-template-columns:320px 1fr; gap:20px; align-items:start; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:20px; padding:20px; box-shadow:0 10px 30px rgba(91,33,182,.06); }
+  h2 { font-family:Fredoka, system-ui, sans-serif; font-size:19px; margin:0 0 14px; }
+  .avatar { width:96px; height:96px; border-radius:50%; background:linear-gradient(135deg, var(--purple), #c084fc); color:#fff; display:grid; place-items:center; font:700 38px Fredoka, sans-serif; overflow:hidden; margin:0 auto 10px; cursor:pointer; position:relative; }
+  .avatar img { width:100%; height:100%; object-fit:cover; }
+  .avatar::after { content:"change"; position:absolute; inset:auto 0 0 0; background:rgba(27,21,53,.55); color:#fff; font:600 11px Inter, sans-serif; padding:4px 0; text-align:center; opacity:0; transition:opacity .15s; }
+  .avatar:hover::after { opacity:1; }
+  .who { text-align:center; margin-bottom:16px; }
+  .who b { display:block; font-size:18px; }
+  .who small { color:var(--muted); }
+  .badge { display:inline-block; border-radius:999px; padding:3px 9px; font-size:11px; font-weight:700; margin:6px 3px 0; }
+  .badge.demo { background:#fef3c7; color:#92400e; }
+  .badge.admin { background:var(--lav); color:var(--purple-deep); }
+  label { display:block; font-size:13px; font-weight:600; margin:12px 0 6px; }
+  input { width:100%; font:15px Inter, sans-serif; border:1px solid var(--lav-2); border-radius:12px; padding:10px 12px; outline:none; }
+  input:focus { border-color:var(--purple); box-shadow:0 0 0 3px rgba(124,58,237,.12); }
+  .row { display:flex; gap:8px; margin-top:14px; }
+  #saveMsg { font-size:13px; margin-top:10px; min-height:18px; }
+  #saveMsg.ok { color:var(--green); } #saveMsg.err { color:var(--red); }
+  .balance { display:flex; align-items:center; justify-content:space-between; gap:12px; background:linear-gradient(135deg, #f5f0ff, #fff); border:1px solid var(--lav-2); border-radius:16px; padding:16px; margin-bottom:16px; }
+  .balance .n { font:700 40px Fredoka, sans-serif; color:var(--purple-deep); line-height:1; }
+  .balance small { color:var(--muted); display:block; margin-top:4px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  td { padding:9px 6px; border-top:1px solid var(--line); vertical-align:top; }
+  td.amt { text-align:right; font-weight:700; white-space:nowrap; }
+  td.amt.plus { color:var(--green); } td.amt.minus { color:var(--red); }
+  td small { color:var(--muted); }
+  .games { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; }
+  .game { border:1px solid var(--line); border-radius:14px; overflow:hidden; text-decoration:none; color:var(--ink); background:#fff; transition:transform .12s, box-shadow .12s; }
+  .game:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(91,33,182,.10); }
+  .game .cover { aspect-ratio:4/3; background:var(--lav); display:grid; place-items:center; font-size:28px; }
+  .game .cover img { width:100%; height:100%; object-fit:cover; }
+  .game b { display:block; padding:8px 10px 2px; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .game small { display:block; padding:0 10px 10px; color:var(--muted); font-size:12px; }
+  .empty { color:var(--muted); font-size:14px; }
+  input[type=file] { display:none; }
+  @media (max-width: 820px) { main { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="index.html"><span class="logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg></span>PlayLab</a>
+  <span class="spacer"></span>
+  <a class="tb" href="admin.html" id="adminLink" hidden>Admin</a>
+  <a class="tb primary" href="studio.html">Open the Studio</a>
+  <button class="tb" id="logoutBtn">Log out</button>
+</header>
+<main>
+  <section class="card">
+    <div class="avatar" id="avatar" title="Change your picture"></div>
+    <input type="file" id="avatarInput" accept="image/*">
+    <div class="who"><b id="whoName">...</b><small id="whoEmail"></small><div id="badges"></div></div>
+    <form id="profileForm">
+      <label for="displayName">Display name</label>
+      <input id="displayName" maxlength="60">
+      <label for="username">Username</label>
+      <input id="username" maxlength="24" placeholder="letters, digits, _">
+      <div class="row"><button class="tb primary" type="submit">Save</button></div>
+      <div id="saveMsg"></div>
+    </form>
+  </section>
+  <div style="display:grid;gap:20px">
+    <section class="card">
+      <div class="balance"><div><div class="n" id="balance">0</div><small>credits</small></div><a class="tb" href="credits.html">Get more credits</a></div>
+      <h2>Credit history</h2>
+      <table id="ledger"><tbody><tr><td class="empty">Loading...</td></tr></tbody></table>
+    </section>
+    <section class="card">
+      <h2>My games</h2>
+      <div class="games" id="games"><span class="empty">Loading...</span></div>
+    </section>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let me = null;
+
+function render() {
+  const name = me.display_name || me.username || me.email.split("@")[0];
+  $("whoName").textContent = name;
+  $("whoEmail").textContent = me.email.endsWith("@demo.playlab.invalid") ? "@" + (me.username || "") : me.email;
+  $("avatar").innerHTML = me.avatar_url ? `<img src="${esc(me.avatar_url)}" alt="">` : esc(name.slice(0, 1).toUpperCase());
+  $("displayName").value = me.display_name || "";
+  $("username").value = me.username || "";
+  $("balance").textContent = me.balance;
+  $("adminLink").hidden = me.role !== "admin";
+  $("badges").innerHTML = (me.role === "admin" ? `<span class="badge admin">Admin</span>` : "") +
+    (me.is_demo ? `<span class="badge demo">Demo account${me.demo_tag ? " · " + esc(me.demo_tag) : ""}${me.expires_at ? " · until " + new Date(me.expires_at).toLocaleDateString() : ""}</span>` : "");
+}
+
+async function save(fields) {
+  const r = await PlayAuth.api("api/me", { method: "PATCH", body: fields });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || "Could not save.");
+  me = data.profile; render();
+}
+
+$("profileForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const m = $("saveMsg");
+  try { await save({ display_name: $("displayName").value, username: $("username").value }); m.textContent = "Saved."; m.className = "ok"; }
+  catch (err) { m.textContent = err.message; m.className = "err"; }
+});
+$("avatar").addEventListener("click", () => $("avatarInput").click());
+$("avatarInput").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try {
+    const img = await PhotoUtil.loadImage(f);
+    // square crop, 160 px JPEG: a few KB in the profile row
+    const c = document.createElement("canvas"); c.width = c.height = 160;
+    const s = Math.min(img.width, img.height);
+    c.getContext("2d").drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 160, 160);
+    await save({ avatar_url: c.toDataURL("image/jpeg", 0.82) });
+    $("saveMsg").textContent = "Picture updated."; $("saveMsg").className = "ok";
+  } catch (err) { $("saveMsg").textContent = err.message; $("saveMsg").className = "err"; }
+});
+$("logoutBtn").addEventListener("click", async () => { await PlayAuth.signOut(); location.href = "login.html?signedout=1"; });
+
+(async () => {
+  me = await PlayAuth.requireLogin();
+  render();
+  const [lr, gr] = await Promise.all([PlayAuth.api("api/me?ledger=1"), PlayAuth.api("api/projects")]);
+  const ledger = (await lr.json().catch(() => ({}))).ledger || [];
+  $("ledger").innerHTML = "<tbody>" + (ledger.length ? ledger.map((l) => `<tr><td>${esc(l.reason)}${l.model ? ` <small>· ${esc(l.model)}</small>` : ""}<br><small>${new Date(l.created_at).toLocaleString()}</small></td><td class="amt ${l.amount >= 0 ? "plus" : "minus"}">${l.amount >= 0 ? "+" : ""}${l.amount}</td></tr>`).join("") : `<tr><td class="empty">No credit activity yet.</td></tr>`) + "</tbody>";
+  const games = (await gr.json().catch(() => ({}))).projects || [];
+  $("games").innerHTML = games.length ? games.map((g) => `<a class="game" href="studio.html?project=${encodeURIComponent(g.id)}"><div class="cover">${g.photo ? `<img src="${esc(g.photo)}" alt="">` : "&#127918;"}</div><b>${esc(g.title)}</b><small>${new Date(g.updated_at).toLocaleDateString()}</small></a>`).join("") : `<span class="empty">No games yet. <a href="studio.html">Make your first one</a>.</span>`;
+})();
+</script>
+</body>
+</html>

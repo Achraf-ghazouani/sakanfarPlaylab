@@ -8,12 +8,15 @@
 import { scanLevelFromImage, aspectFromImage, normalizeLevel } from "../lib/scan-level.mjs";
 import { playtestAndFix } from "../lib/fix-level.mjs";
 import { diffLevels } from "../shared/diff.mjs";
+import { requireUser } from "../lib/auth.mjs";
 
 const MAX_BASE64 = 8_000_000;                 // ~6 MB of image; the page sends ~0.3-0.8 MB
 const OK_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Use POST with a JSON body." });
+  const user = await requireUser(req, res);   // AI costs money: logged-in, approved accounts only
+  if (!user) return;
 
   const body = typeof req.body === "string" ? safeJson(req.body) : req.body;
   if (!body || typeof body.image !== "string") return res.status(400).json({ error: "Body must be JSON with an \"image\" field (base64)." });

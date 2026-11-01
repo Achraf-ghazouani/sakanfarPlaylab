@@ -2,12 +2,13 @@
 //   GET /api/version?project_id=UUID&n=3 -> { version }
 
 import * as db from "../lib/db.mjs";
+import { requireUser } from "../lib/auth.mjs";
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "GET") return res.status(405).json({ error: "Use GET." });
-  const owner = String(req.headers["x-owner"] || "").trim();
-  if (!/^[a-zA-Z0-9_-]{8,64}$/.test(owner)) return res.status(400).json({ error: "Missing or invalid x-owner header." });
+  const owner = await requireUser(req, res);
+  if (!owner) return;
   const pid = req.query?.project_id, n = Number(req.query?.n);
   if (!pid || !Number.isInteger(n) || n < 1) return res.status(400).json({ error: "project_id and n are required." });
   try {

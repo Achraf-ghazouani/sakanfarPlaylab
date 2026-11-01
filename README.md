@@ -103,6 +103,20 @@ Schema: `db/schema.sql` (run it in the Supabase SQL editor once). Uses the same 
 
 Still to come: art and UI kits (Muse Image + SAM 3.1), 3D modes, share links and remix.
 
+## Accounts and access (private beta)
+
+PlayLab is invite-only. Visitors can join the waitlist on the landing page and play shared games; creating games needs an approved account.
+
+- **Waitlist** (`api/waitlist.js`): name, email, game idea, optional source. Validated on the server, a hidden honeypot field for bots, 5 sign-ups per IP per hour plus a global hourly cap (in the database, IPs stored only as salted hashes), a repeated email gets its existing position back.
+- **Who may have an account**: a trigger on Supabase's `auth.users` refuses to create any account whose email is not approved on the waitlist, not in `ADMIN_EMAILS`, and not created by an admin. Sign-ups are closed by the database itself, so Supabase's "Allow new users to sign up" switch can stay on (approved people need it for their first email-link login).
+- **Login** (`login.html`): email link, Google (shown when enabled in Supabase), or username + password for demo accounts (stored as `<username>@demo.playlab.invalid`).
+- **Every private or paid API call** goes through `requireUser()` in `lib/auth.mjs`: the token is checked with Supabase Auth, then the profile is read from the database. No login: 401. Suspended, banned, expired demo or no profile: 403 with the reason, and the page signs out and explains.
+- **Roles**: `user` / `admin`, stored in `profiles` and only changeable by an admin (checked inside the database). The first admin comes from `ADMIN_EMAILS`.
+- **Phones need no account**: in the Studio and on the big screen the phone sends its picture to the logged-in computer, which runs the scan and sends the result back.
+- **Server key**: a few server-only database functions (waitlist inserts, rate limits, admin sync, test accounts) require `PLAYLAB_SERVER_KEY`; the database stores only its SHA-256. It never reaches a page.
+
+Database: `db/schema.sql` (games), then `db/002_accounts.sql` and `db/003_server_users.sql` in the Supabase SQL editor.
+
 ## Run it locally
 
 ```bash
@@ -124,7 +138,8 @@ Other commands:
 | `node check.mjs <level.json> [--fix]` | Playtest report, optional repair |
 | `npm test` | Unit checks: level normalizer, image parsing, reachability and auto-fix |
 | `npm run playtest` | Headless Chrome drives the game through 36 checks (needs `npm run dev` running) |
-| `npm run test:db` | Round trip against the real Supabase tables, including the row-level security checks (needs the Supabase values in `.env`) |
+| `npm run test:auth` | Waitlist, approval gate, logins, roles, blocked accounts and row-level security against the real Supabase project (needs `npm run dev`) |
+| `npm run test:db` | Round trip against the real Supabase tables as two throwaway accounts |
 | `npm run test:studio` | Headless Chrome drives `studio.html`: chat, saved projects, versions, undo, sketch pad, reload, mobile tabs (needs `npm run dev` and Supabase) |
 | `node tests/studio-camera.test.mjs` | Two headless Chromes: the Studio camera link and a phone with the synthetic sheet, level lands in the chat (needs the dev server and the PeerServer or the relay) |
 
@@ -164,7 +179,10 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | --- | --- |
 | `index.html` | Landing page (retro arcade, code-drawn pixel world): PRESS START opens the Studio, Discover shows the demo levels |
 | `game.html` | The game (Phaser 3 arcade physics, colored shapes, touch controls, drawing thumbnail, agent toast); `?embed=1` for the Studio preview |
-| `studio.html` | PlayLab Studio: chat + live preview, My games, versions, history, undo |
+| `studio.html` | PlayLab Studio: chat + live preview, My games, versions, history, undo (login required) |
+| `login.html`, `profile.html`, `credits.html` | Login (email link, Google, username), profile with credit history, credits placeholder |
+| `api/waitlist.js`, `api/me.js`, `lib/auth.mjs`, `shared/auth.js` | Waitlist, the logged-in account, server-side access checks, the browser's login helper |
+| `db/002_accounts.sql`, `db/003_server_users.sql` | Waitlist, profiles, credit ledger, approval trigger, admin and server functions |
 | `api/projects.js`, `api/messages.js`, `api/version.js` | Vercel functions for saved games (Supabase through PostgREST, `lib/db.mjs`) |
 | `api/agent.js`, `lib/agent.mjs` | The Studio game agent: Muse Spark function tools, validation, quick fix, Baseten fallback (`node tests/agent.live.mjs` runs it for real) |
 | `db/schema.sql` | Supabase tables, row-level security and functions for the Studio |

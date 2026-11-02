@@ -140,7 +140,7 @@ try {
   const loggedIn = await loginInPage(evalJS, (e, t) => waitFor(e, { timeout: t || 10_000 }), (url) => send("Page.navigate", { url }));
   check("username + password login lands in the Studio", loggedIn, await evalJS(`location.href`));
   check("first screen: fresh layout, chat box at the bottom center", await evalJS(`document.body.classList.contains("fresh") && (() => { const r = document.querySelector(".chat").getBoundingClientRect(); return Math.abs(r.left + r.width / 2 - innerWidth / 2) < 4 && innerHeight - r.bottom < 60; })()`));
-  check("first screen offers three ways to start from a drawing", await evalJS(`[...document.querySelectorAll(".starts button")].map((b) => b.dataset.start).join()`) === "sketch,upload,camera");
+  check("first screen offers the drawing starts and Add your character", await evalJS(`[...document.querySelectorAll(".starts button")].map((b) => b.dataset.start).join()`) === "sketch,upload,camera,player");
   check("unfinished 3D and Share are hidden", await evalJS(`getComputedStyle(document.getElementById("modeSeg")).display === "none" && getComputedStyle(document.getElementById("shareBtn")).display === "none"`));
   await evalJS(`document.querySelector('.starts [data-start="sketch"]').click(); true`);
   check("Sketch it opens the sketch pad", await evalJS(`document.getElementById("sketchModal").classList.contains("show")`));
@@ -258,6 +258,26 @@ try {
   check("room code and QR rendered", !!code && (await evalJS(`document.querySelector("#camQr svg") !== null && /pad\\.html\\?room=/.test(document.getElementById("camUrl").textContent)`)), code);
   await click("#camClose");
 
+  // 5d. a picture sent with "use this as my player" becomes the player character, not a level
+  await evalJS(`(async () => {
+    const c = document.createElement("canvas"); c.width = 300; c.height = 400; const g = c.getContext("2d");
+    const grad = g.createLinearGradient(0, 0, 0, 400); grad.addColorStop(0, "#d9dde3"); grad.addColorStop(1, "#c4c9d1"); g.fillStyle = grad; g.fillRect(0, 0, 300, 400);
+    g.fillStyle = "#6d28d9"; g.fillRect(110, 140, 80, 150); g.fillStyle = "#f5d0b5"; g.beginPath(); g.arc(150, 105, 42, 0, 7); g.fill();
+    g.fillStyle = "#111"; g.fillRect(115, 290, 25, 70); g.fillRect(160, 290, 25, 70);
+    const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+    await addAttachment(new File([blob], "hero.png", { type: "image/png" })); return true; })()`);
+  await type("use this as my player");
+  check("the picture's toggle switches to Player from the words", await evalJS(`document.querySelector(".attach .role")?.classList.contains("player")`));
+  check("sending a player picture is free", /free/.test(await evalJS(`document.getElementById("sendCost").textContent`)));
+  const scansBefore = await evalJS(`window.__scanCalls`), agentBefore = await evalJS(`window.__agentCalls`), versionsBefore = await evalJS(`S.versions.length`);
+  await sendMsg(); await idle();
+  check("a player picture skips the scanner and the agent", await evalJS(`window.__scanCalls === ${scansBefore} && window.__agentCalls === ${agentBefore} && S.versions.length === ${versionsBefore}`), await evalJS(`({ scans: window.__scanCalls, agent: window.__agentCalls })`));
+  check("the player picture is saved on the game", (await api(`api/projects?id=${pid}`)).project?.art?.player?.startsWith("data:image/png;base64,"));
+  check("player card in the chat", /New player character/.test(await evalJS(`document.body.innerText`)));
+  const worn = await waitFor(`(() => { try { const a = game.scene.getScene("play").avatars[0]; return a && a.sprite && a.skin.type === "Image"; } catch { return false; } })()`, { contextId: iframeCtx(), timeout: 10_000 });
+  check("the preview's main character wears the picture", !!worn);
+  check("the background was cut away (corner and between the legs clear, body solid)", await evalJS(`(async () => { const i = new Image(); i.src = S.project.art.player; await i.decode(); const c = document.createElement("canvas"); c.width = i.width; c.height = i.height; const x = c.getContext("2d"); x.drawImage(i, 0, 0); const d = x.getImageData(0, 0, i.width, i.height).data; const at = (px, py) => d[(py * i.width + px) * 4 + 3]; return at(0, 0) === 0 && at(Math.round(i.width / 2), i.height - 8) === 0 && at(Math.round(i.width / 2), Math.round(i.height / 2)) === 255 && i.height === 256; })()`));
+
   // 6a. arriving again (not a reload) starts on the welcome screen, with a button to continue the last game
   await send("Page.navigate", { url: `${BASE}/studio.html` });
   check("a new visit starts on the welcome screen", !!(await waitFor(`typeof S === "object" && !!S.me && document.body.classList.contains("fresh") && !document.getElementById("continueBtn").hidden`, { timeout: 15_000 })));
@@ -271,6 +291,8 @@ try {
   check("versions restored", await evalJS(`S.versions.length`) === 6);
   const again = await waitFor(`(() => { try { const s = game.scene.getScene("play"); return !!(s && s.player); } catch { return false; } })()`, { contextId: iframeCtx(), timeout: 15_000 });
   check("preview restarts the saved level after reload", !!again);
+  const wornAgain = await waitFor(`(() => { try { return !!game.scene.getScene("play").avatars[0].sprite; } catch { return false; } })()`, { contextId: iframeCtx(), timeout: 10_000 });
+  check("the player picture comes back after reload", !!wornAgain);
 
   // 7. new game resets the UI, project stays in the list
   await click("#newGameBtn");

@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>PlayLab Game</title>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
@@ -316,6 +319,20 @@ let game = null;
 let levelArt = {};
 let artGen = 0;            // bumps on every level load; texture keys carry it so old crops can be dropped
 let artOn = (() => { try { return localStorage.getItem("playlab.art") !== "0"; } catch { return true; } })();
+// Player character from a picture (the Studio's "use this as the player"): an <img> the main character wears.
+let playerSkin = null, playerSkinSrc = null, playerSkinGen = 0;
+function setPlayerSkin(src) {
+  if ((src || null) === playerSkinSrc) return Promise.resolve(false);
+  playerSkinSrc = src || null; playerSkinGen++;
+  if (!src) { playerSkin = null; return Promise.resolve(true); }
+  const gen = playerSkinGen;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => { if (gen === playerSkinGen) playerSkin = img; resolve(true); };
+    img.onerror = () => { if (gen === playerSkinGen) playerSkin = null; resolve(true); };
+    img.src = src;
+  });
+}
 function refreshArtBtn() {
   const b = $("artBtn"), has = Object.keys(levelArt).length > 0;
   b.classList.toggle("show", has); b.classList.toggle("on", has && artOn);
@@ -678,11 +695,17 @@ class PlayScene extends Phaser.Scene {
     cam.setBounds(bx, by, Math.max(this.W, dw), Math.max(this.H, dh));
   }
 
-  // Squash/stretch a character's skin, then ease back to normal.
+  // Squash/stretch a character's skin, then ease back to normal (a picture skin has its own base scale).
   squash(av, sx, sy) {
     this.tweens.killTweensOf(av.skin);
-    av.skin.setScale(sx, sy);
-    this.tweens.add({ targets: av.skin, scaleX: 1, scaleY: 1, duration: 180, ease: "Quad.Out" });
+    const bx = av.baseSX || 1, by = av.baseSY || 1;
+    av.skin.setScale(sx * bx, sy * by);
+    this.tweens.add({ targets: av.skin, scaleX: bx, scaleY: by, duration: 180, ease: "Quad.Out" });
+  }
+  /** Red while hurt, back to normal after: a fill for the block, a tint for a picture. */
+  paintSkin(av, hurt) {
+    if (av.sprite) { if (hurt) av.skin.setTint(0xff6b6b); else av.skin.clearTint(); }
+    else av.skin.setFillStyle(hurt ? 0xef4444 : av.color);
   }
 
   avatarOf(slot) { return this.avatars?.find((a) => a.slot === slot); }
@@ -700,8 +723,22 @@ class PlayScene extends Phaser.Scene {
     const obj = this.add.rectangle(x, feetY - PLAYER_H / 2 - 1, PLAYER_W, PLAYER_H).setVisible(false);
     this.physics.add.existing(obj);
     obj.body.setCollideWorldBounds(true);
-    const skin = this.add.rectangle(x, feetY, PLAYER_W, PLAYER_H, color).setOrigin(0.5, 1).setStrokeStyle(3, Phaser.Display.Color.IntegerToColor(color).darken(45).color).setDepth(5);
-    const av = { slot, color, obj, skin, eyes: this.makeEyes(7), facing: 1, lastGroundedAt: -1e9, jumpPressedAt: -1e9, jumpHeld: false, wasGrounded: false, prevVy: 0, dead: false };
+    // The main character wears the player picture when there is one: same hitbox, drawn a bit taller than it.
+    let skin, sprite = false, baseSX = 1, baseSY = 1;
+    if (slot === 1 && playerSkin) {
+      const key = `pskin${playerSkinGen}`;
+      for (const k of this.textures.getTextureKeys()) if (k.startsWith("pskin") && k !== key) this.textures.remove(k);
+      if (!this.textures.exists(key)) this.textures.addImage(key, playerSkin);
+      skin = this.add.image(x, feetY, key).setOrigin(0.5, 1).setDepth(5);
+      const ratio = playerSkin.naturalWidth / playerSkin.naturalHeight;
+      let h = PLAYER_H * 1.3, w = h * ratio;
+      if (w > PLAYER_W * 2.4) { w = PLAYER_W * 2.4; h = w / ratio; }   // very wide pictures: cap the width
+      skin.setDisplaySize(w, h);
+      sprite = true; baseSX = skin.scaleX; baseSY = skin.scaleY;
+    } else {
+      skin = this.add.rectangle(x, feetY, PLAYER_W, PLAYER_H, color).setOrigin(0.5, 1).setStrokeStyle(3, Phaser.Display.Color.IntegerToColor(color).darken(45).color).setDepth(5);
+    }
+    const av = { slot, color, obj, skin, sprite, baseSX, baseSY, eyes: sprite ? [] : this.makeEyes(7), facing: 1, lastGroundedAt: -1e9, jumpPressedAt: -1e9, jumpHeld: false, wasGrounded: false, prevVy: 0, dead: false };
     this.physics.add.collider(obj, this.platforms);
     this.physics.add.collider(obj, this.movers);
     this.physics.add.overlap(obj, this.coinGroup, (p, c) => this.collectCoin(c, av));
@@ -733,6 +770,7 @@ class PlayScene extends Phaser.Scene {
     return [mk(size, 0xffffff), mk(size, 0xffffff), mk(size * 0.5, 0x111111), mk(size * 0.5, 0x111111)];
   }
   placeEyes(eyes, x, y, facing, gap) {
+    if (!eyes.length) return;
     eyes[0].setPosition(x + facing * 3 - gap, y);
     eyes[1].setPosition(x + facing * 3 + gap, y);
     eyes[2].setPosition(x + facing * 4.5 - gap, y);
@@ -819,6 +857,7 @@ class PlayScene extends Phaser.Scene {
 
     // Skin + eyes follow the body.
     av.skin.setPosition(av.obj.x, b.bottom);
+    if (av.sprite) av.skin.setFlipX(av.facing < 0);
     const top = av.skin.y - PLAYER_H * av.skin.scaleY;
     this.placeEyes(av.eyes, av.obj.x, top + 14 * av.skin.scaleY, av.facing, 7 * av.skin.scaleX);
   }
@@ -855,20 +894,20 @@ class PlayScene extends Phaser.Scene {
     if (this.state !== "play" || !av || av.dead) return;
     if (this.avatars.length > 1) {
       // Several characters: only this one goes back to the start, the others keep playing.
-      av.dead = true; av.skin.setFillStyle(0xef4444);
+      av.dead = true; this.paintSkin(av, true);
       av.obj.body.setVelocity(0, 0); av.obj.body.enable = false;
       SFX.hurt(); gameEvent("hit", av.slot);
       this.cameras.main.shake(150, 0.004);
       this.time.delayedCall(900, () => {
         if (!av.obj.active || !this.avatars.includes(av)) return;
         av.obj.body.reset(this.spawn.x + (av.slot - 1) * 22 * this.ax, this.spawn.feetY - PLAYER_H / 2 - 1);
-        av.obj.body.enable = true; av.skin.setFillStyle(av.color); av.dead = false;
+        av.obj.body.enable = true; this.paintSkin(av, false); av.dead = false;
         av.lastGroundedAt = -1e9; av.jumpPressedAt = -1e9; av.prevVy = 0;
       });
       return;
     }
     this.state = "dead";
-    av.skin.setFillStyle(0xef4444);
+    this.paintSkin(av, true);
     this.physics.pause();
     this.cameras.main.shake(220, 0.006);
     SFX.hurt();
@@ -1337,14 +1376,22 @@ async function init() {
 
   if (isEmbed) {
     // Studio preview: the parent page pushes levels and commands through postMessage.
-    window.addEventListener("message", (e) => {
+    window.addEventListener("message", async (e) => {
       const m = e.data;
       if (!m || typeof m !== "object" || typeof m.type !== "string") return;
+      const okSkin = (v) => v === null || (typeof v === "string" && /^data:image\/(png|webp|jpeg);base64,/.test(v));
       if (m.type === "playlab:level" && m.level && Array.isArray(m.level.objects)) {
         const s = playScene();
         if (m.keepPlayer && s?.player && s.state === "play") pendingSpawn = { x: s.player.x / s.ax, y: s.player.body.bottom };
+        if (m.player !== undefined && okSkin(m.player)) await setPlayerSkin(m.player);
         startLevel(m.level, m.name || "studio", m.thumb || null);
         if (m.toast) showToast(m.toast, 6000);
+      } else if (m.type === "playlab:player" && okSkin(m.image ?? null)) {
+        // a new player picture: restart in place so the character changes without losing their spot
+        if (!(await setPlayerSkin(m.image ?? null))) return;
+        const s = playScene();
+        if (s?.player && s.state === "play") pendingSpawn = { x: s.player.x / s.ax, y: s.player.body.bottom };
+        if (currentLevel) restartScene();
       } else if (m.type === "playlab:restart") restartScene();
       else if (m.type === "playlab:phone") openPhonePanel();
       else if (m.type === "playlab:mute") SFX.setMuted(!!m.muted);

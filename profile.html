@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fbfaff">
 <title>Your profile · Sakanfar PlayLab</title>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
@@ -18,7 +21,8 @@
   body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter, system-ui, sans-serif; }
   header { display:flex; align-items:center; gap:12px; padding:14px 20px; background:#fff; border-bottom:1px solid var(--line); }
   header .brand { display:flex; align-items:center; gap:10px; font-family:Fredoka, system-ui, sans-serif; font-weight:700; font-size:19px; color:var(--purple-deep); text-decoration:none; }
-  header .brand .logo { width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg, var(--purple), #c084fc); display:grid; place-items:center; }
+  header .brand .logo { width:34px; height:34px; display:grid; place-items:center; }
+  header .brand .logo img { width:100%; height:100%; object-fit:contain; }
   header .spacer { flex:1; }
   .tb { border:1px solid var(--lav-2); background:#fff; color:var(--purple-deep); border-radius:999px; padding:8px 14px; font:600 13px Inter, sans-serif; text-decoration:none; cursor:pointer; }
   .tb.primary { background:var(--purple); color:#fff; border-color:var(--purple); }
@@ -63,7 +67,7 @@
 </head>
 <body>
 <header>
-  <a class="brand" href="index.html"><span class="logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg></span>PlayLab</a>
+  <a class="brand" href="index.html"><span class="logo"><img src="assets/mark-256.webp" alt=""></span>PlayLab</a>
   <span class="spacer"></span>
   <a class="tb" href="admin.html" id="adminLink" hidden>Admin</a>
   <a class="tb primary" href="studio.html">Open the Studio</a>

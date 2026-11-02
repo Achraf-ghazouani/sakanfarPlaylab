@@ -104,6 +104,7 @@ What works today (steps 1-4 of the Studio plan):
 - Projects are saved in Supabase (`projects`, `messages`, `versions`). Each browser gets an anonymous owner id (localStorage) sent as the `x-owner` header; row-level security keeps every owner to their own rows. Shared projects (later step) are readable by anyone with the link.
 - "My games" drawer, auto-created project on the first message, rename by clicking the title. A reload keeps the game you are on; a new visit starts on the first screen with a Continue button.
 - Attach a picture or drawing: it goes through the existing `/api/scan` and lands in the preview as a new version.
+- **Your own character as the player**: send a picture with words like "use this as the player" (or flip its **Level / Player** toggle, or use **Add your character** on the first screen). It skips the scanner and the agent, costs nothing, and `shared/cutout.js` cuts the character out of its background (a flood fill from the picture's border), trims it and scales it to 256 px. It is saved on the game (`projects.art.player`) and the main character wears it, with the same hitbox, squash and stretch, facing left or right. "Use the default player" switches back.
 - "Playtest it" runs the playtest agent (`/api/fix`) and shows what it changed.
 - Every level change is a version: History lists them, Undo restores the previous one (as a new version, nothing is lost).
 - Word-by-word streaming, typing indicator, quick chips, example prompts. On phones the chat is full screen with a Preview tab.
@@ -236,6 +237,8 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | `shared/reach.mjs` | Reachability checker + algorithmic fixer (pure JS, used by server and pages) |
 | `shared/diff.mjs` | What changed between two scans of the same drawing (added / removed / moved) |
 | `shared/photo.js` | Browser photo resize helper used by index.html and game.html |
+| `shared/cutout.js` | A character picture -> a transparent player sprite (background removed, trimmed) |
+| `assets/` | The Sakanfar PlayLab logo (`logo.webp`), the mark for top bars (`mark-256.webp`), favicons; `logo-source.webp` is the original |
 | `shared/inkart.js` | Drawn art: cuts every object out of the level's picture and keys out the paper |
 | `lib/fix-level.mjs` | Playtest agent orchestration: AI repair, validation, auto fallback |
 | `lib/ai.mjs` | OpenAI-compatible chat client for Meta (default) and Baseten |

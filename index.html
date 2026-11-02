@@ -6,6 +6,9 @@
 <meta name="theme-color" content="#000000">
 <meta name="description" content="Sakanfar PlayLab: draw a platformer level on paper, snap it with your phone, and play it in seconds. Powered by Meta Muse Spark.">
 <title>Sakanfar PlayLab</title>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,18 +27,14 @@
   .hero::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,.25) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 60%, rgba(0,0,0,.45) 100%); pointer-events:none; }
   .top { position:absolute; top:0; left:0; right:0; z-index:3; display:flex; align-items:center; justify-content:space-between; padding:18px 24px; }
   .top .brand { display:flex; align-items:center; gap:10px; font-weight:600; font-size:15px; text-decoration:none; text-shadow:0 1px 2px rgba(0,0,0,.6); }
-  .top .brand svg { width:20px; height:20px; }
+  .top .brand img { width:34px; height:34px; object-fit:contain; filter:drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
   .top .title { position:absolute; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:10px; font-weight:600; font-size:22px; text-shadow:0 1px 2px rgba(0,0,0,.6); }
   .top .badge { font-family:"Press Start 2P", monospace; font-size:9px; border:1px solid #fff; border-radius:999px; padding:6px 10px; letter-spacing:.08em; }
   .top nav a { font-size:14px; text-decoration:none; margin-left:18px; opacity:.9; text-shadow:0 1px 2px rgba(0,0,0,.6); }
   .hero-center { position:absolute; inset:0; z-index:2; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 16px; }
-  .logo { position:relative; font-size:clamp(34px, 8.5vw, 104px); line-height:1; color:#fff; text-shadow:0 4px 0 rgba(0,0,0,.35), 0 0 30px rgba(0,0,0,.3); }
-  .logo .g { position:absolute; inset:0; color:#fff; pointer-events:none; }
-  .logo .g1 { animation:glitch1 3.6s infinite steps(1); color:#9ff0ff; mix-blend-mode:screen; }
-  .logo .g2 { animation:glitch2 3.6s infinite steps(1); color:#ff9ae6; mix-blend-mode:screen; }
-  @keyframes glitch1 { 0%, 86%, 100% { clip-path:inset(0 0 100% 0); transform:none; } 88% { clip-path:inset(10% 0 60% 0); transform:translate(-6px, 0); } 91% { clip-path:inset(55% 0 20% 0); transform:translate(5px, 0); } 94% { clip-path:inset(30% 0 40% 0); transform:translate(-3px, 0); } }
-  @keyframes glitch2 { 0%, 85%, 100% { clip-path:inset(0 0 100% 0); transform:none; } 87% { clip-path:inset(60% 0 10% 0); transform:translate(6px, 0); } 90% { clip-path:inset(20% 0 65% 0); transform:translate(-5px, 0); } 93% { clip-path:inset(45% 0 35% 0); transform:translate(4px, 0); } }
-  .tag { margin:min(16vh, 150px) 0 22px; font-size:clamp(20px, 3vw, 36px); font-weight:500; text-shadow:0 2px 6px rgba(0,0,0,.6); }
+  .hero-logo { width:clamp(220px, 30vw, 400px); height:auto; filter:drop-shadow(0 10px 24px rgba(0,0,0,.35)); animation:float 4s ease-in-out infinite; }
+  @keyframes float { 50% { transform:translateY(-8px); } }
+  .tag { margin:10px 0 22px; font-size:clamp(20px, 3vw, 36px); font-weight:500; text-shadow:0 2px 6px rgba(0,0,0,.6); }
   .start { display:inline-flex; align-items:center; justify-content:center; background:#fff; color:#000; border:0; border-radius:999px; padding:18px 36px; font-family:"Press Start 2P", monospace; font-size:13px; letter-spacing:.12em; cursor:pointer; text-decoration:none; box-shadow:0 10px 30px rgba(0,0,0,.35); transition:transform .1s; }
   .start:hover { transform:translateY(-2px) scale(1.02); }
   .start:active { transform:translateY(1px); }
@@ -136,12 +135,12 @@
 <header class="hero" id="home">
   <canvas id="world" aria-hidden="true"></canvas>
   <div class="top">
-    <a class="brand" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg>Sakanfar Productions</a>
+    <a class="brand" href="index.html"><img src="assets/mark-256.webp" alt="">Sakanfar Productions</a>
     <div class="title">PlayLab <span class="badge">HACKATHON</span></div>
     <nav><a href="#how">How it works</a><a href="#discover">Play</a><a href="#waitlist" id="navWaitlist">Waitlist</a><a href="login.html" id="navLogin">Log in</a></nav>
   </div>
   <div class="hero-center">
-    <div class="logo px" aria-label="PlayLab">PLAYLAB<span class="g g1" aria-hidden="true">PLAYLAB</span><span class="g g2" aria-hidden="true">PLAYLAB</span></div>
+    <img class="hero-logo" src="assets/logo.webp" alt="Sakanfar PlayLab" width="720" height="594">
     <h1 class="tag">Draw a level on paper, or just describe it. Play it in seconds.</h1>
     <div class="cta-row">
       <a class="start" id="startBtn" href="studio.html">START CREATING</a>

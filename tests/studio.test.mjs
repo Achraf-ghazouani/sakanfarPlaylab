@@ -115,6 +115,11 @@ const inject = `
       return json({ reply: "Built a lava castle with a ledge and a guard.", level: { ...LA, checked: true, fixes: [] }, kind: "create", note: "lava castle, one ledge", playtest: { ok: true, fixed: 0 }, actions: [] });
     }
     if (/api\\/scan$/.test(u)) { window.__scanCalls++; try { window.__lastScanImage = JSON.parse(init.body).image; } catch {} const lvl = window.__scanCalls === 1 ? LB : LC; return json({ level: { ...lvl, checked: true, fixes: [] }, original: lvl, meta: { provider: "mock", playtest: { before: { ok: true, problems: [] } } } }); }
+    if (/api\\/art$/.test(u)) {
+      const b = JSON.parse(init.body); (window.__artCalls = window.__artCalls || []).push(b.task);
+      if (b.task === "classify") return json({ ...(window.__classifyAs || { kind: "level", role: null, name: "a level" }), confidence: 0.9, credits: { spent: 1 } });
+      return json({ image: b.image, kind: b.kind, role: b.role, credits: { spent: 15 } });   // the "sprite" is the picture itself
+    }
     if (/api\\/fix$/.test(u)) { window.__fixCalls++; const lvl = JSON.parse(init.body).level; return json({ level: { ...lvl, checked: true, fixes: [] }, report: { before: { ok: true, problems: [] }, after: { ok: true, problems: [] }, fixes: [], fixedBy: null } }); }
     return realFetch(url, init);
   };
@@ -258,7 +263,7 @@ try {
   check("room code and QR rendered", !!code && (await evalJS(`document.querySelector("#camQr svg") !== null && /pad\\.html\\?room=/.test(document.getElementById("camUrl").textContent)`)), code);
   await click("#camClose");
 
-  // 5d. a picture sent with "use this as my player" becomes the player character, not a level
+  // 5d. a picture sent with "use this as my player" becomes the player character (Muse Image sprite, mocked), not a level
   await evalJS(`(async () => {
     const c = document.createElement("canvas"); c.width = 300; c.height = 400; const g = c.getContext("2d");
     const grad = g.createLinearGradient(0, 0, 0, 400); grad.addColorStop(0, "#d9dde3"); grad.addColorStop(1, "#c4c9d1"); g.fillStyle = grad; g.fillRect(0, 0, 300, 400);
@@ -268,15 +273,33 @@ try {
     await addAttachment(new File([blob], "hero.png", { type: "image/png" })); return true; })()`);
   await type("use this as my player");
   check("the picture's toggle switches to Player from the words", await evalJS(`document.querySelector(".attach .role")?.classList.contains("player")`));
-  check("sending a player picture is free", /free/.test(await evalJS(`document.getElementById("sendCost").textContent`)));
+  check("the send line says Muse Image draws the player", /Muse Image draws the player/.test(await evalJS(`document.getElementById("sendCost").textContent`)));
+  await evalJS(`window.__artCalls = []; true`);
   const scansBefore = await evalJS(`window.__scanCalls`), agentBefore = await evalJS(`window.__agentCalls`), versionsBefore = await evalJS(`S.versions.length`);
   await sendMsg(); await idle();
   check("a player picture skips the scanner and the agent", await evalJS(`window.__scanCalls === ${scansBefore} && window.__agentCalls === ${agentBefore} && S.versions.length === ${versionsBefore}`), await evalJS(`({ scans: window.__scanCalls, agent: window.__agentCalls })`));
-  check("the player picture is saved on the game", (await api(`api/projects?id=${pid}`)).project?.art?.player?.startsWith("data:image/png;base64,"));
+  check("the words skip the look-at step and go straight to Muse Image", await evalJS(`window.__artCalls.join()`) === "sprite", await evalJS(`window.__artCalls`));
+  check("the player picture is saved on the game", (await api(`api/projects?id=${pid}`)).project?.art?.player?.match(/^data:image\/(webp|png);base64,/));
   check("player card in the chat", /New player character/.test(await evalJS(`document.body.innerText`)));
   const worn = await waitFor(`(() => { try { const a = game.scene.getScene("play").avatars[0]; return a && a.sprite && a.skin.type === "Image"; } catch { return false; } })()`, { contextId: iframeCtx(), timeout: 10_000 });
   check("the preview's main character wears the picture", !!worn);
-  check("the background was cut away (corner and between the legs clear, body solid)", await evalJS(`(async () => { const i = new Image(); i.src = S.project.art.player; await i.decode(); const c = document.createElement("canvas"); c.width = i.width; c.height = i.height; const x = c.getContext("2d"); x.drawImage(i, 0, 0); const d = x.getImageData(0, 0, i.width, i.height).data; const at = (px, py) => d[(py * i.width + px) * 4 + 3]; return at(0, 0) === 0 && at(Math.round(i.width / 2), i.height - 8) === 0 && at(Math.round(i.width / 2), Math.round(i.height / 2)) === 255 && i.height === 256; })()`));
+  check("the background was cut away (corner and between the legs clear, body solid)", await evalJS(`(async () => { const i = new Image(); i.src = S.project.art.player; await i.decode(); const c = document.createElement("canvas"); c.width = i.width; c.height = i.height; const x = c.getContext("2d"); x.drawImage(i, 0, 0); const d = x.getImageData(0, 0, i.width, i.height).data; const at = (px, py) => d[(py * i.width + px) * 4 + 3]; return at(0, 0) <= 5 && at(Math.round(i.width / 2), i.height - 8) <= 5 && at(Math.round(i.width / 2), Math.round(i.height / 2)) >= 250 && i.height === 256; })()`));
+
+  // 5e. a picture with no words: Muse Spark looks at it (mocked: an enemy), Muse Image draws it, every enemy wears it
+  await evalJS(`(async () => {
+    window.__artCalls = []; window.__classifyAs = { kind: "object", role: "enemy", name: "red blob" };
+    const c = document.createElement("canvas"); c.width = 300; c.height = 300; const g = c.getContext("2d");
+    g.fillStyle = "#ffffff"; g.fillRect(0, 0, 300, 300); g.fillStyle = "#dc2626"; g.beginPath(); g.ellipse(150, 170, 90, 70, 0, 0, 7); g.fill();
+    const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+    await addAttachment(new File([blob], "blob.png", { type: "image/png" })); return true; })()`);
+  check("a picture with no words is on Auto", await evalJS(`document.querySelector(".attach .role")?.classList.contains("auto")`));
+  await sendMsg(); await idle();
+  check("Auto: looked at first, then drawn", await evalJS(`window.__artCalls.join()`) === "classify,sprite", await evalJS(`window.__artCalls`));
+  check("the enemy sprite is saved on the game", !!(await api(`api/projects?id=${pid}`)).project?.art?.sprites?.enemy?.match(/^data:image\/(webp|png);base64,/));
+  check("the chat says it will be the enemy", /it will be the enemy/.test(await evalJS(`document.body.innerText`)) && /New enemy sprite/.test(await evalJS(`document.body.innerText`)));
+  const enemiesWear = await waitFor(`(() => { try { const es = game.scene.getScene("play").enemies.getChildren(); return es.length > 0 && es.every((e) => !!e.getData("art")); } catch { return false; } })()`, { contextId: iframeCtx(), timeout: 10_000 });
+  check("every enemy in the preview wears the sprite", !!enemiesWear);
+  await evalJS(`window.__classifyAs = null; true`);
 
   // 6a. arriving again (not a reload) starts on the welcome screen, with a button to continue the last game
   await send("Page.navigate", { url: `${BASE}/studio.html` });

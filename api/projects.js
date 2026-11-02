@@ -12,7 +12,8 @@ import { requireUser } from "../lib/auth.mjs";
 
 const MAX_PHOTO = 200_000;   // data URL chars (a 480px JPEG is ~40 KB)
 const MAX_SPRITE = 400_000;  // data URL chars for the player picture (a 256px PNG is ~50-150 KB)
-const MAX_ART = 500_000;     // the whole art object
+const MAX_ART = 900_000;     // the whole art object (player + up to five object sprites, ~30-120 KB each)
+const SPRITE_ROLES = new Set(["enemy", "coin", "goal", "spike", "decoration"]);
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
@@ -78,7 +79,16 @@ function pickFields(body) {
   if (body.art !== undefined) {
     const art = body.art && typeof body.art === "object" && !Array.isArray(body.art) ? body.art : null;
     // art.player: the player character picture (a transparent PNG/WebP from shared/cutout.js, ~256 px tall)
-    if (art && art.player != null && (typeof art.player !== "string" || !/^data:image\/(png|webp);base64,/.test(art.player) || art.player.length > MAX_SPRITE)) return { error: "The player picture must be a small PNG or WebP image." };
+    const okSprite = (v) => typeof v === "string" && /^data:image\/(png|webp);base64,/.test(v) && v.length <= MAX_SPRITE;
+    if (art && art.player != null && !okSprite(art.player)) return { error: "The player picture must be a small PNG or WebP image." };
+    // art.sprites: one picture per object type, worn by every object of that type (Muse Image sprites, api/art.js)
+    if (art && art.sprites != null) {
+      if (typeof art.sprites !== "object" || Array.isArray(art.sprites)) return { error: "sprites must be an object." };
+      for (const [k, v] of Object.entries(art.sprites)) {
+        if (!SPRITE_ROLES.has(k)) return { error: `Unknown sprite type "${k}".` };
+        if (v !== null && !okSprite(v)) return { error: `The ${k} sprite must be a small PNG or WebP image.` };
+      }
+    }
     if (art && JSON.stringify(art).length > MAX_ART) return { error: "Game art is too large." };
     out.art = art;
   }

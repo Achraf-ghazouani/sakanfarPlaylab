@@ -2,7 +2,7 @@
 // The background is what touches the picture's border: a flood fill from every border pixel takes in neighbours
 // that stay close to the colour it started from (so soft gradients and photo backdrops go, outlines stop it).
 // Pictures that are already transparent are only trimmed. The result is trimmed to the character and scaled
-// to SPRITE_H pixels tall, as a PNG data URL.
+// to SPRITE_H pixels tall, as a WebP (or PNG) data URL.
 window.Cutout = (() => {
   const WORK = 512;          // keying runs on at most this many pixels per side
   const SPRITE_H = 256;      // output height (the game shows it about 70 units tall)
@@ -65,7 +65,8 @@ window.Cutout = (() => {
     const o = document.createElement("canvas"); o.width = Math.max(1, Math.round(tw * k)); o.height = Math.max(1, Math.round(th * k));
     const ox = o.getContext("2d"); ox.imageSmoothingQuality = "high";
     ox.drawImage(c, x0, y0, tw, th, 0, 0, o.width, o.height);
-    return { src: o.toDataURL("image/png"), keyed };
+    // WebP keeps the transparency at about a third of the PNG size (browsers that cannot encode WebP give PNG)
+  return { src: o.toDataURL("image/webp", 0.92), keyed };
   }
 
   return { character };

@@ -321,6 +321,19 @@ let artGen = 0;            // bumps on every level load; texture keys carry it s
 let artOn = (() => { try { return localStorage.getItem("playlab.art") !== "0"; } catch { return true; } })();
 // Player character from a picture (the Studio's "use this as the player"): an <img> the main character wears.
 let playerSkin = null, playerSkinSrc = null, playerSkinGen = 0;
+// Object sprites (Muse Image, from the Studio): { enemy, coin, goal, spike, decoration } -> <img>, worn by every object of that type.
+const SPRITE_TYPES = ["enemy", "coin", "goal", "spike", "decoration"];
+let objSprites = {}, objSpritesKey = "", objSpriteGen = 0;
+function setObjectSprites(map) {
+  const want = {};
+  for (const t of SPRITE_TYPES) if (map && typeof map[t] === "string" && /^data:image\/(png|webp|jpeg);base64,/.test(map[t])) want[t] = map[t];
+  const key = SPRITE_TYPES.map((t) => (want[t] ? t + want[t].length + want[t].slice(-24) : "")).join("|");
+  if (key === objSpritesKey) return Promise.resolve(false);
+  objSpritesKey = key; const gen = ++objSpriteGen;
+  return Promise.all(Object.entries(want).map(([t, src]) => new Promise((resolve) => {
+    const img = new Image(); img.onload = () => resolve([t, img]); img.onerror = () => resolve(null); img.src = src;
+  }))).then((pairs) => { if (gen === objSpriteGen) objSprites = Object.fromEntries(pairs.filter(Boolean)); return true; });
+}
 function setPlayerSkin(src) {
   if ((src || null) === playerSkinSrc) return Promise.resolve(false);
   playerSkinSrc = src || null; playerSkinGen++;
@@ -471,11 +484,22 @@ class PlayScene extends Phaser.Scene {
 
     // Drawn art: the crop of the picture for object i, as an image over its padded box (null = draw the shape).
     for (const k of this.textures.getTextureKeys()) if (k.startsWith("ink") && !k.startsWith(`ink${artGen}_`)) this.textures.remove(k);
-    const art = artOn ? levelArt : {};
+    for (const k of this.textures.getTextureKeys()) if (k.startsWith("osp") && !k.startsWith(`osp${objSpriteGen}_`)) this.textures.remove(k);
+    // A Muse Image sprite for a type beats the drawn ink: it is fitted inside the object's box, standing on its bottom.
+    const spriteArt = {};
+    L.objects.forEach((o, i) => {
+      const img = objSprites[o.type]; if (!img || !(o.w > 0 && o.h > 0)) return;
+      const ratio = img.naturalWidth / img.naturalHeight, boxW = o.w * this.ax;
+      let h = o.h, w = h * ratio;
+      if (w > boxW * 1.6) { w = boxW * 1.6; h = w / ratio; }
+      const cx = (o.x + o.w / 2) * this.ax;
+      spriteArt[i] = { image: img, key: `osp${objSpriteGen}_${o.type}`, inkBottom: 1, box: { x: (cx - w / 2) / this.ax, y: o.y + o.h - h, w: w / this.ax, h } };
+    });
+    const art = { ...(artOn ? levelArt : {}), ...spriteArt };
     const artSprite = (i, depth = 1) => {
       const a = art[i]; if (!a) return null;
-      const key = `ink${artGen}_${i}`;
-      if (!this.textures.exists(key)) this.textures.addCanvas(key, a.canvas);
+      const key = a.key || `ink${artGen}_${i}`;
+      if (!this.textures.exists(key)) { if (a.image) this.textures.addImage(key, a.image); else this.textures.addCanvas(key, a.canvas); }
       const b = a.box, X = b.x * this.ax, Wd = b.w * this.ax;
       return this.add.image(X + Wd / 2, b.y + b.h / 2, key).setDisplaySize(Wd, b.h).setDepth(depth);
     };
@@ -549,7 +573,7 @@ class PlayScene extends Phaser.Scene {
           if (img) {
             e.isFilled = false; e.isStroked = false;
             const dh = eh * (art[i].box.h / o.h);
-            const dy = dh * (0.5 - (art[i].canvas.inkBottom ?? 1)) + eh / 2;   // lowest stroke on the enemy's feet
+            const dy = dh * (0.5 - (art[i].canvas?.inkBottom ?? art[i].inkBottom ?? 1)) + eh / 2;   // lowest stroke on the enemy's feet
             img.setDisplaySize(ew * (art[i].box.w / o.w), dh).setPosition(e.x, e.y + dy);
             e.setData("art", img); e.setData("artDy", dy); e.setData("eyes", []);
             mark(i, e, img);
@@ -1384,8 +1408,15 @@ async function init() {
         const s = playScene();
         if (m.keepPlayer && s?.player && s.state === "play") pendingSpawn = { x: s.player.x / s.ax, y: s.player.body.bottom };
         if (m.player !== undefined && okSkin(m.player)) await setPlayerSkin(m.player);
+        if (m.sprites !== undefined) await setObjectSprites(m.sprites);
         startLevel(m.level, m.name || "studio", m.thumb || null);
         if (m.toast) showToast(m.toast, 6000);
+      } else if (m.type === "playlab:sprites") {
+        // new object sprites: restart in place so enemies, coins and friends change without losing the player's spot
+        if (!(await setObjectSprites(m.sprites))) return;
+        const s = playScene();
+        if (s?.player && s.state === "play") pendingSpawn = { x: s.player.x / s.ax, y: s.player.body.bottom };
+        if (currentLevel) restartScene();
       } else if (m.type === "playlab:player" && okSkin(m.image ?? null)) {
         // a new player picture: restart in place so the character changes without losing their spot
         if (!(await setPlayerSkin(m.image ?? null))) return;

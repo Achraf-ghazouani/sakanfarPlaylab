@@ -1,15 +1,44 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/scan.js": { "maxDuration": 60 },
-    "api/fix.js": { "maxDuration": 120 },
-    "api/agent.js": { "maxDuration": 60 }
+    "api/scan.js": {
+      "maxDuration": 60
+    },
+    "api/fix.js": {
+      "maxDuration": 120
+    },
+    "api/agent.js": {
+      "maxDuration": 60
+    },
+    "api/art.js": {
+      "maxDuration": 60
+    }
   },
   "redirects": [
-    { "source": "/lib/(.*)", "destination": "/", "permanent": false }
+    {
+      "source": "/lib/(.*)",
+      "destination": "/",
+      "permanent": false
+    }
   ],
   "headers": [
-    { "source": "/api/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-store" }] },
-    { "source": "/levels/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/levels/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    }
   ]
 }

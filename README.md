@@ -104,7 +104,7 @@ What works today (steps 1-4 of the Studio plan):
 - Projects are saved in Supabase (`projects`, `messages`, `versions`). Each browser gets an anonymous owner id (localStorage) sent as the `x-owner` header; row-level security keeps every owner to their own rows. Shared projects (later step) are readable by anyone with the link.
 - "My games" drawer, auto-created project on the first message, rename by clicking the title. A reload keeps the game you are on; a new visit starts on the first screen with a Continue button.
 - Attach a picture or drawing: it goes through the existing `/api/scan` and lands in the preview as a new version.
-- **Your own character as the player**: send a picture with words like "use this as the player" (or flip its **Level / Player** toggle, or use **Add your character** on the first screen). It skips the scanner and the agent, costs nothing, and `shared/cutout.js` cuts the character out of its background (a flood fill from the picture's border), trims it and scales it to 256 px. It is saved on the game (`projects.art.player`) and the main character wears it, with the same hitbox, squash and stretch, facing left or right. "Use the default player" switches back.
+- **Pictures become a level, the player or an object.** Every attached picture has a toggle: **Auto**, **Level**, **Player** or **Object**. Words decide too ("use this as my player", "make this the enemy", "these are the coins"). On Auto, Muse Spark looks at the picture first (`api/art` classify, 1 credit): a level drawing goes to the scanner as before; a character or a single object is redrawn by **Muse Image 1.0** as a clean game sprite (`api/art` sprite, `POST /v1/images/edits` with the picture as the reference, 15 credits, refunded on failure). Muse Image has no transparent output, so it draws on flat white and `shared/cutout.js` cuts it out. A character becomes the player (`projects.art.player`); an object becomes the sprite every enemy, coin, goal, spike or decoration wears (`projects.art.sprites`). "As is" skips Muse Image and cuts out the original picture (free), and so does a failed Muse Image call. **Add your character** on the first screen does the player in one click; "use the default player" switches back.
 - "Playtest it" runs the playtest agent (`/api/fix`) and shows what it changed.
 - Every level change is a version: History lists them, Undo restores the previous one (as a new version, nothing is lost).
 - Word-by-word streaming, typing indicator, quick chips, example prompts. On phones the chat is full screen with a Preview tab.
@@ -140,12 +140,14 @@ PlayLab is invite-only. Visitors can join the waitlist on the landing page and p
 | --- | --- | --- |
 | `create_2d` | 10 | a chat turn with no game yet |
 | `edit_2d` | 2 | a chat turn on an existing game |
-| `scan` | 8 | a photo, sketch or camera picture |
+| `scan` | 8 | a photo, sketch or camera picture of a level |
+| `classify` | 1 | Muse Spark looks at a picture sent on Auto (level, character or object) |
+| `art` | 15 | Muse Image draws a player or object sprite (model `muse-image-1.0`) |
 | `playtest` | 3 | only when the level needs the AI repair (free when it is already fine; refunded when the instant fix is used instead) |
 
 Models: Muse Spark 1.3 ×1 (default), 1.2 ×0.8, 1.1 ×0.6, Muse Spark Open on Baseten ×0.5 (live re-scans from the phone use it). Replies that need no AI are free. A short balance answers 402 before any AI call, and the Studio shows the price of each action next to its button. Prices and multipliers are edited in the admin panel; `GET /api/costs` is the public price list.
 
-Database: `db/schema.sql` (games), then `db/002_accounts.sql`, `db/003_server_users.sql`, `db/004_credits.sql` and `db/005_admin.sql` in the Supabase SQL editor.
+Database: `db/schema.sql` (games), then `db/002_accounts.sql`, `db/003_server_users.sql`, `db/004_credits.sql`, `db/005_admin.sql` and `db/006_sprites.sql` in the Supabase SQL editor.
 
 ## Admin panel (`admin.html`)
 
@@ -237,7 +239,8 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | `shared/reach.mjs` | Reachability checker + algorithmic fixer (pure JS, used by server and pages) |
 | `shared/diff.mjs` | What changed between two scans of the same drawing (added / removed / moved) |
 | `shared/photo.js` | Browser photo resize helper used by index.html and game.html |
-| `shared/cutout.js` | A character picture -> a transparent player sprite (background removed, trimmed) |
+| `shared/cutout.js` | A picture -> a transparent sprite (background removed, trimmed, 256 px WebP) |
+| `api/art.js`, `lib/image.mjs` | Pictures: Muse Spark classifies (level / character / object), Muse Image 1.0 draws the sprite |
 | `assets/` | The Sakanfar PlayLab logo (`logo.webp`), the mark for top bars (`mark-256.webp`), favicons; `logo-source.webp` is the original |
 | `shared/inkart.js` | Drawn art: cuts every object out of the level's picture and keys out the paper |
 | `lib/fix-level.mjs` | Playtest agent orchestration: AI repair, validation, auto fallback |

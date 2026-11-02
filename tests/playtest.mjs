@@ -235,6 +235,16 @@ try {
   const art3 = await evalJS(artOf);
   check("G switches the drawn art back on", art3.on && art3.images === art1.images, art3);
 
+  // 12d. the 3D view: same level drawn by three.js, the 2D canvas hidden, the game still running underneath; V switches back
+  await evalJS(`setViewMode("3d").then(() => true)`);
+  const v3 = await evalJS(`(async () => { for (let i = 0; i < 80 && !(View3D.on && document.getElementById("view3d")); i++) await new Promise((r) => setTimeout(r, 100)); return { on: View3D.on, canvas: !!document.getElementById("view3d"), hidden: document.querySelector("#game canvas:not(#view3d)").style.visibility, layout: lastState && lastState.layout }; })()`);
+  check("3D view: three.js canvas on, 2D canvas hidden, state says 3d", v3.on && v3.canvas && v3.hidden === "hidden" && v3.layout === "3d", v3);
+  const moved3d = await evalJS(`(async () => { const s = ${S}; const x0 = s.player.x; remoteInput(1, { r: 1 }); await new Promise((r) => setTimeout(r, 500)); remoteInput(1, { r: 0 }); return { x0: Math.round(x0), x1: Math.round(s.player.x) }; })()`);
+  check("the game still plays in 3D (the player walks)", moved3d.x1 > moved3d.x0 + 50, moved3d);
+  await hold("KeyV", 86, 50); await sleep(400);
+  const v2 = await evalJS(`({ on: View3D.on, hidden: document.querySelector("#game canvas:not(#view3d)").style.visibility })`);
+  check("V switches back to 2D", !v2.on && v2.hidden === "", v2);
+
   // 13. phone controllers: a second character for slot 2, independent input, respawn without restart, menu + state
   await evalJS(`(() => { const sel = document.getElementById("levelSelect"); sel.value = "levels/sample.json"; sel.dispatchEvent(new Event("change")); return true; })()`);
   await sleep(1000);

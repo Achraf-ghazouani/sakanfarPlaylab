@@ -13,6 +13,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js" defer></script>
 <script src="shared/photo.js"></script>
 <script src="shared/inkart.js"></script>
+<script src="shared/view3d.js"></script>
 <script src="shared/phonelink.js" defer></script>
 <script src="shared/auth.js"></script>
 <style>
@@ -38,6 +39,10 @@
   #redrawInput { display:none; }
   body.touch .lbl { display:none; }
   /* drawn art toggle: only shown when the level has a picture to cut the art from */
+  #viewBtn { background:#0f766e; font-weight:700; }
+  #viewBtn.on { background:#7c3aed; }
+  body.embed #viewBtn { display:none; }            /* the Studio has its own 2D / 3D toggle */
+  body.player #viewBtn { display:inline-block !important; background:rgba(27,21,53,.72); border-radius:999px; padding:7px 14px; font-size:14px; }
   #artBtn { display:none; background:#6b7280; }
   #artBtn.show { display:inline-block; }
   #artBtn.on { background:#db2777; font-weight:700; }
@@ -182,6 +187,7 @@
   <label><span class="desktop">Level</span><select id="levelSelect"></select></label>
   <button id="restartBtn" title="Restart (R)">&#8635;<span class="lbl"> Restart</span></button>
   <button id="muteBtn" title="Sound on/off (M)">&#128266;</button>
+  <button id="viewBtn" title="Switch between the 2D and the 3D view (V)">3D</button>
   <button id="artBtn" title="Use the drawing itself as the art, or simple shapes (G)">&#9998;<span class="lbl"> Drawn art</span></button>
   <button id="phoneBtn" class="desktop" title="Use your phone as the controller">&#128241; Play with your phone</button>
   <span id="phoneChip" title="Phone controller"><span class="dot"></span><span id="phoneChipText">0/4</span></span>
@@ -274,7 +280,7 @@ function menuAction(action) {
 }
 function stateSnapshot() {
   const s = playScene();
-  return { t: "state", level: currentLevelName, theme: currentLevel?.theme || null, state: s?.state || "none", coins: s?.coins || 0, total: s?.totalCoins || 0, muted: !!SFX.muted, players: remotePlayers, layout: "2d" };
+  return { t: "state", level: currentLevelName, theme: currentLevel?.theme || null, state: s?.state || "none", coins: s?.coins || 0, total: s?.totalCoins || 0, muted: !!SFX.muted, players: remotePlayers, layout: viewMode };
 }
 /** Tell the phones (and the Studio, in embed mode) what the game is doing: level, coins, paused, who plays. */
 function publishState() {
@@ -319,6 +325,24 @@ let game = null;
 let levelArt = {};
 let artGen = 0;            // bumps on every level load; texture keys carry it so old crops can be dropped
 let artOn = (() => { try { return localStorage.getItem("playlab.art") !== "0"; } catch { return true; } })();
+// 2D or 3D view (shared/view3d.js draws the same running level in three.js). ?mode=3d, the V key, the 3D button,
+// or the Studio's toggle (postMessage playlab:mode / the mode of playlab:level).
+let viewMode = (new URLSearchParams(location.search).get("mode") || "").toLowerCase().startsWith("3d") ? "3d" : "2d";
+/** What the 3D view needs from a scene (cached on it). */
+function ctx3d(s) {
+  if (!s.ctx3d) s.ctx3d = { level: currentLevel, pal: s.pal, playerW: PLAYER_W, playerH: PLAYER_H,
+    toWorld: (o) => { const X = o.x * s.ax, Wd = o.w * s.ax; return { X, Y: o.y, Wd, Ht: o.h, cx: X + Wd / 2, cy: o.y + o.h / 2 }; } };
+  return s.ctx3d;
+}
+async function setViewMode(mode) {
+  viewMode = mode === "3d" ? "3d" : "2d";
+  $("viewBtn").textContent = viewMode === "3d" ? "2D" : "3D";
+  $("viewBtn").classList.toggle("on", viewMode === "3d");
+  const s = playScene();
+  try { await View3D.setOn(viewMode === "3d", $("game"), s?.W ? s : null, s?.W ? ctx3d(s) : null); }
+  catch (err) { viewMode = "2d"; showToast("<b>3D could not start</b> (WebGL or the network). Playing in 2D.", 5000); await View3D.setOn(false, $("game")); }
+  publishState();
+}
 // Player character from a picture (the Studio's "use this as the player"): an <img> the main character wears.
 let playerSkin = null, playerSkinSrc = null, playerSkinGen = 0;
 // Object sprites (Muse Image, from the Studio): { enemy, coin, goal, spike, decoration } -> <img>, worn by every object of that type.
@@ -452,6 +476,7 @@ class PlayScene extends Phaser.Scene {
 
     // Background
     const pal = PALETTES.find((p) => p.re.test((L.theme || "").toLowerCase())) || DEFAULT_PAL;
+    this.pal = pal; this.ctx3d = null;
     this.cameras.main.setBackgroundColor(pal.sky);
     document.body.style.background = hex(pal.sky);
     this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, pal.paper).setDepth(-10);
@@ -674,6 +699,7 @@ class PlayScene extends Phaser.Scene {
     this.input.keyboard.on("keydown-P", () => { if (this.state === "paused") this.resume(); else this.pause(); });
     this.input.keyboard.on("keydown-M", () => SFX.setMuted(!SFX.muted));
     this.input.keyboard.on("keydown-G", () => setArtOn(!artOn));
+    this.input.keyboard.on("keydown-V", () => setViewMode(viewMode === "3d" ? "2d" : "3d"));
 
     // Camera: slightly zoomed in, follows the player smoothly, clamped to the level.
     this.layout();
@@ -698,6 +724,12 @@ class PlayScene extends Phaser.Scene {
         }
       }
     }
+
+    // 3D view: rebuilt for every (re)start, mirrored after every physics step.
+    const sync3d = () => View3D.sync(this, ctx3d(this));
+    this.events.on("postupdate", sync3d);
+    this.events.once("shutdown", () => this.events.off("postupdate", sync3d));
+    if (viewMode === "3d") View3D.setOn(true, $("game"), this, ctx3d(this)).catch(() => setViewMode("2d"));
 
     updateScore(this);
     hideMsg();
@@ -1392,6 +1424,8 @@ async function init() {
   window.addEventListener("pagehide", () => { try { host?.destroy(); } catch {} });   // free the room id quickly
   $("muteBtn").addEventListener("click", (e) => { e.target.blur(); SFX.setMuted(!SFX.muted); });
   $("artBtn").addEventListener("click", (e) => { e.currentTarget.blur(); setArtOn(!artOn); });
+  $("viewBtn").addEventListener("click", (e) => { e.currentTarget.blur(); setViewMode(viewMode === "3d" ? "2d" : "3d"); });
+  $("viewBtn").textContent = viewMode === "3d" ? "2D" : "3D"; $("viewBtn").classList.toggle("on", viewMode === "3d");
   try { SFX.setMuted(localStorage.getItem("playlab.muted") === "1"); } catch {}
   // Browsers only allow audio after a user gesture: unlock on the first key or tap.
   window.addEventListener("keydown", () => SFX.ensure());
@@ -1409,8 +1443,11 @@ async function init() {
         if (m.keepPlayer && s?.player && s.state === "play") pendingSpawn = { x: s.player.x / s.ax, y: s.player.body.bottom };
         if (m.player !== undefined && okSkin(m.player)) await setPlayerSkin(m.player);
         if (m.sprites !== undefined) await setObjectSprites(m.sprites);
+        if (m.mode !== undefined) viewMode = String(m.mode).startsWith("3d") ? "3d" : "2d";   // the new scene builds the right view
         startLevel(m.level, m.name || "studio", m.thumb || null);
         if (m.toast) showToast(m.toast, 6000);
+      } else if (m.type === "playlab:mode") {
+        await setViewMode(String(m.mode || "").startsWith("3d") ? "3d" : "2d");
       } else if (m.type === "playlab:sprites") {
         // new object sprites: restart in place so enemies, coins and friends change without losing the player's spot
         if (!(await setObjectSprites(m.sprites))) return;

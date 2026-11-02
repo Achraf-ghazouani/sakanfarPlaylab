@@ -301,6 +301,24 @@ try {
   check("every enemy in the preview wears the sprite", !!enemiesWear);
   await evalJS(`window.__classifyAs = null; true`);
 
+  // 5f. the 2D / 3D switch in the chat box: saved on the game, sent to the agent (3D prices) and drawn in 3D by the preview
+  check("the chat box has a 2D / 3D switch on 2D", await evalJS(`document.querySelector("#dimSeg [data-dim='2d']").classList.contains("on")`));
+  await evalJS(`document.querySelector("#dimSeg [data-dim='3d']").click(); true`);
+  check("3D is selected", await evalJS(`S.mode === "3d" && document.querySelector("#dimSeg [data-dim='3d']").classList.contains("on")`));
+  const in3d = await waitFor(`typeof View3D === "object" && View3D.on && !!document.getElementById("view3d") && document.querySelector("#game canvas:not(#view3d)").style.visibility === "hidden"`, { contextId: iframeCtx(), timeout: 20_000 });
+  check("the preview draws the game in 3D (three.js canvas on, 2D canvas hidden)", !!in3d);
+  check("the game type is saved as 3d-side", !!(await waitFor(`true`)) && (await api(`api/projects?id=${pid}`)).project?.mode === "3d-side");
+  check("the send line shows the 3D price", /3D game/.test(await evalJS(`(() => { const c = document.getElementById("composer"); c.value = "more coins"; c.dispatchEvent(new Event("input")); return document.getElementById("sendCost").textContent; })()`)));
+  await sendMsg(); await idle();
+  check("the agent is told the game is 3D", await evalJS(`window.__lastAgentBody && window.__lastAgentBody.mode === "3d"`));
+  const stillIn3d = await waitFor(`View3D.on && game.scene.getScene("play").state === "play"`, { contextId: iframeCtx(), timeout: 15_000 });
+  check("the edited level plays in 3D", !!stillIn3d);
+  await new Promise((r) => setTimeout(r, 800));
+  { const shot = await send("Page.captureScreenshot", { format: "png" }); await fs.writeFile(path.join(OUT, "studio-3d.png"), Buffer.from(shot.data, "base64")); }
+  await evalJS(`document.querySelector("#dimSeg [data-dim='2d']").click(); true`);
+  const back2d = await waitFor(`!View3D.on && document.querySelector("#game canvas:not(#view3d)").style.visibility === ""`, { contextId: iframeCtx(), timeout: 10_000 });
+  check("back to 2D", !!back2d && await evalJS(`S.mode === "2d"`));
+
   // 6a. arriving again (not a reload) starts on the welcome screen, with a button to continue the last game
   await send("Page.navigate", { url: `${BASE}/studio.html` });
   check("a new visit starts on the welcome screen", !!(await waitFor(`typeof S === "object" && !!S.me && document.body.classList.contains("fresh") && !document.getElementById("continueBtn").hidden`, { timeout: 15_000 })));
@@ -311,7 +329,7 @@ try {
   await waitFor(`S.previewReady`, { timeout: 20_000 });
   check("reload reopens the last project", await evalJS(`S.project.id`) === pid);
   check("messages restored", (await evalJS(`document.querySelectorAll(".msg, .card").length`)) >= 15, await evalJS(`document.querySelectorAll(".msg, .card").length`));
-  check("versions restored", await evalJS(`S.versions.length`) === 6);
+  check("versions restored (6 + the 3D edit)", await evalJS(`S.versions.length`) === 7);
   const again = await waitFor(`(() => { try { const s = game.scene.getScene("play"); return !!(s && s.player); } catch { return false; } })()`, { contextId: iframeCtx(), timeout: 15_000 });
   check("preview restarts the saved level after reload", !!again);
   const wornAgain = await waitFor(`(() => { try { return !!game.scene.getScene("play").avatars[0].sprite; } catch { return false; } })()`, { contextId: iframeCtx(), timeout: 10_000 });

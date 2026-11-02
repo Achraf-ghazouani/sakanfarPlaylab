@@ -156,6 +156,13 @@
   .ib { border:0; background:transparent; width:36px; height:36px; border-radius:50%; display:grid; place-items:center; color:var(--muted); }
   .ib:hover { background:var(--lav); color:var(--purple-deep); }
   .ib svg { width:20px; height:20px; }
+  /* in the side panel the text gets a full line; the 2D / 3D switch, the tools and Send sit on a row below */
+  body:not(.fresh) .box { flex-wrap:wrap; row-gap:4px; padding:8px; }
+  body:not(.fresh) #composer { order:-1; flex-basis:100%; padding:4px 6px; }
+  body:not(.fresh) #sendBtn { margin-left:auto; }
+  .dim { display:inline-flex; align-self:center; flex:none; border:1px solid var(--lav-2); border-radius:999px; padding:2px; background:var(--lav); margin-right:2px; }
+  .dim button { border:0; background:transparent; border-radius:999px; padding:5px 10px; font-size:12px; font-weight:800; color:var(--purple-deep); letter-spacing:.02em; }
+  .dim button.on { background:var(--purple); color:#fff; box-shadow:0 2px 6px rgba(124,58,237,.35); }
   #sendBtn { background:var(--purple); color:#fff; }
   #sendBtn:hover { background:var(--purple-deep); }
   #sendBtn:disabled { background:var(--lav-2); color:#fff; cursor:default; }
@@ -289,6 +296,7 @@
         <div class="composer">
           <div id="attachments"></div>
           <div class="box">
+            <div class="dim" id="dimSeg" role="radiogroup" aria-label="Game type"><button data-dim="2d" class="on" role="radio" aria-checked="true" title="A 2D game">2D</button><button data-dim="3d" role="radio" aria-checked="false" title="The same game in 3D (three.js)">3D</button></div>
             <button class="ib" id="attachBtn" title="Attach an image, sketch, sprite or 3D model"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.5l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l9-9a3.5 3.5 0 0 1 5 5l-9 9a1.5 1.5 0 0 1-2.1-2.1l8-8"/></svg></button>
             <input type="file" id="attachInput" multiple accept="image/*,.png,.webp,.glb,.gltf">
             <button class="ib" id="sketchBtn" title="Sketch a level"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg></button>
@@ -371,7 +379,21 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const S = { project: null, messages: [], versions: [], level: null, attachments: [], busy: false, previewReady: false, dbOk: true };
+const S = { project: null, messages: [], versions: [], level: null, attachments: [], busy: false, previewReady: false, dbOk: true, mode: "2d" };
+/** 2D or 3D: the chat box switch. Saved on the game (projects.mode "2d" | "3d-side"), sent to the preview (game.html draws it with
+ *  shared/view3d.js), and 3D turns cost the 3D prices. Words like "3D" in a message switch it too. */
+function setDim(d, { save = true } = {}) {
+  S.mode = d === "3d" ? "3d" : "2d";
+  document.querySelectorAll("#dimSeg button").forEach((b) => { const on = b.dataset.dim === S.mode; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); });
+  if (S.previewReady) preview().postMessage({ type: "playlab:mode", mode: S.mode }, "*");
+  if (save && S.project && dimOf(S.project.mode) !== S.mode) {
+    S.project.mode = S.mode === "3d" ? "3d-side" : "2d";
+    api("api/projects", { method: "PATCH", body: { id: S.project.id, mode: S.project.mode } }).catch((err) => toast("Could not save the game type: " + err.message));
+  }
+  if (S.level) $("previewStatus").textContent = $("previewStatus").textContent.replace(/ · 3D$/, "") + (S.mode === "3d" ? " · 3D" : "");
+  if (typeof updateCosts === "function") updateCosts();
+}
+const dimOf = (mode) => (String(mode || "").startsWith("3d") ? "3d" : "2d");
 /** Two layouts: "fresh" (no game, no chat yet: welcome on the stage, chat box at the bottom center) and the game
  *  layout (chat and corrections on the left, the game in the center). "building" covers the stage until the
  *  first level arrives. */
@@ -406,8 +428,8 @@ window.addEventListener("message", (e) => {
 function pushLevel(level, { name = "studio", thumb = null, keepPlayer = false, toastText = null, quiet = false } = {}) {
   S.level = level; layout(); queueMicrotask(updateCosts);
   const n = level?.objects?.length || 0;
-  $("previewStatus").textContent = `${n} objects${S.versions[0] ? ` · v${S.versions[0].n}` : ""}${level?.theme ? ` · ${level.theme}` : ""}`;
-  if (S.previewReady) preview().postMessage({ type: "playlab:level", level, name, thumb: thumb || S.project?.photo || null, player: S.project?.art?.player || null, sprites: S.project?.art?.sprites || null, keepPlayer, toast: quiet ? null : toastText }, "*");
+  $("previewStatus").textContent = `${n} objects${S.versions[0] ? ` · v${S.versions[0].n}` : ""}${level?.theme ? ` · ${level.theme}` : ""}${S.mode === "3d" ? " · 3D" : ""}`;
+  if (S.previewReady) preview().postMessage({ type: "playlab:level", level, name, thumb: thumb || S.project?.photo || null, player: S.project?.art?.player || null, sprites: S.project?.art?.sprites || null, mode: S.mode, keepPlayer, toast: quiet ? null : toastText }, "*");
 }
 
 // ---------------------------------------------------------------------------
@@ -443,6 +465,7 @@ async function openProject(id) {
     S.project = project; S.messages = messages; S.versions = versions;
     try { localStorage.setItem("playlab.studio.project", id); } catch {}
     $("title").value = project.title;
+    setDim(dimOf(project.mode), { save: false });
     renderMessages();
     renderHistory();
     if (project.level) pushLevel(project.level, { quiet: true }); else { S.level = null; layout(); $("previewStatus").textContent = "no game yet"; }
@@ -461,7 +484,7 @@ function newProjectUI() {
 async function ensureProject(firstText) {
   if (S.project) return S.project;
   const title = (firstText || "New game").replace(/\s+/g, " ").trim().slice(0, 40) || "New game";
-  const { project } = await api("api/projects", { method: "POST", body: { title } });
+  const { project } = await api("api/projects", { method: "POST", body: { title, mode: S.mode === "3d" ? "3d-side" : "2d" } });
   S.project = project; $("title").value = project.title;
   try { localStorage.setItem("playlab.studio.project", project.id); } catch {}
   loadProjects();
@@ -746,6 +769,7 @@ $("chips").addEventListener("click", (e) => { const c = e.target.closest(".chip"
 $("composer").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
 $("composer").addEventListener("input", () => { const c = $("composer"); c.style.height = "auto"; c.style.height = Math.min(140, c.scrollHeight) + "px"; });
 $("sendBtn").addEventListener("click", send);
+$("dimSeg").addEventListener("click", (e) => { const b = e.target.closest("button[data-dim]"); if (!b) return; setDim(b.dataset.dim); toast(S.mode === "3d" ? "3D: the game is drawn in three dimensions" : "2D: the classic flat view"); $("composer").focus(); });
 // Paste a picture into the chat box, or drop it anywhere on the page: it becomes an attachment like the clip button.
 const imagesOf = (list) => [...(list || [])].filter((f) => f && f.type?.startsWith("image/"));
 document.addEventListener("paste", async (e) => {
@@ -779,6 +803,9 @@ async function send() {
   const attMeta = atts.map((a) => ({ name: a.name, type: a.type, thumb: a.thumb || null }));
   appendMessage({ role: "user", content: text, meta: { attachments: attMeta } });
   try {
+    // "a 3D lava castle" switches the game to 3D before anything is built (and charged)
+    const wants = /\b(3d|three.?d)\b/i.test(text) ? "3d" : /\b(2d|two.?d)\b/i.test(text) ? "2d" : null;
+    if (wants && wants !== S.mode) setDim(wants);
     await ensureProject(text || (atts[0] && "Level from " + atts[0].name));
     // Chat context for the agent: the last turns before this message.
     const history = S.messages.filter((m) => m.role === "user" || m.role === "assistant").slice(-12).map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 600) }));
@@ -911,7 +938,7 @@ async function askAgent(text, history) {
   showTyping();
   let res;
   try {
-    res = await api("api/agent", { method: "POST", body: { project_id: S.project?.id, message: text, level: S.level ? strip(S.level) : null, history } });
+    res = await api("api/agent", { method: "POST", body: { project_id: S.project?.id, mode: S.mode, message: text, level: S.level ? strip(S.level) : null, history } });
   } catch (err) { hideTyping(); await streamAssistant("The agent could not answer: " + err.message); return; }
   hideTyping();
   if (res.level && Array.isArray(res.level.objects)) {
@@ -928,6 +955,7 @@ async function askAgent(text, history) {
 
 /** Actions the page runs itself with the existing endpoints. */
 async function runAction(action) {
+  if (action.type === "mode") { setDim(action.mode); return; }
   if (action.type === "playtest") {
     if (!S.level) return;
     showTyping();
@@ -999,9 +1027,10 @@ function updateCosts() {
     return;
   }
   const hasImg = false;
-  const action = hasImg ? "scan" : S.level ? "edit_2d" : "create_2d";
+  const d3 = S.mode === "3d" || /\b3d\b/i.test(text);
+  const action = hasImg ? "scan" : S.level ? (d3 ? "edit_3d" : "edit_2d") : (d3 ? "create_3d" : "create_2d");
   const n = price(action);
-  $("sendCost").textContent = n === undefined || (!text && !hasImg) ? "" : `Send · ${n} credit${n === 1 ? "" : "s"} (${hasImg ? "read the picture" : S.level ? "change the game" : "new game"}) · you have ${S.me?.balance ?? 0}`;
+  $("sendCost").textContent = n === undefined || (!text && !hasImg) ? "" : `Send · ${n} credit${n === 1 ? "" : "s"} (${hasImg ? "read the picture" : S.level ? (d3 ? "change the 3D game" : "change the game") : (d3 ? "new 3D game" : "new game")}) · you have ${S.me?.balance ?? 0}`;
 }
 async function loadCosts() {
   try { const d = await (await fetch("api/costs", { cache: "no-store" })).json(); S.costs = d.costs || {}; S.models = d.models || []; } catch {}

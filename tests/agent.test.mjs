@@ -74,7 +74,7 @@ check("garbage objects are normalized, not fatal", garbage.level && garbage.leve
 
 // 7. quick replies without a model call
 calls = [];
-for (const [msg, re] of [["Make it 3D", /later step/], ["Generate art", /later step/], ["Share", /later step/], ["", /Tell me what to build/]]) {
+for (const [msg, re] of [["Make it 3D", /3D view/], ["switch to 2d", /2D view/], ["Generate art", /Muse Image draws it/], ["Share", /later step/], ["", /Tell me what to build/]]) {
   const r = await runAgent({ message: msg, level: base }, { complete: fake(textReply("should not be called")) });
   check(`quick reply for "${msg || "(empty)"}"`, re.test(r.reply), r.reply);
 }

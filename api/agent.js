@@ -30,7 +30,8 @@ export default async function handler(req, res) {
   if (free) return res.status(200).json(free);
   const model = typeof body.model === "string" ? body.model.slice(0, 60) : null;
   try {
-    const out = await paid(user, res, level ? "edit_2d" : "create_2d", { model, gameId: uuidOrNull(body.project_id) },
+    const is3d = String(body.mode || "").startsWith("3d");   // the Studio's 2D / 3D toggle: 3D games cost the 3D prices
+    const out = await paid(user, res, level ? (is3d ? "edit_3d" : "edit_2d") : (is3d ? "create_3d" : "create_2d"), { model, gameId: uuidOrNull(body.project_id) },
       (c) => runAgent({ message, level, history, attachments }, { timeoutMs: 50_000, provider: c.provider }));
     if (!out) return;   // 402 / 403 already sent
     return res.status(200).json({ ...out.result, credits: out.credits });

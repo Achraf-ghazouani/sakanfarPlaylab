@@ -72,6 +72,14 @@ with no AI call and no credits:
 
 The Studio and the phone save the picture at 720 px for this (chat thumbnails stay small).
 
+## 2D or 3D
+
+The chat box starts with a **2D | 3D** switch: pick it before you type (words like "a 3D lava castle" or "make it 3D" switch it too). The game type is saved on the game (`projects.mode`: `2d` or `3d-side`), and 3D turns cost the 3D prices (`create_3d` 25, `edit_3d` 5).
+
+The 3D view (`shared/view3d.js`, three.js 0.160 from a CDN, loaded only when needed) draws the same running level in three dimensions: the game underneath does not change, so the physics, the controls, the phone controllers, the playtest agent and every existing level work the same. Phaser keeps running with its canvas hidden, and after every frame the scene is mirrored: platforms become solid blocks with a grass top, spikes metal cones, coins spinning gold, enemies and characters little blocks with eyes, the goal a pole with a waving flag, "tree" and "cloud" decorations real trees and clouds. Pictures (drawn ink, Muse Image sprites, your player picture) stand in the world as paper cut-outs; ink drawn on a platform sits on its front face. A sun follows the player for sharp shadows, and the camera eases after them from slightly above.
+
+Outside the Studio: `game.html?mode=3d`, the **3D** button on the game page, or the **V** key.
+
 ## The playtest agent
 
 `shared/reach.mjs` simulates the game's jump physics (max height 252 units, flat jump about 300 across, platforms solid from below) and walks the level graph from the start:
@@ -242,6 +250,7 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | `shared/cutout.js` | A picture -> a transparent sprite (background removed, trimmed, 256 px WebP) |
 | `api/art.js`, `lib/image.mjs` | Pictures: Muse Spark classifies (level / character / object), Muse Image 1.0 draws the sprite |
 | `assets/` | The Sakanfar PlayLab logo (`logo.webp`), the mark for top bars (`mark-256.webp`), favicons; `logo-source.webp` is the original |
+| `shared/view3d.js` | The 3D view: mirrors the running Phaser scene into three.js every frame |
 | `shared/inkart.js` | Drawn art: cuts every object out of the level's picture and keys out the paper |
 | `lib/fix-level.mjs` | Playtest agent orchestration: AI repair, validation, auto fallback |
 | `lib/ai.mjs` | OpenAI-compatible chat client for Meta (default) and Baseten |

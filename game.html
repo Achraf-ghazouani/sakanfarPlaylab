@@ -142,6 +142,15 @@
   /* embedded in the studio preview: the studio owns levels, history and sharing */
   body.embed #homeBtn, body.embed #newBtn, body.embed #redrawBtn, body.embed #phoneBtn, body.embed .desktop, body.embed #hint, body.embed #levelSelect, body.embed #thumb { display:none !important; }
   body.embed #hud { background:rgba(27,21,53,.85); }
+  /* demo player (game.html opened on its own): full screen, only a back arrow, the level name and the coins */
+  body.player #hud { background:transparent; pointer-events:none; }
+  body.player #hud > * { pointer-events:auto; }
+  body.player #newBtn, body.player #redrawBtn, body.player #levelSelect, body.player #restartBtn, body.player #muteBtn,
+  body.player #artBtn, body.player #phoneBtn, body.player #phoneChip, body.player #thumb, body.player #hud label { display:none !important; }
+  body.player #game { top:0; }
+  body.player #homeBtn { background:rgba(27,21,53,.72); color:#fff; box-shadow:none; font-size:15px; padding:7px 14px; border-radius:999px; }
+  body.player #theme, body.player #score { background:rgba(27,21,53,.72); color:#fff; padding:5px 12px; border-radius:999px; }
+  body.player #theme { display:inline-block !important; max-width:50vw; }
   body.touch #hud { gap:8px; padding:0 8px; }
   body.touch #hud select { max-width:150px; }
 
@@ -282,6 +291,7 @@ const PARAMS = new URLSearchParams(location.search);
 const isScreen = PARAMS.get("screen") === "1";
 const isEmbed = PARAMS.get("embed") === "1";         // inside studio.html: levels arrive by postMessage
 if (isEmbed) document.body.classList.add("embed");
+if (!isEmbed && !isScreen) document.body.classList.add("player");   // a demo opened from the landing page: just the game
 let cameraPlayer = null;                           // the phone whose camera is on the stage
 let relayCfg = null;                               // { url, key } from api/config: Supabase Realtime fallback transport
 const configReady = fetch("api/config", { cache: "no-store" }).then((r) => r.json()).then((c) => { relayCfg = c.relay || null; if (host && relayCfg) host.startRelay(relayCfg); return relayCfg; }).catch(() => null);

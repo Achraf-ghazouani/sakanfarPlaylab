@@ -21,10 +21,11 @@
   html, body { margin:0; height:100%; }
   body { background:var(--bg); color:var(--ink); font-family:Inter, system-ui, sans-serif; font-size:15px; line-height:1.5; overflow:hidden; }
   button { font:inherit; cursor:pointer; }
-  .app { display:grid; grid-template-columns:260px 1fr; height:100%; }
+  .app { height:100%; }
 
-  /* sidebar */
-  aside { background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; min-width:0; }
+  /* My games: a drawer opened from the menu button, so the game gets the whole width */
+  aside { background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; min-width:0; position:fixed; inset:0 auto 0 0; width:290px; z-index:6; transform:translateX(-100%); transition:transform .2s; }
+  aside.open { transform:none; box-shadow:0 20px 60px rgba(27,21,53,.25); }
   .brand { display:flex; align-items:center; gap:10px; padding:16px 16px 10px; font-family:Fredoka, system-ui, sans-serif; font-weight:700; font-size:19px; color:var(--purple-deep); text-decoration:none; }
   .brand .logo { width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg, var(--purple), #c084fc); display:grid; place-items:center; }
   .brand .logo svg { width:17px; height:17px; }
@@ -45,7 +46,10 @@
   /* main */
   main { display:flex; flex-direction:column; min-width:0; height:100%; }
   .top { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); background:var(--panel); }
-  .top .menu { display:none; border:0; background:transparent; font-size:20px; padding:4px 6px; }
+  .top .menu { border:0; background:transparent; font-size:20px; padding:4px 8px; border-radius:10px; color:var(--purple-deep); }
+  .top .menu:hover { background:var(--lav); }
+  .mini-brand .logo { width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg, var(--purple), #c084fc); display:grid; place-items:center; }
+  .mini-brand .logo svg { width:17px; height:17px; }
   #title { font-family:Fredoka, system-ui, sans-serif; font-weight:600; font-size:18px; border:1px solid transparent; border-radius:10px; padding:5px 10px; min-width:120px; max-width:34vw; background:transparent; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #title:hover, #title:focus { border-color:var(--lav-2); background:var(--lav); outline:none; }
   .seg { display:inline-flex; border:1px solid var(--lav-2); border-radius:999px; overflow:hidden; background:#fff; }
@@ -69,8 +73,42 @@
   .pop .v.cur .n { background:var(--purple); color:#fff; }
   .pop .empty { padding:10px; color:var(--muted); font-size:13px; }
 
-  .split { display:grid; grid-template-columns:minmax(360px, 46%) 1fr; flex:1; min-height:0; }
+  /* with a game: chat and corrections on the left, the game in the center */
+  .split { display:grid; grid-template-columns:minmax(320px, 400px) 1fr; flex:1; min-height:0; position:relative; }
   .chat { display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--line); background:var(--bg); }
+  .chat-h { padding:12px 18px 0; font-weight:700; font-size:13px; color:var(--purple-deep); }
+  .chat-h small { font-weight:500; color:var(--muted); margin-left:6px; }
+
+  /* first screen: no chat panel yet; the welcome is on the stage and the chat box floats at the bottom center */
+  body.fresh .split { grid-template-columns:1fr; }
+  body.fresh .chat { position:absolute; left:50%; bottom:28px; transform:translateX(-50%); width:min(760px, calc(100% - 32px)); z-index:3; border:0; background:transparent; }
+  body.fresh .chat-h, body.fresh #messages, body.fresh .chips { display:none; }
+  body.fresh .composer { border:0; background:transparent; padding:0; }
+  body.fresh .box { padding:12px 12px 12px 16px; border-radius:22px; box-shadow:0 18px 50px rgba(91,33,182,.18); }
+  body.fresh #composer { font-size:16px; }
+  body.fresh .preview { background:radial-gradient(1200px 600px at 50% 30%, #f3eeff, var(--bg)); }
+  body.fresh .preview iframe, body.fresh #previewStatus { visibility:hidden; }
+  body.fresh .top #undoBtn, body.fresh .top #historyBtn { display:none; }
+  .welcome { display:none; position:absolute; inset:0; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px 20px 170px; overflow:auto; }
+  body.fresh .welcome { display:flex; }
+  .welcome h2 { font-family:Fredoka, system-ui, sans-serif; font-size:clamp(28px, 4vw, 42px); margin:0 0 6px; }
+  .welcome p { color:var(--muted); margin:0 0 22px; }
+  .welcome .starts { grid-template-columns:repeat(3, minmax(0, 190px)); }
+  .welcome .examples { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; max-width:720px; }
+  .welcome .examples button { border-radius:999px; padding:8px 14px; font-size:13px; }
+  .welcome .continue { margin-top:18px; border:0; background:transparent; color:var(--purple-deep); font-size:14px; padding:6px 10px; border-radius:999px; }
+  .welcome .continue:hover { background:var(--lav); }
+  .welcome .continue b { max-width:260px; display:inline-block; vertical-align:bottom; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* the first build: a loader on the stage until the level arrives */
+  .building { display:none; position:absolute; inset:0; z-index:2; flex-direction:column; align-items:center; justify-content:center; gap:6px; background:#1b1535; color:#fff; text-align:center; padding:20px; }
+  body.building .building { display:flex; }
+  .building b { font-family:Fredoka, system-ui, sans-serif; font-size:24px; }
+  .building small { color:#cfc6ee; }
+  .building .spin { width:44px; height:44px; border-radius:50%; border:4px solid rgba(255,255,255,.2); border-top-color:#c4b5fd; animation:spin 0.9s linear infinite; margin-bottom:10px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .drop-hint { display:none; position:absolute; inset:14px; z-index:4; border:3px dashed var(--purple); border-radius:20px; background:rgba(239,234,255,.92); color:var(--purple-deep); font:700 22px Fredoka, sans-serif; align-items:center; justify-content:center; pointer-events:none; }
+  body.dragging .drop-hint { display:flex; }
   #messages { flex:1; overflow:auto; padding:18px 18px 8px; display:flex; flex-direction:column; gap:12px; }
   .msg { display:flex; gap:10px; max-width:92%; animation:pop .18s ease-out; }
   @keyframes pop { from { opacity:0; transform:translateY(6px); } }
@@ -91,19 +129,14 @@
   .typing i:nth-child(2) { animation-delay:.2s; } .typing i:nth-child(3) { animation-delay:.4s; }
   @keyframes blink { 0%, 80%, 100% { opacity:.3; } 40% { opacity:1; } }
 
-  .empty-state { margin:auto; text-align:center; max-width:460px; padding:20px; }
-  .empty-state h2 { font-family:Fredoka, system-ui, sans-serif; font-size:28px; margin:0 0 6px; }
-  .empty-state p { color:var(--muted); margin:0 0 16px; }
-  .examples { display:grid; gap:8px; }
   .examples button { text-align:left; background:#fff; border:1px solid var(--lav-2); border-radius:12px; padding:11px 14px; color:var(--ink); }
   .examples button:hover { border-color:var(--purple); background:var(--lav); }
-  .starts { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px; }
+  .starts { display:grid; gap:10px; margin-bottom:18px; }
   .starts button { display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; background:#fff; border:1px solid var(--lav-2); border-radius:16px; padding:14px; color:var(--ink); cursor:pointer; transition:transform .12s, border-color .12s, box-shadow .12s; }
   .starts button:hover { border-color:var(--purple); box-shadow:0 8px 20px rgba(91,33,182,.10); transform:translateY(-1px); }
   .starts i { font-style:normal; font-size:22px; margin-bottom:4px; }
   .starts b { font-size:15px; }
   .starts small { color:var(--muted); font-size:12px; }
-  .or-try { color:var(--muted); font-size:12px; margin:0 0 8px; }
 
   .composer { padding:10px 14px 12px; border-top:1px solid var(--line); background:var(--panel); }
   #attachments { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
@@ -182,10 +215,8 @@
     .modal { padding:0; }
     .sheet { width:100vw; height:100vh; max-height:none; border-radius:0; }
     .cam-grid { grid-template-columns:1fr; }
-    aside { position:fixed; inset:0 auto 0 0; width:280px; z-index:6; transform:translateX(-100%); transition:transform .2s; }
-    aside.open { transform:none; }
-    .top .menu { display:block; }
     .top { gap:6px; padding:8px 10px; }
+    .mini-brand { display:none; }
     .top .seg, .top .tb { flex:none; }
     .tb { padding:7px 9px; }
     #undoBtn { display:none; }   /* History has restore; keeps the bar on one line */
@@ -197,6 +228,15 @@
     .mtabs { display:flex; }
     .tb span.lbl { display:none; }
     #composer::placeholder { font-size:14px; }
+    /* first screen on a phone: the stage with the welcome, the chat box at the bottom, no tabs yet */
+    body.fresh .preview { display:block; }
+    body.fresh .mtabs { display:none; }
+    body.fresh .chat { bottom:14px; }
+    .welcome { justify-content:flex-start; padding:28px 16px 150px; }
+    .welcome .starts { grid-template-columns:1fr; width:100%; max-width:360px; }
+    .welcome .starts button { flex-direction:row; align-items:center; gap:10px; padding:11px 14px; }
+    .welcome .starts i { margin:0; }
+    .welcome .starts small { margin-left:auto; text-align:right; }
   }
 </style>
 </head>
@@ -212,7 +252,8 @@
 
   <main>
     <header class="top">
-      <button class="menu" id="menuBtn" aria-label="Menu">&#9776;</button>
+      <button class="menu" id="menuBtn" aria-label="My games" title="My games">&#9776;</button>
+      <a class="mini-brand" href="index.html" title="PlayLab home"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg></span></a>
       <input id="title" value="Untitled game" aria-label="Project name" maxlength="80">
       <div class="seg" id="modeSeg" hidden><button class="on" data-mode="2d">2D</button><button data-mode="3d" disabled title="3D arrives in a later step">3D</button></div>
       <span class="spacer"></span>
@@ -228,24 +269,8 @@
 
     <div class="split">
       <section class="chat">
-        <div id="messages">
-          <div class="empty-state" id="emptyState">
-            <h2>What are we building today?</h2>
-            <p>Pick a way to start. Your game appears on the right.</p>
-            <div class="starts">
-              <button data-start="describe"><i>&#128172;</i><b>Describe it</b><small>Type the game you want</small></button>
-              <button data-start="sketch"><i>&#9999;&#65039;</i><b>Sketch it</b><small>Draw a level right here</small></button>
-              <button data-start="upload"><i>&#128444;&#65039;</i><b>Upload a drawing</b><small>A photo of your paper</small></button>
-              <button data-start="camera"><i>&#128247;</i><b>Use the camera</b><small>Point your phone at the paper</small></button>
-            </div>
-            <div class="or-try">or try one of these</div>
-            <div class="examples">
-              <button data-prompt="A lava castle with moving platforms">&#127969; A lava castle with moving platforms</button>
-              <button data-prompt="A space level with floating platforms and lots of coins">&#128640; A space level with floating platforms</button>
-              <button data-prompt="A jungle level for kids, easy">&#127796; A jungle level for kids, easy</button>
-            </div>
-          </div>
-        </div>
+        <div class="chat-h">Chat <small>ask for changes, or redraw</small></div>
+        <div id="messages"></div>
         <div class="composer">
           <div id="attachments"></div>
           <div class="box">
@@ -253,7 +278,7 @@
             <input type="file" id="attachInput" multiple accept="image/*,.png,.webp,.glb,.gltf">
             <button class="ib" id="sketchBtn" title="Sketch a level"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg></button>
             <button class="ib" id="cameraBtn" title="Camera: take a picture on a phone, or link your phone camera from a computer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
-            <textarea id="composer" rows="1" placeholder="Describe your game..."></textarea>
+            <textarea id="composer" rows="1" placeholder="Describe your game, or paste / drop a drawing..."></textarea>
             <button class="ib" id="sendBtn" title="Send (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
           </div>
           <div class="chips" id="chips">
@@ -264,6 +289,24 @@
       <section class="preview">
         <iframe id="preview" src="game.html?embed=1" title="Game preview" allow="autoplay"></iframe>
         <div id="previewStatus">no game yet</div>
+        <!-- first screen: the welcome sits on the stage, the chat box floats at the bottom center -->
+        <div class="welcome" id="emptyState">
+          <h2>What are we building today?</h2>
+          <p>Describe a game in the box below, or start from a drawing. It appears right here.</p>
+          <div class="starts">
+            <button data-start="sketch"><i>&#9999;&#65039;</i><b>Sketch it</b><small>Draw a level here</small></button>
+            <button data-start="upload"><i>&#128444;&#65039;</i><b>Upload a drawing</b><small>A photo of your paper</small></button>
+            <button data-start="camera"><i>&#128247;</i><b>Use the camera</b><small>Point your phone at it</small></button>
+          </div>
+          <div class="examples">
+            <button data-prompt="A lava castle with moving platforms">&#127969; A lava castle with moving platforms</button>
+            <button data-prompt="A space level with floating platforms and lots of coins">&#128640; A space level with floating platforms</button>
+            <button data-prompt="A jungle level for kids, easy">&#127796; A jungle level for kids, easy</button>
+          </div>
+          <button class="continue" id="continueBtn" hidden>Continue <b></b> &rarr;</button>
+        </div>
+        <div class="building" id="building"><span class="spin"></span><b>Building your game...</b><small>Muse Spark is placing platforms, coins and enemies</small></div>
+        <div class="drop-hint" id="dropHint">Drop your drawing to build it</div>
       </section>
     </div>
     <nav class="mtabs"><button class="on" id="mtabChat">Chat</button><button id="mtabPreview">Preview</button></nav>
@@ -305,7 +348,16 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const S = { project: null, messages: [], versions: [], level: null, attachments: [], busy: false, previewReady: false, dbOk: true };
-const EMPTY_HTML = $("emptyState").outerHTML;   // the empty state leaves the DOM on the first message; keep a copy to bring it back
+/** Two layouts: "fresh" (no game, no chat yet: welcome on the stage, chat box at the bottom center) and the game
+ *  layout (chat and corrections on the left, the game in the center). "building" covers the stage until the
+ *  first level arrives. */
+function layout() {
+  const fresh = !S.level && !$("messages").children.length;
+  document.body.classList.toggle("fresh", fresh);
+  document.body.classList.toggle("building", S.busy && !S.level);
+  $("composer").placeholder = fresh ? "Describe your game, or paste / drop a drawing..." : S.level ? "Ask for a change..." : "Describe your game...";
+}
+layout();
 
 async function api(path, { method = "GET", body } = {}) {
   const r = await PlayAuth.api(path, { method, body });   // adds the login token; 401/403 send the user to the login page
@@ -326,7 +378,7 @@ window.addEventListener("message", (e) => {
   if (m.type === "playlab:state" && m.state) Cam.host?.broadcast(m.state);                                                            // phones show level, coins, paused
 });
 function pushLevel(level, { name = "studio", thumb = null, keepPlayer = false, toastText = null, quiet = false } = {}) {
-  S.level = level;
+  S.level = level; layout();
   const n = level?.objects?.length || 0;
   $("previewStatus").textContent = `${n} objects${S.versions[0] ? ` · v${S.versions[0].n}` : ""}${level?.theme ? ` · ${level.theme}` : ""}`;
   if (S.previewReady) preview().postMessage({ type: "playlab:level", level, name, thumb: thumb || S.project?.photo || null, keepPlayer, toast: quiet ? null : toastText }, "*");
@@ -367,7 +419,7 @@ async function openProject(id) {
     $("title").value = project.title;
     renderMessages();
     renderHistory();
-    if (project.level) pushLevel(project.level, { quiet: true }); else { S.level = null; $("previewStatus").textContent = "no game yet"; }
+    if (project.level) pushLevel(project.level, { quiet: true }); else { S.level = null; layout(); $("previewStatus").textContent = "no game yet"; }
     document.querySelectorAll(".proj").forEach((b) => b.classList.toggle("active", b.dataset.id === id));
   } catch (err) { toast("Could not open that game: " + err.message); }
 }
@@ -403,19 +455,18 @@ $("title").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.
 function renderMessages() {
   const box = $("messages");
   box.innerHTML = "";
-  if (!S.messages.length) { box.innerHTML = EMPTY_HTML; bindExamples(); return; }
   for (const m of S.messages) appendMessage(m, false);
   box.scrollTop = box.scrollHeight;
+  layout();
 }
 function bindExamples() {
   document.querySelectorAll(".examples button").forEach((b) => b.addEventListener("click", () => { $("composer").value = b.dataset.prompt; send(); }));
   // The four ways to start reuse the composer's own buttons, so they behave exactly the same.
-  const START = { describe: () => $("composer").focus(), sketch: () => $("sketchBtn").click(), upload: () => $("attachBtn").click(), camera: () => $("cameraBtn").click() };
+  const START = { sketch: () => $("sketchBtn").click(), upload: () => $("attachBtn").click(), camera: () => $("cameraBtn").click() };
   document.querySelectorAll(".starts button").forEach((b) => b.addEventListener("click", () => START[b.dataset.start]?.()));
 }
 function appendMessage(m, scroll = true) {
   const box = $("messages");
-  const empty = box.querySelector(".empty-state"); if (empty) empty.remove();
   let el;
   if (m.role === "tool") {
     el = document.createElement("div"); el.className = "card";
@@ -428,6 +479,7 @@ function appendMessage(m, scroll = true) {
   }
   box.appendChild(el);
   if (scroll) box.scrollTop = box.scrollHeight;
+  layout();
   return el;
 }
 function showTyping() { const box = $("messages"); const el = document.createElement("div"); el.className = "msg assistant"; el.id = "typing"; el.innerHTML = `<div class="av">&#9998;</div><div class="bubble"><span class="typing"><i></i><i></i><i></i></span></div>`; box.appendChild(el); box.scrollTop = box.scrollHeight; }
@@ -661,13 +713,35 @@ $("chips").addEventListener("click", (e) => { const c = e.target.closest(".chip"
 $("composer").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
 $("composer").addEventListener("input", () => { const c = $("composer"); c.style.height = "auto"; c.style.height = Math.min(140, c.scrollHeight) + "px"; });
 $("sendBtn").addEventListener("click", send);
+// Paste a picture into the chat box, or drop it anywhere on the page: it becomes an attachment like the clip button.
+const imagesOf = (list) => [...(list || [])].filter((f) => f && f.type?.startsWith("image/"));
+document.addEventListener("paste", async (e) => {
+  const files = imagesOf([...(e.clipboardData?.items || [])].filter((i) => i.kind === "file").map((i) => i.getAsFile()));
+  if (!files.length) return;
+  e.preventDefault();
+  for (const f of files) await addAttachment(f);
+  $("composer").focus();
+});
+let dragDepth = 0;
+const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes("Files");
+document.addEventListener("dragenter", (e) => { if (!hasFiles(e)) return; dragDepth++; document.body.classList.add("dragging"); });
+document.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dragging"); } });
+document.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
+document.addEventListener("drop", async (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging");
+  if (e.target.closest?.(".modal")) return;                 // not over the sketch pad or the phone link
+  const files = imagesOf(e.dataTransfer.files);
+  for (const f of files) await addAttachment(f);
+  if (files.length && !$("composer").value.trim()) send();  // a drawing alone: build it right away, like the sketch pad
+});
 
 async function send() {
   if (S.busy) return;
   const text = $("composer").value.trim();
   const atts = S.attachments.splice(0);
   if (!text && !atts.length) return;
-  S.busy = true; $("sendBtn").disabled = true;
+  S.busy = true; $("sendBtn").disabled = true; layout();
   $("composer").value = ""; $("composer").style.height = "auto"; renderAttachments();
   const attMeta = atts.map((a) => ({ name: a.name, type: a.type, thumb: a.thumb || null }));
   appendMessage({ role: "user", content: text, meta: { attachments: attMeta } });
@@ -685,7 +759,7 @@ async function send() {
     hideTyping();
     await streamAssistant("Something went wrong: " + err.message);
   }
-  S.busy = false; $("sendBtn").disabled = false; $("composer").focus();
+  S.busy = false; $("sendBtn").disabled = false; layout(); $("composer").focus();
 }
 
 /** A picture becomes a level through /api/scan (the same scanner as the phone flow). */
@@ -779,8 +853,19 @@ $("logoutBtn").addEventListener("click", async (e) => { e.preventDefault(); try 
   const projects = await loadProjects();
   const last = (() => { try { return localStorage.getItem("playlab.studio.project"); } catch { return null; } })();
   const params = new URLSearchParams(location.search);
-  const wanted = params.get("project") || last;
+  // Arriving (after login, from the landing page) starts on the fresh screen; a reload keeps the game you were on.
+  // A link with ?project= (profile page) opens that game.
+  const reload = performance.getEntriesByType?.("navigation")[0]?.type === "reload";
+  const wanted = params.get("project") || (reload ? last : null);
   if (wanted && projects.some((p) => p.id === wanted)) openProject(wanted);
+  else {
+    const prev = projects.find((p) => p.id === last) || projects[0];
+    if (prev) {
+      const b = $("continueBtn"); b.hidden = false;
+      b.querySelector("b").textContent = prev.title;
+      b.addEventListener("click", () => openProject(prev.id));
+    }
+  }
   if (!S.dbOk) toast("Saving is off: the server has no database configured", 5000);
   document.body.classList.toggle("phone", isPhoneNow());
   if (params.get("new") === "1") newProjectUI();

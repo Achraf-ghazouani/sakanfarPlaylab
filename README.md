@@ -94,7 +94,7 @@ In the Studio, **Playtest it** runs the same check and repair on the current gam
 
 ## PlayLab Studio (chat builder, `studio.html`)
 
-Chat on the left, the live game on the right. The game page runs inside an iframe in embed mode (`game.html?embed=1`) and receives levels and commands by `postMessage`, so the game code is shared with the phone and big-screen flows.
+After login the Studio opens on a clean first screen: the welcome in the middle (sketch it, upload a drawing, use the camera, example ideas, continue your last game) and one chat box floating at the bottom center. Type, attach, paste or drop a drawing. As soon as you send something the layout becomes the workspace: chat and corrections on the left, the game in the center (a loader covers it until the first level arrives). My games is a drawer behind the menu button. The game page runs inside an iframe in embed mode (`game.html?embed=1`) and receives levels and commands by `postMessage`, so the game code is shared with the phone and big-screen flows.
 
 What works today (steps 1-4 of the Studio plan):
 - **Phones as controllers, one room for everything.** "Play with phone" and the camera button open the same QR: the phone that scans after the camera button is the camera, every other phone is a controller. Player 1 drives the main character; players 2 to 4 get their own characters in the preview (their phone's color), and only the one who dies goes back to the start. The phone has restart, pause and sound buttons and shows the level, the coins and whether the game is paused (the game broadcasts a state message on every change). Controller input reaches the game iframe by `postMessage`; `game.html` on its own (big screen, `?screen=1`) uses the same code with its own room.
@@ -102,7 +102,7 @@ What works today (steps 1-4 of the Studio plan):
 - **Camera in the chat**: on a phone the camera button takes a picture with the device camera and builds it. On a computer it opens the phone link: a QR code, the phone (`pad.html`) runs the live paper detection and auto-capture from the big-screen flow, the ink layer previews in the modal, and every scan lands in the chat as a version ("from phone camera", then "redrawn on paper"). Closing the modal keeps the link: the live video shrinks to a corner.
 - **Build and change the game by chat.** Muse Spark gets the brief (level format, jump physics, design rules), the last chat turns and the current level, and answers with a function tool: `create_level`, `edit_level` (full updated level, unchanged things keep their coordinates) or `playtest_level`. The server validates the objects, runs the instant reachability fix and the page saves the result as a version with the model's own note ("harder: two more spikes"). Per the Meta Model API docs, `tool_choice` is left on `auto` (the only accepted value) and `parallel_tool_calls:false` keeps it to one call per turn. If the Meta API fails, Muse Spark Open on Baseten gets the same brief and answers with a JSON object instead.
 - Projects are saved in Supabase (`projects`, `messages`, `versions`). Each browser gets an anonymous owner id (localStorage) sent as the `x-owner` header; row-level security keeps every owner to their own rows. Shared projects (later step) are readable by anyone with the link.
-- "My games" sidebar, auto-created project on the first message, rename by clicking the title, reload reopens the last game.
+- "My games" drawer, auto-created project on the first message, rename by clicking the title. A reload keeps the game you are on; a new visit starts on the first screen with a Continue button.
 - Attach a picture or drawing: it goes through the existing `/api/scan` and lands in the preview as a new version.
 - "Playtest it" runs the playtest agent (`/api/fix`) and shows what it changed.
 - Every level change is a version: History lists them, Undo restores the previous one (as a new version, nothing is lost).
@@ -196,8 +196,8 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | File | Purpose |
 | --- | --- |
 | `index.html` | Landing page (retro arcade, code-drawn pixel world): Start creating, Play a demo, how it works in three steps, playable levels, the waitlist |
-| `game.html` | The game (Phaser 3 arcade physics, colored shapes, touch controls, drawing thumbnail, agent toast); `?embed=1` for the Studio preview |
-| `studio.html` | PlayLab Studio: chat + live preview, My games, versions, history, undo (login required) |
+| `game.html` | The game (Phaser 3 arcade physics, colored shapes, touch controls, drawing thumbnail, agent toast); `?embed=1` for the Studio preview, `?screen=1` for the big screen; opened on its own it is a clean full-screen player for the demo levels |
+| `studio.html` | PlayLab Studio: centered chat box first, then chat on the left and the game in the center, My games drawer, versions, history, undo (login required) |
 | `login.html`, `profile.html` | Login (email link, Google, username), profile with credits, credit history and games |
 | `api/waitlist.js`, `api/me.js`, `lib/auth.mjs`, `shared/auth.js` | Waitlist, the logged-in account, server-side access checks, the browser's login helper |
 | `db/002_accounts.sql`, `db/003_server_users.sql` | Waitlist, profiles, credit ledger, approval trigger, admin and server functions |

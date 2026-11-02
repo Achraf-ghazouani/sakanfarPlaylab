@@ -139,7 +139,8 @@ try {
   check("the Studio sends visitors to the login page", !!(await waitFor(`/login\\.html$/.test(location.pathname) && /next=studio/.test(location.search)`, { timeout: 15_000 })), await evalJS(`location.href`));
   const loggedIn = await loginInPage(evalJS, (e, t) => waitFor(e, { timeout: t || 10_000 }), (url) => send("Page.navigate", { url }));
   check("username + password login lands in the Studio", loggedIn, await evalJS(`location.href`));
-  check("first screen offers four ways to start", await evalJS(`[...document.querySelectorAll(".starts button")].map((b) => b.dataset.start).join()`) === "describe,sketch,upload,camera");
+  check("first screen: fresh layout, chat box at the bottom center", await evalJS(`document.body.classList.contains("fresh") && (() => { const r = document.querySelector(".chat").getBoundingClientRect(); return Math.abs(r.left + r.width / 2 - innerWidth / 2) < 4 && innerHeight - r.bottom < 60; })()`));
+  check("first screen offers three ways to start from a drawing", await evalJS(`[...document.querySelectorAll(".starts button")].map((b) => b.dataset.start).join()`) === "sketch,upload,camera");
   check("unfinished 3D and Share are hidden", await evalJS(`getComputedStyle(document.getElementById("modeSeg")).display === "none" && getComputedStyle(document.getElementById("shareBtn")).display === "none"`));
   await evalJS(`document.querySelector('.starts [data-start="sketch"]').click(); true`);
   check("Sketch it opens the sketch pad", await evalJS(`document.getElementById("sketchModal").classList.contains("show")`));
@@ -149,8 +150,8 @@ try {
   await send("Page.navigate", { url: `${BASE}/studio.html?camera=1` });
   check("studio.html?camera=1 opens the camera link", !!(await waitFor(`typeof S === "object" && document.getElementById("camModal").classList.contains("show")`, { timeout: 15_000 })));
   await send("Page.navigate", { url: `${BASE}/studio.html` });
-  await waitFor(`typeof S === "object" && document.querySelector(".empty-state") !== null`);
-  check("studio loads with the empty state", await evalJS(`!!document.querySelector(".empty-state h2")`));
+  await waitFor(`typeof S === "object" && document.body.classList.contains("fresh")`);
+  check("studio loads on the welcome screen", await evalJS(`getComputedStyle(document.getElementById("emptyState")).display === "flex"`));
   check("my games list is empty for a fresh owner", await evalJS(`document.querySelectorAll(".proj").length`) === 0);
   check("preview iframe reports ready", !!(await waitFor(`S.previewReady`, { timeout: 20_000 })));
   const ctx = iframeCtx();
@@ -160,6 +161,7 @@ try {
   // 1. first text message: project auto-created, reply streamed, both messages saved
   await type("A lava castle with moving platforms"); await sendMsg();
   check("user bubble appears", !!(await waitFor(`document.querySelector(".msg.user .bubble")`)));
+  check("first message switches to the chat panel on the left", await evalJS(`!document.body.classList.contains("fresh") && document.querySelector(".chat").getBoundingClientRect().left < 5`));
   await idle();
   check("typing indicator showed while waiting", await evalJS(`window.__sawTyping`));
   check("assistant reply streamed in", await evalJS(`document.querySelectorAll(".msg.assistant .bubble").length`) === 1);
@@ -175,6 +177,8 @@ try {
   check("messages saved to the database", saved.messages?.length === 3 && saved.messages.map((m) => m.role).join() === "user,tool,assistant", saved.messages?.map((m) => m.role));
   const player = await waitFor(`(() => { try { const s = game.scene.getScene("play"); return s && s.player ? { x: Math.round(s.player.x), state: s.state } : null; } catch { return null; } })()`, { contextId: iframeCtx(), timeout: 15_000 });
   check("preview iframe is running the level", !!player && player.state === "play", player);
+  check("game layout: chat on the left, the game in the center", await evalJS(`!document.body.classList.contains("building") && document.querySelector(".preview").getBoundingClientRect().left >= 300`));
+  { const shot = await send("Page.captureScreenshot", { format: "png" }); await fs.writeFile(path.join(OUT, "studio-game.png"), Buffer.from(shot.data, "base64")); }
 
   // 2. a chat edit: the agent gets the level + history, the result is version 2
   await type("Change theme"); await sendMsg(); await idle();
@@ -254,8 +258,12 @@ try {
   check("room code and QR rendered", !!code && (await evalJS(`document.querySelector("#camQr svg") !== null && /pad\\.html\\?room=/.test(document.getElementById("camUrl").textContent)`)), code);
   await click("#camClose");
 
-  // 6. reload -> last project reopens with its history and level
+  // 6a. arriving again (not a reload) starts on the welcome screen, with a button to continue the last game
   await send("Page.navigate", { url: `${BASE}/studio.html` });
+  check("a new visit starts on the welcome screen", !!(await waitFor(`typeof S === "object" && !!S.me && document.body.classList.contains("fresh") && !document.getElementById("continueBtn").hidden`, { timeout: 15_000 })));
+  check("Continue names the last game", /Lava Castle/.test(await evalJS(`document.getElementById("continueBtn").textContent`)));
+  // 6b. reload -> last project reopens with its history and level
+  await send("Page.reload");
   await waitFor(`typeof S === "object" && S.project && S.project.id === ${JSON.stringify(pid)}`, { timeout: 15_000 });
   await waitFor(`S.previewReady`, { timeout: 20_000 });
   check("reload reopens the last project", await evalJS(`S.project.id`) === pid);
@@ -266,7 +274,7 @@ try {
 
   // 7. new game resets the UI, project stays in the list
   await click("#newGameBtn");
-  check("new game shows the empty state", await evalJS(`!S.project && !!document.querySelector(".empty-state")`));
+  check("new game goes back to the welcome screen", await evalJS(`!S.project && document.body.classList.contains("fresh")`));
   check("old game still listed", await evalJS(`document.querySelectorAll(".proj").length`) === 1);
   await click(".proj");
   await waitFor(`S.project && S.project.id === ${JSON.stringify(pid)}`);

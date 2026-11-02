@@ -17,6 +17,7 @@
     "test:auth": "node tests/auth.test.mjs http://localhost:3000",
     "test:db": "node tests/db.test.mjs",
     "test:studio": "node tests/studio.test.mjs http://localhost:3000",
+    "test:admin": "node tests/admin.test.mjs http://localhost:3000",
     "dev:https": "node serve.mjs --https"
   }
 }

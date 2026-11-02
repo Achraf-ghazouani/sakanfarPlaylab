@@ -133,7 +133,18 @@ PlayLab is invite-only. Visitors can join the waitlist on the landing page and p
 - **Phones need no account**: in the Studio and on the big screen the phone sends its picture to the logged-in computer, which runs the scan and sends the result back.
 - **Server key**: a few server-only database functions (waitlist inserts, rate limits, admin sync, test accounts) require `PLAYLAB_SERVER_KEY`; the database stores only its SHA-256. It never reaches a page.
 
-Database: `db/schema.sql` (games), then `db/002_accounts.sql` and `db/003_server_users.sql` in the Supabase SQL editor.
+Database: `db/schema.sql` (games), then `db/002_accounts.sql`, `db/003_server_users.sql`, `db/004_credits.sql` and `db/005_admin.sql` in the Supabase SQL editor.
+
+## Admin panel (`admin.html`)
+
+Admins open it from the account menu in the Studio (**Admin panel**) or the **Admin** button on the profile page. Everyone else gets "Admins only": `api/admin.js` checks the role, and every database function checks it again.
+
+- **Overview**: people waiting for approval, accounts, credits used today / 7 days / 30 days, credits held by users, a 14-day chart of credits used (hover a day for the numbers), usage by action and by model, top users.
+- **Waitlist**: pending / approved / rejected, search, approve with starting credits, reject (also pauses an existing account), mark invited. PlayLab does not send invites: **Copy invite** gives you the text to send.
+- **Users**: search, real or demo accounts, give or take credits for several users at once (with a reason, written to their credit history), and per user: status (active / suspended / banned), role, daily credit limit, access end date, set a password, their usage, delete. Admins cannot pause, demote or delete themselves. **New user** creates email or username accounts, including demo accounts for judges.
+- **Credits & usage**: every credit movement for everyone, filtered by action or user.
+- **Prices & models**: the credit price of each action, each model's multiplier, which models are on, and the default model.
+- **Activity**: every change made from the panel, by whom.
 
 ## Run it locally
 
@@ -158,6 +169,7 @@ Other commands:
 | `npm run playtest` | Headless Chrome drives the game through 36 checks (needs `npm run dev` running) |
 | `npm run test:auth` | Waitlist, approval gate, logins, roles, blocked accounts and row-level security against the real Supabase project (needs `npm run dev`) |
 | `npm run test:db` | Round trip against the real Supabase tables as two throwaway accounts |
+| `npm run test:admin` | The admin API against the real Supabase project with a throwaway admin and user: access, credits, limits, suspend, passwords, accounts, waitlist, prices, models, activity (needs `npm run dev`) |
 | `npm run test:studio` | Headless Chrome drives `studio.html`: chat, saved projects, versions, undo, sketch pad, reload, mobile tabs (needs `npm run dev` and Supabase) |
 | `node tests/studio-camera.test.mjs` | Two headless Chromes: the Studio camera link and a phone with the synthetic sheet, level lands in the chat (needs the dev server and the PeerServer or the relay) |
 
@@ -199,6 +211,7 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | `game.html` | The game (Phaser 3 arcade physics, colored shapes, touch controls, drawing thumbnail, agent toast); `?embed=1` for the Studio preview, `?screen=1` for the big screen; opened on its own it is a clean full-screen player for the demo levels |
 | `studio.html` | PlayLab Studio: centered chat box first, then chat on the left and the game in the center, My games drawer, versions, history, undo (login required) |
 | `login.html`, `profile.html` | Login (email link, Google, username), profile with credits, credit history and games |
+| `admin.html`, `api/admin.js`, `db/005_admin.sql` | Admin panel: overview, waitlist, users, credits and usage, prices and models, activity |
 | `api/waitlist.js`, `api/me.js`, `lib/auth.mjs`, `shared/auth.js` | Waitlist, the logged-in account, server-side access checks, the browser's login helper |
 | `db/002_accounts.sql`, `db/003_server_users.sql` | Waitlist, profiles, credit ledger, approval trigger, admin and server functions |
 | `api/projects.js`, `api/messages.js`, `api/version.js` | Vercel functions for saved games (Supabase through PostgREST, `lib/db.mjs`) |

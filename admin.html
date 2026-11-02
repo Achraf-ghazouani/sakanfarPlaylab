@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fbfaff">
+<meta name="robots" content="noindex">
+<title>Admin · Sakanfar PlayLab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js"></script>
+<script src="shared/auth.js"></script>
+<style>
+  :root { --bg:#fbfaff; --lav:#efeaff; --lav-2:#e2d9ff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --line:#ebe6f7; --green:#15803d; --red:#b91c1c; --amber:#92400e; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter, system-ui, sans-serif; font-size:14px; }
+  button, input, select, textarea { font:inherit; }
+  header { display:flex; align-items:center; gap:12px; padding:12px 20px; background:#fff; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  header .brand { display:flex; align-items:center; gap:10px; font-family:Fredoka, system-ui, sans-serif; font-weight:700; font-size:19px; color:var(--purple-deep); text-decoration:none; }
+  header .brand .logo { width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg, var(--purple), #c084fc); display:grid; place-items:center; }
+  header .brand small { font:600 11px Inter, sans-serif; background:var(--lav); color:var(--purple-deep); border-radius:999px; padding:3px 8px; }
+  .spacer { flex:1; }
+  .tb { border:1px solid var(--lav-2); background:#fff; color:var(--purple-deep); border-radius:999px; padding:7px 13px; font-weight:600; font-size:13px; text-decoration:none; cursor:pointer; white-space:nowrap; }
+  .tb:hover { background:var(--lav); }
+  .tb.primary { background:var(--purple); color:#fff; border-color:var(--purple); }
+  .tb.primary:hover { background:var(--purple-deep); }
+  .tb.danger { color:var(--red); border-color:#fecaca; }
+  .tb.danger:hover { background:#fef2f2; }
+  .tb:disabled { opacity:.45; cursor:not-allowed; }
+  nav.tabs { display:flex; gap:4px; padding:0 20px; background:#fff; border-bottom:1px solid var(--line); overflow-x:auto; position:sticky; top:55px; z-index:4; }
+  nav.tabs button { border:0; background:transparent; padding:12px 14px; font-weight:600; color:var(--muted); cursor:pointer; white-space:nowrap; box-shadow:inset 0 -3px 0 transparent; }
+  nav.tabs button.on { color:var(--purple-deep); box-shadow:inset 0 -3px 0 var(--purple); }
+  nav.tabs .count { background:var(--purple); color:#fff; border-radius:999px; font-size:11px; padding:1px 7px; margin-left:4px; }
+  main { width:min(1200px, 100%); margin:0 auto; padding:20px 16px 60px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:18px; padding:18px; box-shadow:0 10px 30px rgba(91,33,182,.05); margin-bottom:16px; }
+  h2 { font-family:Fredoka, system-ui, sans-serif; font-size:18px; margin:0 0 12px; }
+  h2 small { font:400 13px Inter, sans-serif; color:var(--muted); margin-left:6px; }
+  .muted { color:var(--muted); }
+  .bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  .bar input[type=search], .bar input[type=number], .bar input[type=text], .bar select { border:1px solid var(--lav-2); border-radius:10px; padding:7px 10px; background:#fff; outline:none; }
+  .bar input:focus, .bar select:focus { border-color:var(--purple); }
+  .bar .sel { color:var(--muted); font-size:13px; }
+
+  /* overview */
+  .stats { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:12px; margin-bottom:16px; }
+  .stat { background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px 16px; }
+  .stat .n { font:700 28px Fredoka, sans-serif; color:var(--ink); line-height:1.1; }
+  .stat .l { color:var(--muted); font-size:12px; margin-top:4px; }
+  .stat .s { color:var(--muted); font-size:12px; }
+  .stat.warn .n { color:var(--amber); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .chart { position:relative; height:180px; display:flex; align-items:flex-end; gap:2px; padding:0 4px 22px; border-bottom:1px solid var(--line); }
+  .chart .col { flex:1; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; position:relative; cursor:default; }
+  .chart .col i { display:block; width:min(24px, 70%); background:var(--purple); border-radius:4px 4px 0 0; min-height:0; }
+  .chart .col.zero i { background:transparent; }
+  .chart .col:hover i { background:var(--purple-deep); }
+  .chart .col span { position:absolute; bottom:-20px; font-size:10px; color:var(--muted); white-space:nowrap; }
+  .chart .peak { position:absolute; left:4px; top:0; font-size:11px; color:var(--muted); }
+  #tip { position:fixed; pointer-events:none; background:#1b1535; color:#fff; font-size:12px; padding:6px 9px; border-radius:8px; z-index:20; display:none; white-space:nowrap; }
+  .rank { width:100%; border-collapse:collapse; }
+  .rank td { padding:7px 4px; border-top:1px solid var(--line); }
+  .rank td.v { text-align:right; font-weight:600; white-space:nowrap; }
+  .rank .meter { height:6px; background:var(--lav); border-radius:999px; overflow:hidden; margin-top:4px; }
+  .rank .meter i { display:block; height:100%; background:var(--purple); border-radius:999px; }
+
+  /* tables */
+  .tablewrap { overflow-x:auto; }
+  table.t { width:100%; border-collapse:collapse; }
+  table.t th { text-align:left; font-size:12px; color:var(--muted); font-weight:600; padding:8px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  table.t td { padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  table.t tr.clickable { cursor:pointer; }
+  table.t tr.clickable:hover td { background:#faf8ff; }
+  table.t td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.plus { color:var(--green); font-weight:700; } td.minus { color:var(--red); font-weight:700; }
+  .who b { display:block; } .who small { color:var(--muted); }
+  .msgcell { max-width:320px; color:var(--muted); font-size:13px; white-space:pre-wrap; }
+  .pill { display:inline-block; border-radius:999px; padding:2px 9px; font-size:11px; font-weight:700; white-space:nowrap; }
+  .pill.pending { background:#fef3c7; color:var(--amber); }
+  .pill.approved, .pill.active { background:#dcfce7; color:var(--green); }
+  .pill.rejected, .pill.banned { background:#fee2e2; color:var(--red); }
+  .pill.suspended { background:#fef3c7; color:var(--amber); }
+  .pill.admin { background:var(--lav); color:var(--purple-deep); }
+  .pill.demo { background:#e0f2fe; color:#075985; }
+  .pill.off { background:#f3f4f6; color:#6b7280; }
+  .empty { color:var(--muted); padding:16px 4px; }
+  input.cell { width:90px; border:1px solid var(--lav-2); border-radius:8px; padding:5px 8px; }
+  input.cell.wide { width:220px; }
+
+  /* drawer + modal */
+  .scrim { position:fixed; inset:0; background:rgba(27,21,53,.4); z-index:10; display:none; }
+  .scrim.show { display:block; }
+  .drawer { position:fixed; top:0; right:0; bottom:0; width:min(520px, 100vw); background:#fff; z-index:11; transform:translateX(100%); transition:transform .2s; overflow:auto; box-shadow:-20px 0 60px rgba(27,21,53,.2); }
+  .drawer.show { transform:none; }
+  .drawer .head { display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; }
+  .drawer .head b { font:700 18px Fredoka, sans-serif; }
+  .drawer .body { padding:16px 18px; }
+  .drawer section { border-bottom:1px solid var(--line); padding:14px 0; }
+  .drawer section:last-child { border-bottom:0; }
+  .drawer h3 { font-size:13px; margin:0 0 10px; color:var(--purple-deep); }
+  .form { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .form label { display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:600; color:var(--muted); }
+  .form .full { grid-column:1 / -1; }
+  .form input, .form select, .form textarea { border:1px solid var(--lav-2); border-radius:10px; padding:8px 10px; color:var(--ink); font-weight:400; font-size:14px; outline:none; background:#fff; }
+  .form input:focus, .form select:focus { border-color:var(--purple); }
+  .form .check { flex-direction:row; align-items:center; gap:8px; color:var(--ink); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; font-size:13px; }
+  .kv span { color:var(--muted); }
+  #toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#1b1535; color:#fff; padding:10px 16px; border-radius:10px; font-size:13px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:30; max-width:90vw; }
+  #toast.show { opacity:1; }
+  #toast.err { background:var(--red); }
+  .gate { max-width:440px; margin:80px auto; text-align:center; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns:1fr; } .form { grid-template-columns:1fr; } nav.tabs { top:55px; } }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="index.html"><span class="logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg></span>PlayLab <small>Admin</small></a>
+  <span class="spacer"></span>
+  <span class="muted" id="whoami"></span>
+  <a class="tb" href="studio.html">Studio</a>
+  <a class="tb" href="profile.html">Profile</a>
+</header>
+<nav class="tabs" id="tabs" hidden>
+  <button data-tab="overview" class="on">Overview</button>
+  <button data-tab="waitlist">Waitlist <span class="count" id="pendingCount" hidden></span></button>
+  <button data-tab="users">Users</button>
+  <button data-tab="usage">Credits &amp; usage</button>
+  <button data-tab="pricing">Prices &amp; models</button>
+  <button data-tab="activity">Activity</button>
+</nav>
+<main id="main">
+  <div class="gate" id="gate"><p class="muted">Checking your access...</p></div>
+
+  <!-- OVERVIEW -->
+  <div data-pane="overview" hidden>
+    <div class="stats" id="stats"></div>
+    <div class="card">
+      <h2>Credits used per day <small>last 14 days, AI calls only (admin grants not counted)</small></h2>
+      <div class="chart" id="dailyChart"></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h2>By action <small>30 days</small></h2><table class="rank" id="byAction"></table></div>
+      <div class="card"><h2>By model <small>30 days</small></h2><table class="rank" id="byModel"></table></div>
+    </div>
+    <div class="card"><h2>Top users <small>credits used, 30 days</small></h2><table class="rank" id="topUsers"></table></div>
+  </div>
+
+  <!-- WAITLIST -->
+  <div data-pane="waitlist" hidden>
+    <div class="card">
+      <div class="bar">
+        <select id="wlStatus"><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="">All</option></select>
+        <input type="search" id="wlSearch" placeholder="Search name, email, idea...">
+        <span class="spacer"></span>
+        <span class="sel" id="wlSel">0 selected</span>
+        <label class="sel">credits <input type="number" id="wlCredits" value="200" min="0" max="100000" style="width:90px"></label>
+        <button class="tb primary" id="wlApprove" disabled>Approve</button>
+        <button class="tb" id="wlInvited" disabled>Mark invited</button>
+        <button class="tb danger" id="wlReject" disabled>Reject</button>
+      </div>
+      <p class="muted" style="margin:-4px 0 10px;font-size:12px">Approving lets that email log in (email link or Google) with the starting credits. PlayLab does not send the invite: use <b>Copy invite</b>, send it yourself, then mark them invited.</p>
+      <div class="tablewrap"><table class="t" id="wlTable"></table></div>
+    </div>
+  </div>
+
+  <!-- USERS -->
+  <div data-pane="users" hidden>
+    <div class="card">
+      <div class="bar">
+        <input type="search" id="uSearch" placeholder="Search email, username, name...">
+        <select id="uDemo"><option value="">Everyone</option><option value="0">Real accounts</option><option value="1">Demo accounts</option></select>
+        <span class="spacer"></span>
+        <span class="sel" id="uSel">0 selected</span>
+        <input type="number" id="uAmount" placeholder="credits (+/-)" style="width:120px">
+        <input type="text" id="uReason" placeholder="reason" style="width:170px">
+        <button class="tb" id="uGive" disabled>Give credits</button>
+        <button class="tb primary" id="uNew">+ New user</button>
+      </div>
+      <div class="tablewrap"><table class="t" id="uTable"></table></div>
+    </div>
+  </div>
+
+  <!-- USAGE -->
+  <div data-pane="usage" hidden>
+    <div class="card">
+      <div class="bar">
+        <select id="lgKind"><option value="">Every kind</option></select>
+        <span class="sel" id="lgUser" hidden></span>
+        <button class="tb" id="lgClearUser" hidden>Show everyone</button>
+        <span class="spacer"></span>
+        <button class="tb" id="lgMore">Load more</button>
+      </div>
+      <div class="tablewrap"><table class="t" id="lgTable"></table></div>
+    </div>
+  </div>
+
+  <!-- PRICING -->
+  <div data-pane="pricing" hidden>
+    <div class="card">
+      <h2>Prices <small>credits per action, before the model multiplier</small></h2>
+      <div class="tablewrap"><table class="t" id="costTable"></table></div>
+    </div>
+    <div class="card">
+      <h2>Models <small>the charge is price &times; multiplier, rounded up; the default is used when nobody picks one</small></h2>
+      <div class="tablewrap"><table class="t" id="modelTable"></table></div>
+    </div>
+  </div>
+
+  <!-- ACTIVITY -->
+  <div data-pane="activity" hidden>
+    <div class="card">
+      <h2>Admin activity <small>every change made from this panel</small></h2>
+      <div class="tablewrap"><table class="t" id="actTable"></table></div>
+    </div>
+  </div>
+</main>
+
+<!-- user drawer -->
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer">
+  <div class="head"><b id="dTitle">User</b><span class="spacer"></span><button class="tb" id="dClose">Close</button></div>
+  <div class="body" id="dBody"></div>
+</aside>
+<div id="tip"></div>
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmt = (n) => Number(n || 0).toLocaleString();
+const plural = (n, word) => `${fmt(n)} ${word}${Number(n) === 1 ? "" : "s"}`;
+const when = (iso) => iso ? new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—";
+const day = (iso) => iso ? new Date(iso).toLocaleDateString([], { dateStyle: "medium" }) : "—";
+const S = { me: null, tab: "overview", wl: [], users: [], wlSel: new Set(), uSel: new Set(), ledger: [], lgUser: null, lgOffset: 0 };
+
+function toast(text, err = false) { const t = $("toast"); t.textContent = text; t.className = "show" + (err ? " err" : ""); clearTimeout(toast.t); toast.t = setTimeout(() => (t.className = ""), err ? 5000 : 2500); }
+async function api(query, body) {
+  const r = await PlayAuth.api("api/admin" + (body ? "" : "?" + new URLSearchParams(query)), body ? { method: "POST", body } : {});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
+  return data;
+}
+/** Run an admin change, show the outcome, then refresh the given views. */
+async function act(body, okText, ...refresh) {
+  try { const d = await api(null, body); toast(okText(d)); for (const f of refresh) await f(); return d; }
+  catch (err) { toast(err.message, true); return null; }
+}
+const name = (u) => u.display_name || u.username || (u.email || "").split("@")[0];
+const shownEmail = (e) => (e || "").endsWith("@demo.playlab.invalid") ? "username login" : e;
+
+// ---------------------------------------------------------------------------
+// Tabs
+// ---------------------------------------------------------------------------
+const LOADERS = { overview: loadOverview, waitlist: loadWaitlist, users: loadUsers, usage: () => loadLedger(true), pricing: loadPricing, activity: loadActivity };
+function showTab(t) {
+  S.tab = t;
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
+  document.querySelectorAll("[data-pane]").forEach((p) => (p.hidden = p.dataset.pane !== t));
+  try { history.replaceState(null, "", "#" + t); } catch {}
+  LOADERS[t]?.();
+}
+$("tabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) showTab(b.dataset.tab); });
+
+// ---------------------------------------------------------------------------
+// Overview
+// ---------------------------------------------------------------------------
+async function loadOverview() {
+  let o; try { ({ overview: o } = await api({ action: "overview" })); } catch (err) { return toast(err.message, true); }
+  setPending(o.waitlist.pending);
+  const stat = (n, l, s = "", cls = "") => `<div class="stat ${cls}"><div class="n">${fmt(n)}</div><div class="l">${l}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
+  $("stats").innerHTML =
+    stat(o.waitlist.pending, "waiting for approval", `${fmt(o.waitlist.approved)} approved · ${fmt(o.waitlist.total)} total`, o.waitlist.pending ? "warn" : "") +
+    stat(o.users.total, "accounts", `${fmt(o.users.active_7d)} active this week · ${fmt(o.users.demo)} demo`) +
+    stat(o.spent.today, "credits used today", plural(o.spent.calls_today, "AI call")) +
+    stat(o.spent.d7, "credits used, 7 days", `${fmt(o.spent.d30)} in 30 days`) +
+    stat(o.users.balance, "credits held by users", `${fmt(o.granted_30d)} granted in 30 days`) +
+    stat(o.users.suspended + o.users.banned, "paused or closed", `${plural(o.spent.refunds_30d, "refund")} in 30 days`);
+  // one series (credits per day): a single hue, columns from one baseline, hover for the exact numbers
+  const max = Math.max(1, ...o.daily.map((d) => d.credits));
+  $("dailyChart").innerHTML = `<span class="peak">${fmt(max)}</span>` + o.daily.map((d, i) => {
+    const dt = new Date(d.day + "T00:00:00");
+    const label = i % 2 === o.daily.length % 2 ? "" : dt.toLocaleDateString([], { month: "short", day: "numeric" });
+    return `<div class="col${d.credits ? "" : " zero"}" data-tip="${esc(dt.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }))}: ${fmt(d.credits)} credits · ${plural(d.calls, "call")}"><i style="height:${(d.credits / max) * 100}%"></i><span>${label}</span></div>`;
+  }).join("");
+  const rank = (rows, key, labelOf) => {
+    if (!rows.length) return `<tr><td class="empty">No usage yet.</td></tr>`;
+    const top = Math.max(1, ...rows.map((r) => r.credits));
+    return rows.map((r) => `<tr><td>${labelOf(r)}<div class="meter"><i style="width:${(r.credits / top) * 100}%"></i></div></td><td class="v">${fmt(r.credits)}<br><small class="muted">${plural(r.calls, "call")}</small></td></tr>`).join("");
+  };
+  $("byAction").innerHTML = rank(o.by_action, "action", (r) => esc(r.action));
+  $("byModel").innerHTML = rank(o.by_model, "model", (r) => esc(r.model));
+  $("topUsers").innerHTML = rank(o.top_users, "id", (r) => `<a href="#" data-ledger="${r.id}" data-label="${esc(r.username || r.email)}">${esc(r.username ? "@" + r.username : r.email)}</a>`);
+}
+// tooltip for chart columns
+document.addEventListener("mousemove", (e) => {
+  const c = e.target.closest?.("[data-tip]"), tip = $("tip");
+  if (!c) { tip.style.display = "none"; return; }
+  tip.textContent = c.dataset.tip; tip.style.display = "block";
+  tip.style.left = Math.min(innerWidth - tip.offsetWidth - 8, e.clientX + 12) + "px"; tip.style.top = (e.clientY - 34) + "px";
+});
+function setPending(n) { const c = $("pendingCount"); c.hidden = !n; c.textContent = n; }
+
+// ---------------------------------------------------------------------------
+// Waitlist
+// ---------------------------------------------------------------------------
+async function loadWaitlist() {
+  try { ({ waitlist: S.wl } = await api({ action: "waitlist", status: $("wlStatus").value, search: $("wlSearch").value.trim() })); } catch (err) { return toast(err.message, true); }
+  S.wlSel.clear(); renderWaitlist();
+}
+function renderWaitlist() {
+  const rows = S.wl;
+  $("wlTable").innerHTML = `<thead><tr><th><input type="checkbox" id="wlAll"></th><th>Person</th><th>Game idea</th><th>Status</th><th>Joined</th><th></th></tr></thead><tbody>` +
+    (rows.length ? rows.map((w) => `<tr>
+      <td><input type="checkbox" data-id="${w.id}" ${S.wlSel.has(w.id) ? "checked" : ""}></td>
+      <td class="who"><b>${esc(w.name)}</b><small>${esc(w.email)}</small>${w.source ? `<br><small>via ${esc(w.source)}</small>` : ""}</td>
+      <td class="msgcell">${esc(w.message || "")}</td>
+      <td><span class="pill ${w.status}">${w.status}</span>${w.status === "approved" ? `<br><small class="muted">${fmt(w.starting_credits)} credits${w.invited_at ? " · invited" : ""}${w.accepted_at ? " · joined" : ""}</small>` : ""}</td>
+      <td class="muted">${day(w.created_at)}</td>
+      <td>${w.status === "approved" ? `<button class="tb" data-invite="${w.id}">Copy invite</button>` : ""}</td></tr>`).join("") : `<tr><td colspan="6" class="empty">Nobody here.</td></tr>`) + "</tbody>";
+  $("wlAll").addEventListener("change", (e) => { rows.forEach((w) => (e.target.checked ? S.wlSel.add(w.id) : S.wlSel.delete(w.id))); renderWaitlist(); });
+  $("wlTable").querySelectorAll("[data-id]").forEach((c) => c.addEventListener("change", () => { const id = Number(c.dataset.id); c.checked ? S.wlSel.add(id) : S.wlSel.delete(id); wlButtons(); }));
+  $("wlTable").querySelectorAll("[data-invite]").forEach((b) => b.addEventListener("click", () => copyInvite(rows.find((w) => w.id === Number(b.dataset.invite)))));
+  wlButtons();
+}
+function wlButtons() { const n = S.wlSel.size; $("wlSel").textContent = `${n} selected`; ["wlApprove", "wlInvited", "wlReject"].forEach((id) => ($(id).disabled = !n)); }
+async function copyInvite(w) {
+  const link = new URL("login.html", location.href).href;
+  const text = `Hi ${w.name}, your Sakanfar PlayLab invite is ready! Log in at ${link} with ${w.email} (email link or Google) and start building. You have ${w.starting_credits} credits to begin.`;
+  try { await navigator.clipboard.writeText(text); toast("Invite text copied. Send it, then mark them invited."); } catch { prompt("Copy this invite:", text); }
+}
+$("wlStatus").addEventListener("change", loadWaitlist);
+$("wlSearch").addEventListener("input", () => { clearTimeout(loadWaitlist.t); loadWaitlist.t = setTimeout(loadWaitlist, 300); });
+$("wlApprove").addEventListener("click", () => act({ action: "waitlist_set", ids: [...S.wlSel], status: "approved", credits: $("wlCredits").value }, (d) => `Approved ${d.updated}. They can log in now.`, loadWaitlist, refreshPending));
+$("wlReject").addEventListener("click", () => { if (confirm(`Reject ${S.wlSel.size}? An account they already have gets paused.`)) act({ action: "waitlist_set", ids: [...S.wlSel], status: "rejected" }, (d) => `Rejected ${d.updated}.`, loadWaitlist, refreshPending); });
+$("wlInvited").addEventListener("click", () => act({ action: "waitlist_invited", ids: [...S.wlSel] }, (d) => `Marked ${d.updated} as invited (approved people only).`, loadWaitlist));
+async function refreshPending() { try { const { overview } = await api({ action: "overview" }); setPending(overview.waitlist.pending); } catch {} }
+
+// ---------------------------------------------------------------------------
+// Users
+// ---------------------------------------------------------------------------
+async function loadUsers() {
+  try { ({ users: S.users } = await api({ action: "users", search: $("uSearch").value.trim(), demo: $("uDemo").value })); } catch (err) { return toast(err.message, true); }
+  for (const id of [...S.uSel]) if (!S.users.some((u) => u.id === id)) S.uSel.delete(id);
+  renderUsers();
+}
+function renderUsers() {
+  const rows = S.users;
+  $("uTable").innerHTML = `<thead><tr><th><input type="checkbox" id="uAll"></th><th>User</th><th>Role</th><th>Status</th><th class="num">Credits</th><th class="num">Daily limit</th><th>Last active</th><th>Joined</th></tr></thead><tbody>` +
+    (rows.length ? rows.map((u) => `<tr class="clickable" data-user="${u.id}">
+      <td><input type="checkbox" data-id="${u.id}" ${S.uSel.has(u.id) ? "checked" : ""}></td>
+      <td class="who"><b>${esc(name(u))}</b><small>${esc(u.username ? "@" + u.username : "")} ${esc(shownEmail(u.email))}</small></td>
+      <td>${u.role === "admin" ? `<span class="pill admin">admin</span>` : "user"}${u.is_demo ? ` <span class="pill demo">demo${u.demo_tag ? " · " + esc(u.demo_tag) : ""}</span>` : ""}</td>
+      <td><span class="pill ${u.status}">${u.status}</span>${u.expires_at ? `<br><small class="muted">until ${day(u.expires_at)}</small>` : ""}</td>
+      <td class="num">${fmt(u.balance)}</td><td class="num">${u.daily_limit ?? "—"}</td>
+      <td class="muted">${u.last_active_at ? when(u.last_active_at) : "never"}</td><td class="muted">${day(u.created_at)}</td></tr>`).join("") : `<tr><td colspan="8" class="empty">No users match.</td></tr>`) + "</tbody>";
+  $("uAll").addEventListener("change", (e) => { rows.forEach((u) => (e.target.checked ? S.uSel.add(u.id) : S.uSel.delete(u.id))); renderUsers(); });
+  $("uTable").querySelectorAll("tbody input[data-id]").forEach((c) => {
+    c.addEventListener("click", (e) => e.stopPropagation());
+    c.addEventListener("change", () => { c.checked ? S.uSel.add(c.dataset.id) : S.uSel.delete(c.dataset.id); uButtons(); });
+  });
+  $("uTable").querySelectorAll("tr[data-user]").forEach((tr) => tr.addEventListener("click", () => openUser(rows.find((u) => u.id === tr.dataset.user))));
+  uButtons();
+}
+function uButtons() { $("uSel").textContent = `${S.uSel.size} selected`; $("uGive").disabled = !S.uSel.size; }
+$("uSearch").addEventListener("input", () => { clearTimeout(loadUsers.t); loadUsers.t = setTimeout(loadUsers, 300); });
+$("uDemo").addEventListener("change", loadUsers);
+$("uGive").addEventListener("click", () => {
+  const amount = $("uAmount").value, reason = $("uReason").value.trim();
+  act({ action: "credits", ids: [...S.uSel], amount, reason }, (d) => `${Number(amount) > 0 ? "Gave" : "Took"} ${Math.abs(amount)} credits ${Number(amount) > 0 ? "to" : "from"} ${d.updated} user${d.updated === 1 ? "" : "s"}.`, loadUsers)
+    .then((d) => { if (d) { $("uAmount").value = ""; $("uReason").value = ""; } });
+});
+
+// user drawer: details, access, credits, password, usage, delete
+function openDrawer(title, html) { $("dTitle").textContent = title; $("dBody").innerHTML = html; $("drawer").classList.add("show"); $("scrim").classList.add("show"); }
+function closeDrawer() { $("drawer").classList.remove("show"); $("scrim").classList.remove("show"); }
+$("dClose").addEventListener("click", closeDrawer); $("scrim").addEventListener("click", closeDrawer);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+const localInput = (iso) => { if (!iso) return ""; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+
+function openUser(u) {
+  const self = u.id === S.me.id;
+  openDrawer(name(u), `
+    <section><div class="kv">
+      <span>Email</span><b>${esc(shownEmail(u.email))}</b>
+      <span>Username</span><b>${u.username ? "@" + esc(u.username) : "—"}</b>
+      <span>Credits</span><b id="dBal">${fmt(u.balance)}</b>
+      <span>Joined</span><b>${when(u.created_at)}</b>
+      <span>Last active</span><b>${u.last_active_at ? when(u.last_active_at) : "never"}</b>
+      ${u.is_demo ? `<span>Demo</span><b>${esc(u.demo_tag || "yes")}${u.demo_note ? " · " + esc(u.demo_note) : ""}</b>` : ""}
+    </div></section>
+    <section><h3>Access</h3><div class="form">
+      <label>Status<select id="dStatus" ${self ? "disabled" : ""}><option value="active">Active</option><option value="suspended">Suspended (paused)</option><option value="banned">Banned (closed)</option></select></label>
+      <label>Role<select id="dRole" ${self ? "disabled" : ""}><option value="user">User</option><option value="admin">Admin</option></select></label>
+      <label>Daily credit limit<input type="number" id="dDaily" min="0" placeholder="no limit" value="${u.daily_limit ?? ""}"></label>
+      <label>Access until<input type="datetime-local" id="dExpires" value="${localInput(u.expires_at)}"></label>
+      <div class="full row"><button class="tb primary" id="dSave">Save access</button>${self ? `<span class="muted">You cannot pause or demote yourself.</span>` : ""}</div>
+    </div></section>
+    <section><h3>Credits</h3><div class="form">
+      <label>Amount (negative takes away)<input type="number" id="dAmount" placeholder="e.g. 100"></label>
+      <label>Reason<input type="text" id="dReason" placeholder="e.g. hackathon judge" maxlength="200"></label>
+      <div class="full row"><button class="tb" id="dGive">Apply</button></div>
+    </div></section>
+    <section><h3>Password</h3><div class="form">
+      <label class="full">New password (10+ characters)<input type="text" id="dPass" autocomplete="off" placeholder="leave empty to keep it"></label>
+      <div class="full row"><button class="tb" id="dGen">Generate</button><button class="tb" id="dSetPass">Set password</button></div>
+    </div></section>
+    <section><h3>Usage</h3><div class="tablewrap"><table class="t" id="dLedger"><tr><td class="empty">Loading...</td></tr></table></div>
+      <div class="row" style="margin-top:8px"><button class="tb" id="dAllUsage">Open in Credits &amp; usage</button></div></section>
+    ${self ? "" : `<section><h3>Danger zone</h3><button class="tb danger" id="dDelete">Delete this account</button> <span class="muted">Also deletes their games and credit history.</span></section>`}`);
+  $("dStatus").value = u.status; $("dRole").value = u.role;
+  $("dSave").addEventListener("click", async () => {
+    const daily = $("dDaily").value.trim(), exp = $("dExpires").value;
+    const body = { action: "user_set", id: u.id, daily_limit: daily === "" ? null : daily, clear_daily_limit: daily === "", expires_at: exp ? new Date(exp).toISOString() : null, clear_expiry: !exp };
+    if (!self) { body.status = $("dStatus").value; body.role = $("dRole").value; }
+    const d = await act(body, () => "Access saved.", loadUsers);
+    if (d) Object.assign(u, d.user);
+  });
+  $("dGive").addEventListener("click", async () => {
+    const amount = $("dAmount").value;
+    const d = await act({ action: "credits", ids: [u.id], amount, reason: $("dReason").value.trim() }, () => `${Number(amount) > 0 ? "Added" : "Removed"} ${Math.abs(amount)} credits.`, loadUsers, () => userLedger(u));
+    if (d) { const fresh = S.users.find((x) => x.id === u.id); if (fresh) { u.balance = fresh.balance; $("dBal").textContent = fmt(fresh.balance); } $("dAmount").value = ""; }
+  });
+  $("dGen").addEventListener("click", () => { const a = new Uint8Array(12); crypto.getRandomValues(a); $("dPass").value = [...a].map((b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("").replace(/(.{4})(?!$)/g, "$1-"); });
+  $("dSetPass").addEventListener("click", () => act({ action: "user_password", id: u.id, password: $("dPass").value }, () => "Password set. Share it with them privately."));
+  $("dAllUsage").addEventListener("click", () => { closeDrawer(); S.lgUser = { id: u.id, label: u.username ? "@" + u.username : u.email }; showTab("usage"); });
+  $("dDelete")?.addEventListener("click", () => {
+    if (prompt(`Type DELETE to remove ${name(u)} and all their games.`) !== "DELETE") return;
+    act({ action: "user_delete", id: u.id }, () => "Account deleted.", loadUsers).then((d) => d && closeDrawer());
+  });
+  userLedger(u);
+}
+async function userLedger(u) {
+  try {
+    const { ledger } = await api({ action: "ledger", user: u.id });
+    $("dLedger").innerHTML = ledger.length ? ledger.slice(0, 30).map((l) => `<tr><td>${esc(l.reason)}${l.model ? ` <small class="muted">· ${esc(l.model)}</small>` : ""}<br><small class="muted">${when(l.created_at)}</small></td><td class="num ${l.amount >= 0 ? "plus" : "minus"}">${l.amount >= 0 ? "+" : ""}${l.amount}</td></tr>`).join("") : `<tr><td class="empty">No credit activity yet.</td></tr>`;
+  } catch (err) { $("dLedger").innerHTML = `<tr><td class="empty">${esc(err.message)}</td></tr>`; }
+}
+
+// new user (demo / judge accounts too)
+$("uNew").addEventListener("click", () => {
+  openDrawer("New user", `<section><div class="form">
+    <label>Email <small>(or leave empty and use a username)</small><input type="email" id="nEmail" placeholder="person@example.com"></label>
+    <label>Username <small>(for password logins)</small><input type="text" id="nUser" placeholder="judge_ana" maxlength="24"></label>
+    <label>Display name<input type="text" id="nName" maxlength="60"></label>
+    <label>Password (10+)<input type="text" id="nPass" autocomplete="off"></label>
+    <label>Starting credits<input type="number" id="nCredits" value="200" min="0"></label>
+    <label>Daily credit limit<input type="number" id="nDaily" min="0" placeholder="no limit"></label>
+    <label>Role<select id="nRole"><option value="user">User</option><option value="admin">Admin</option></select></label>
+    <label class="check"><input type="checkbox" id="nDemo"> Demo account (marked in the app)</label>
+    <label>Demo tag<select id="nTag"><option value="">—</option><option>Judge</option><option>Tester</option><option>Partner</option></select></label>
+    <label>Access until<input type="datetime-local" id="nExpires"></label>
+    <label class="full">Note<input type="text" id="nNote" maxlength="500" placeholder="who it is for"></label>
+    <div class="full row"><button class="tb" id="nGen">Generate password</button><button class="tb primary" id="nCreate">Create account</button></div>
+    <p class="muted full" id="nDone" style="margin:0"></p>
+  </div></section>`);
+  $("nGen").addEventListener("click", () => { const a = new Uint8Array(12); crypto.getRandomValues(a); $("nPass").value = [...a].map((b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("").replace(/(.{4})(?!$)/g, "$1-"); });
+  $("nCreate").addEventListener("click", async () => {
+    const exp = $("nExpires").value;
+    const body = { action: "user_create", email: $("nEmail").value.trim(), username: $("nUser").value.trim(), display_name: $("nName").value.trim(), password: $("nPass").value,
+      credits: $("nCredits").value, daily_limit: $("nDaily").value, role: $("nRole").value, is_demo: $("nDemo").checked, tag: $("nTag").value,
+      expires_at: exp ? new Date(exp).toISOString() : null, note: $("nNote").value.trim() };
+    const d = await act(body, () => "Account created.", loadUsers);
+    if (d) $("nDone").textContent = `Created. They log in on the login page with ${body.username ? `the Username tab: ${body.username}` : body.email} and the password you set.`;
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Credits & usage
+// ---------------------------------------------------------------------------
+async function loadLedger(reset = false) {
+  if (reset) { S.lgOffset = 0; S.ledger = []; }
+  $("lgUser").hidden = $("lgClearUser").hidden = !S.lgUser;
+  if (S.lgUser) $("lgUser").textContent = "Only " + S.lgUser.label;
+  try {
+    const { ledger } = await api({ action: "ledger", kind: $("lgKind").value, user: S.lgUser?.id || "", offset: S.lgOffset });
+    S.ledger = S.ledger.concat(ledger); S.lgOffset += ledger.length; $("lgMore").disabled = ledger.length < 200;
+  } catch (err) { return toast(err.message, true); }
+  $("lgTable").innerHTML = `<thead><tr><th>When</th><th>User</th><th>What</th><th>Model</th><th class="num">Credits</th><th class="num">Balance after</th></tr></thead><tbody>` +
+    (S.ledger.length ? S.ledger.map((l) => `<tr><td class="muted">${when(l.created_at)}</td>
+      <td class="who"><a href="#" data-ledger="${l.user_id}" data-label="${esc(l.username ? "@" + l.username : l.email)}">${esc(l.username ? "@" + l.username : shownEmail(l.email))}</a></td>
+      <td>${esc(l.reason)}${l.refund_of ? ` <span class="pill off">refund</span>` : ""}${l.admin_email ? `<br><small class="muted">by ${esc(l.admin_email)}</small>` : ""}</td>
+      <td class="muted">${esc(l.model || "")}</td><td class="num ${l.amount >= 0 ? "plus" : "minus"}">${l.amount >= 0 ? "+" : ""}${l.amount}</td><td class="num">${fmt(l.balance_after)}</td></tr>`).join("")
+      : `<tr><td colspan="6" class="empty">No credit activity yet.</td></tr>`) + "</tbody>";
+}
+$("lgKind").addEventListener("change", () => loadLedger(true));
+$("lgMore").addEventListener("click", () => loadLedger(false));
+$("lgClearUser").addEventListener("click", () => { S.lgUser = null; loadLedger(true); });
+document.addEventListener("click", (e) => {
+  const a = e.target.closest?.("[data-ledger]"); if (!a) return;
+  e.preventDefault(); S.lgUser = { id: a.dataset.ledger, label: a.dataset.label }; showTab("usage");
+});
+
+// ---------------------------------------------------------------------------
+// Prices & models
+// ---------------------------------------------------------------------------
+async function loadPricing() {
+  let costs, models;
+  try { ({ costs, models } = await api({ action: "pricing" })); } catch (err) { return toast(err.message, true); }
+  const kind = $("lgKind");
+  if (kind.options.length === 1) for (const c of costs) kind.insertAdjacentHTML("beforeend", `<option value="${esc(c.action)}">${esc(c.label)}</option>`);
+  const def = models.find((m) => m.is_default) || { multiplier: 1 };
+  $("costTable").innerHTML = `<thead><tr><th>Action</th><th>Label</th><th class="num">Credits</th><th class="num">With ${esc(def.label || "default")}</th><th></th></tr></thead><tbody>` + costs.map((c) => `<tr>
+    <td><code>${esc(c.action)}</code></td><td><input class="cell wide" data-label="${esc(c.action)}" value="${esc(c.label)}" maxlength="80"></td>
+    <td class="num"><input class="cell" type="number" min="0" max="100000" data-credits="${esc(c.action)}" value="${c.credits}"></td>
+    <td class="num muted">${Math.ceil(c.credits * def.multiplier)}</td>
+    <td><button class="tb" data-save-cost="${esc(c.action)}">Save</button></td></tr>`).join("") + "</tbody>";
+  $("costTable").querySelectorAll("[data-save-cost]").forEach((b) => b.addEventListener("click", () => {
+    const k = b.dataset.saveCost;
+    act({ action: "cost_set", key: k, credits: $("costTable").querySelector(`[data-credits="${k}"]`).value, label: $("costTable").querySelector(`[data-label="${k}"]`).value }, (d) => `${d.cost.label}: ${d.cost.credits} credits.`, loadPricing);
+  }));
+  $("modelTable").innerHTML = `<thead><tr><th>Model</th><th>Provider</th><th class="num">Multiplier</th><th>On</th><th>Default</th><th></th></tr></thead><tbody>` + models.map((m) => `<tr>
+    <td class="who"><b>${esc(m.label)}</b><small>${esc(m.model)}${m.description ? " · " + esc(m.description) : ""}</small></td>
+    <td>${esc(m.provider)}</td>
+    <td class="num"><input class="cell" type="number" step="0.05" min="0.05" max="20" data-mult="${esc(m.id)}" value="${m.multiplier}"></td>
+    <td><input type="checkbox" data-on="${esc(m.id)}" ${m.enabled ? "checked" : ""} ${m.is_default ? "disabled title=\"The default model stays on\"" : ""}></td>
+    <td><input type="radio" name="defModel" data-def="${esc(m.id)}" ${m.is_default ? "checked" : ""} ${m.enabled ? "" : "disabled"}></td>
+    <td><button class="tb" data-save-model="${esc(m.id)}">Save</button></td></tr>`).join("") + "</tbody>";
+  const q = (sel) => $("modelTable").querySelector(sel);
+  $("modelTable").querySelectorAll("[data-save-model]").forEach((b) => b.addEventListener("click", () => {
+    const id = b.dataset.saveModel;
+    act({ action: "model_set", id, multiplier: q(`[data-mult="${id}"]`).value, enabled: q(`[data-on="${id}"]`).checked }, (d) => `${d.model.label} saved (×${d.model.multiplier}, ${d.model.enabled ? "on" : "off"}).`, loadPricing);
+  }));
+  $("modelTable").querySelectorAll("[data-def]").forEach((r) => r.addEventListener("change", () => act({ action: "model_set", id: r.dataset.def, is_default: true }, (d) => `${d.model.label} is now the default.`, loadPricing)));
+}
+
+// ---------------------------------------------------------------------------
+// Activity
+// ---------------------------------------------------------------------------
+const ACT_LABEL = { waitlist_approved: "approved on the waitlist", waitlist_rejected: "rejected on the waitlist", waitlist_pending: "moved back to pending", waitlist_invited: "marked invited",
+  user_create: "created an account", demo_create: "created a demo account", user_update: "changed access", password_reset: "set a password", user_delete: "deleted an account",
+  credits: "changed credits", cost_update: "changed a price", model_update: "changed a model" };
+async function loadActivity() {
+  let activity; try { ({ activity } = await api({ action: "activity" })); } catch (err) { return toast(err.message, true); }
+  const detail = (a) => { const d = a.details || {}; return Object.entries(d).filter(([, v]) => v !== null && v !== "").map(([k, v]) => `${esc(k)}: ${esc(typeof v === "object" ? JSON.stringify(v) : v)}`).join(" · "); };
+  $("actTable").innerHTML = `<thead><tr><th>When</th><th>Admin</th><th>What</th><th>Details</th></tr></thead><tbody>` + (activity.length ? activity.map((a) => `<tr>
+    <td class="muted">${when(a.created_at)}</td><td>${esc(a.admin_email || "system")}</td><td>${esc(ACT_LABEL[a.action] || a.action)}</td>
+    <td class="muted" style="font-size:12px">${detail(a)}${a.target && !/,/.test(a.target) && a.target.length < 40 ? ` · ${esc(a.target)}` : ""}</td></tr>`).join("") : `<tr><td colspan="4" class="empty">Nothing yet.</td></tr>`) + "</tbody>";
+}
+
+// ---------------------------------------------------------------------------
+// Boot: admins only (the server and the database check again on every call)
+// ---------------------------------------------------------------------------
+(async () => {
+  S.me = await PlayAuth.requireLogin();
+  if (S.me.role !== "admin") {
+    $("gate").innerHTML = `<h2>Admins only</h2><p class="muted">This page is for PlayLab admins. Your account is a regular one.</p><a class="tb primary" href="studio.html">Back to the Studio</a>`;
+    return;
+  }
+  $("gate").remove(); $("tabs").hidden = false;
+  $("whoami").textContent = S.me.email;
+  loadPricing();   // fills the usage filter with the action names
+  const start = location.hash.slice(1);
+  showTab(LOADERS[start] ? start : "overview");
+})();
+</script>
+</body>
+</html>

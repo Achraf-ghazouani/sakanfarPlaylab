@@ -8,7 +8,7 @@ Built solo for the Meta hackathon (Oct 30 - Nov 4, 2026). Plain HTML/JS + Phaser
 
 ## The flow
 
-1. `index.html`: the landing page. **PRESS START** opens the Studio.
+1. `index.html`: the landing page. **Start creating** opens the Studio (visitors log in first; the login page links the waitlist), **Play a demo** opens a sample level with no account.
 2. `studio.html`, the Studio: a chat next to the live game. Describe a game and Muse Spark builds it (`POST /api/agent`). Attach a drawing, sketch one on the pad, or take a picture with the phone camera, and the scanner reads it. On a computer, link your phone camera with the QR code and point it at the paper: live detection, auto-capture, re-scans while you draw. Every change is a saved version with undo.
 3. `POST /api/scan`: Muse Spark reads the picture (the browser resizes it to a 1600px JPEG) and returns level JSON. The playtest agent checks reachability and applies an instant fix if needed.
 4. "Playtest it" calls `POST /api/fix`: Muse Spark repairs the level with minimal edits (add a step, lower a ledge).
@@ -17,7 +17,7 @@ Built solo for the Meta hackathon (Oct 30 - Nov 4, 2026). Plain HTML/JS + Phaser
 
 ## Big screen mode (PC + phone, one QR)
 
-Click **Get started on the big screen** on the landing page (or open `game.html?screen=1`). The PC shows a QR code
+Click **Big screen** in the landing page footer or the Studio sidebar (or open `game.html?screen=1`). The PC shows a QR code
 and a 4-letter room code. Scanning it opens `pad.html` on the phone, which starts its back camera right away and
 streams it to the PC over a one-way PeerJS media call, so the big screen shows what the phone sees. The phone can
 switch between **Camera** and **Controller** with one button; phones that join while a level is already loaded become
@@ -90,7 +90,7 @@ node check.mjs levels/impossible.json --fix      # AI repair -> levels/impossibl
 node check.mjs levels/impossible.json --fix --no-ai
 ```
 
-In `viewer.html`, pick a level: unreachable things get a red dashed outline, and the "Playtest + fix with AI" button repairs them live.
+In the Studio, **Playtest it** runs the same check and repair on the current game.
 
 ## PlayLab Studio (chat builder, `studio.html`)
 
@@ -195,10 +195,10 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 
 | File | Purpose |
 | --- | --- |
-| `index.html` | Landing page (retro arcade, code-drawn pixel world): PRESS START opens the Studio, Discover shows the demo levels |
+| `index.html` | Landing page (retro arcade, code-drawn pixel world): Start creating, Play a demo, how it works in three steps, playable levels, the waitlist |
 | `game.html` | The game (Phaser 3 arcade physics, colored shapes, touch controls, drawing thumbnail, agent toast); `?embed=1` for the Studio preview |
 | `studio.html` | PlayLab Studio: chat + live preview, My games, versions, history, undo (login required) |
-| `login.html`, `profile.html`, `credits.html` | Login (email link, Google, username), profile with credit history, credits placeholder |
+| `login.html`, `profile.html` | Login (email link, Google, username), profile with credits, credit history and games |
 | `api/waitlist.js`, `api/me.js`, `lib/auth.mjs`, `shared/auth.js` | Waitlist, the logged-in account, server-side access checks, the browser's login helper |
 | `db/002_accounts.sql`, `db/003_server_users.sql` | Waitlist, profiles, credit ledger, approval trigger, admin and server functions |
 | `api/projects.js`, `api/messages.js`, `api/version.js` | Vercel functions for saved games (Supabase through PostgREST, `lib/db.mjs`) |
@@ -206,7 +206,6 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | `db/schema.sql` | Supabase tables, row-level security and functions for the Studio |
 | `pad.html` | Phone controller page (joins a room by QR / code) |
 | `shared/phonelink.js` | PeerJS host (game) and client (pad): rooms, slots, heartbeat, reconnect |
-| `viewer.html` | Debug: AI boxes over the photo, reachability report, fix button |
 | `api/scan.js` | Vercel function: base64 photo -> validated, quick-fixed level JSON |
 | `api/fix.js` | Vercel function: level JSON -> AI-repaired level JSON |
 | `shared/reach.mjs` | Reachability checker + algorithmic fixer (pure JS, used by server and pages) |

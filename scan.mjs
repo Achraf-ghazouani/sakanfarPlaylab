@@ -61,7 +61,7 @@ async function main() {
     if (dims) {
       const rotated = dims.orientation >= 5;
       aspect = rotated ? dims.height / dims.width : dims.width / dims.height;
-      if (rotated) console.warn("Warning: this photo has EXIF rotation. If the boxes look misaligned in viewer.html, re-save the photo upright.");
+      if (rotated) console.warn("Warning: this photo has EXIF rotation. If the level looks misaligned, re-save the photo upright.");
     }
 
     let previous = null;
@@ -118,7 +118,7 @@ async function main() {
   }
   console.log(`\nSaved ${outPath}${level.aspect ? ` (aspect ${level.aspect})` : ""}`);
   await writeIndex();
-  console.log("Next: npm run dev, then open http://localhost:3000/game.html to play it, or viewer.html to check the boxes.");
+  console.log("Next: npm run dev, then open http://localhost:3000/game.html to play it.");
 }
 
 /** levels/index.json lists every level for the dropdown in game.html (newest first). */

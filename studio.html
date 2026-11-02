@@ -17,6 +17,7 @@
 <style>
   :root { --bg:#fbfaff; --panel:#ffffff; --lav:#efeaff; --lav-2:#e2d9ff; --lav-3:#cdbdff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --line:#ebe6f7; --green:#22c55e; --shadow:0 10px 30px rgba(91,33,182,.08); }
   * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
   html, body { margin:0; height:100%; }
   body { background:var(--bg); color:var(--ink); font-family:Inter, system-ui, sans-serif; font-size:15px; line-height:1.5; overflow:hidden; }
   button { font:inherit; cursor:pointer; }
@@ -96,6 +97,13 @@
   .examples { display:grid; gap:8px; }
   .examples button { text-align:left; background:#fff; border:1px solid var(--lav-2); border-radius:12px; padding:11px 14px; color:var(--ink); }
   .examples button:hover { border-color:var(--purple); background:var(--lav); }
+  .starts { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px; }
+  .starts button { display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; background:#fff; border:1px solid var(--lav-2); border-radius:16px; padding:14px; color:var(--ink); cursor:pointer; transition:transform .12s, border-color .12s, box-shadow .12s; }
+  .starts button:hover { border-color:var(--purple); box-shadow:0 8px 20px rgba(91,33,182,.10); transform:translateY(-1px); }
+  .starts i { font-style:normal; font-size:22px; margin-bottom:4px; }
+  .starts b { font-size:15px; }
+  .starts small { color:var(--muted); font-size:12px; }
+  .or-try { color:var(--muted); font-size:12px; margin:0 0 8px; }
 
   .composer { padding:10px 14px 12px; border-top:1px solid var(--line); background:var(--panel); }
   #attachments { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
@@ -206,7 +214,7 @@
     <header class="top">
       <button class="menu" id="menuBtn" aria-label="Menu">&#9776;</button>
       <input id="title" value="Untitled game" aria-label="Project name" maxlength="80">
-      <div class="seg" id="modeSeg"><button class="on" data-mode="2d">2D</button><button data-mode="3d" disabled title="3D arrives in a later step">3D</button></div>
+      <div class="seg" id="modeSeg" hidden><button class="on" data-mode="2d">2D</button><button data-mode="3d" disabled title="3D arrives in a later step">3D</button></div>
       <span class="spacer"></span>
       <button class="tb" id="undoBtn" title="Restore the previous version"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l-4-4 4-4"/><path d="M5 10h9a5 5 0 0 1 0 10h-3"/></svg><span class="lbl">Undo</span></button>
       <button class="tb" id="historyBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="lbl">History</span>
@@ -215,7 +223,7 @@
       <button class="tb" id="phoneBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg><span class="lbl">Play with phone</span></button>
       <div class="user" id="userBox"><button class="tb" id="userBtn" title="Your account"><span class="av" id="userAv"></span><span class="lbl" id="userName">...</span><span class="credits" id="creditBadge" title="Credits">&#9679; <b id="creditNum">0</b></span></button>
         <div class="pop" id="userPop"><a class="v" href="profile.html"><b>Profile and credits</b></a><a class="v" href="admin.html" id="adminLink" hidden><b>Admin panel</b></a><a class="v" href="#" id="logoutBtn"><b>Log out</b></a></div></div>
-      <button class="tb primary" id="shareBtn" disabled title="Share links arrive in a later step"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 15V3M8 7l4-4 4 4"/></svg><span class="lbl">Share</span></button>
+      <button class="tb primary" id="shareBtn" hidden disabled title="Share links arrive in a later step"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 15V3M8 7l4-4 4 4"/></svg><span class="lbl">Share</span></button>
     </header>
 
     <div class="split">
@@ -223,10 +231,17 @@
         <div id="messages">
           <div class="empty-state" id="emptyState">
             <h2>What are we building today?</h2>
-            <p>Describe a game, attach a sketch or a picture, and watch it appear on the right.</p>
+            <p>Pick a way to start. Your game appears on the right.</p>
+            <div class="starts">
+              <button data-start="describe"><i>&#128172;</i><b>Describe it</b><small>Type the game you want</small></button>
+              <button data-start="sketch"><i>&#9999;&#65039;</i><b>Sketch it</b><small>Draw a level right here</small></button>
+              <button data-start="upload"><i>&#128444;&#65039;</i><b>Upload a drawing</b><small>A photo of your paper</small></button>
+              <button data-start="camera"><i>&#128247;</i><b>Use the camera</b><small>Point your phone at the paper</small></button>
+            </div>
+            <div class="or-try">or try one of these</div>
             <div class="examples">
               <button data-prompt="A lava castle with moving platforms">&#127969; A lava castle with moving platforms</button>
-              <button data-prompt="Turn my drawing into a space level">&#128640; Turn my drawing into a space level</button>
+              <button data-prompt="A space level with floating platforms and lots of coins">&#128640; A space level with floating platforms</button>
               <button data-prompt="A jungle level for kids, easy">&#127796; A jungle level for kids, easy</button>
             </div>
           </div>
@@ -242,7 +257,7 @@
             <button class="ib" id="sendBtn" title="Send (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
           </div>
           <div class="chips" id="chips">
-            <button class="chip">Make it harder</button><button class="chip">Add more coins</button><button class="chip">Change theme</button><button class="chip">Generate art</button><button class="chip">Make it 3D</button><button class="chip">Playtest it</button><button class="chip">Share</button>
+            <button class="chip">Make it harder</button><button class="chip">Add more coins</button><button class="chip">Change theme</button><button class="chip">Playtest it</button>
           </div>
         </div>
       </section>
@@ -392,7 +407,12 @@ function renderMessages() {
   for (const m of S.messages) appendMessage(m, false);
   box.scrollTop = box.scrollHeight;
 }
-function bindExamples() { document.querySelectorAll(".examples button").forEach((b) => b.addEventListener("click", () => { $("composer").value = b.dataset.prompt; send(); })); }
+function bindExamples() {
+  document.querySelectorAll(".examples button").forEach((b) => b.addEventListener("click", () => { $("composer").value = b.dataset.prompt; send(); }));
+  // The four ways to start reuse the composer's own buttons, so they behave exactly the same.
+  const START = { describe: () => $("composer").focus(), sketch: () => $("sketchBtn").click(), upload: () => $("attachBtn").click(), camera: () => $("cameraBtn").click() };
+  document.querySelectorAll(".starts button").forEach((b) => b.addEventListener("click", () => START[b.dataset.start]?.()));
+}
 function appendMessage(m, scroll = true) {
   const box = $("messages");
   const empty = box.querySelector(".empty-state"); if (empty) empty.remove();

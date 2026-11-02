@@ -125,19 +125,26 @@ try {
   await send("Page.addScriptToEvaluateOnNewDocument", { source: inject });
   const { frameTree } = await send("Page.getFrameTree"); mainFrameId = frameTree.frame.id;
 
-  // 0. landing page: the main button is the waitlist; the Studio needs a login
+  // 0. landing page: the main button opens the Studio (which needs a login), the waitlist is offered once
   await send("Page.navigate", { url: `${BASE}/index.html` });
-  await waitFor(`document.readyState === "complete" && typeof TABS === "object"`);   // the page script has run
+  await waitFor(`document.readyState === "complete" && typeof discover === "function"`);   // the page script has run
   await evalJS(`localStorage.clear(); sessionStorage.clear(); true`);   // a visitor: no old session from an earlier run
   await send("Page.navigate", { url: `${BASE}/index.html` });
-  await waitFor(`document.readyState === "complete" && typeof TABS === "object"`);
+  await waitFor(`document.readyState === "complete" && typeof discover === "function"`);
   check("landing page has no leftover photo inputs", await evalJS(`document.querySelectorAll("input[type=file]").length`) === 0);
-  check("main button says JOIN THE WAITLIST for visitors", (await evalJS(`document.getElementById("startBtn").textContent`)) === "JOIN THE WAITLIST");
+  check("main button starts creating in the Studio", await evalJS(`(() => { const b = document.getElementById("startBtn"); return b.textContent === "START CREATING" && /studio\.html$/.test(b.href); })()`));
+  check("visitors see the waitlist note", await evalJS(`!document.getElementById("betaNote").hidden`));
   check("waitlist form with a hidden honeypot", await evalJS(`!!document.getElementById("wlForm") && getComputedStyle(document.querySelector(".wl .hp")).position === "absolute"`));
   await send("Page.navigate", { url: `${BASE}/studio.html` });
   check("the Studio sends visitors to the login page", !!(await waitFor(`/login\\.html$/.test(location.pathname) && /next=studio/.test(location.search)`, { timeout: 15_000 })), await evalJS(`location.href`));
   const loggedIn = await loginInPage(evalJS, (e, t) => waitFor(e, { timeout: t || 10_000 }), (url) => send("Page.navigate", { url }));
   check("username + password login lands in the Studio", loggedIn, await evalJS(`location.href`));
+  check("first screen offers four ways to start", await evalJS(`[...document.querySelectorAll(".starts button")].map((b) => b.dataset.start).join()`) === "describe,sketch,upload,camera");
+  check("unfinished 3D and Share are hidden", await evalJS(`getComputedStyle(document.getElementById("modeSeg")).display === "none" && getComputedStyle(document.getElementById("shareBtn")).display === "none"`));
+  await evalJS(`document.querySelector('.starts [data-start="sketch"]').click(); true`);
+  check("Sketch it opens the sketch pad", await evalJS(`document.getElementById("sketchModal").classList.contains("show")`));
+  await evalJS(`document.getElementById("sketchClose").click(); true`);
+  { const shot = await send("Page.captureScreenshot", { format: "png" }); await fs.writeFile(path.join(OUT, "studio-start.png"), Buffer.from(shot.data, "base64")); }
   check("top bar shows the name, credits and the demo badge", await evalJS(`document.getElementById("userName").textContent === "Studio Tester" && document.getElementById("creditNum").textContent === "200" && !!document.getElementById("demoBadge")`));
   await send("Page.navigate", { url: `${BASE}/studio.html?camera=1` });
   check("studio.html?camera=1 opens the camera link", !!(await waitFor(`typeof S === "object" && document.getElementById("camModal").classList.contains("show")`, { timeout: 15_000 })));
@@ -147,7 +154,7 @@ try {
   check("my games list is empty for a fresh owner", await evalJS(`document.querySelectorAll(".proj").length`) === 0);
   check("preview iframe reports ready", !!(await waitFor(`S.previewReady`, { timeout: 20_000 })));
   const ctx = iframeCtx();
-  check("preview shows no-game message", ctx && /No game yet/.test(await evalJS(`document.getElementById("msgText").textContent`, ctx)));
+  check("preview shows no-game message", ctx && /Your game appears here/.test(await evalJS(`document.getElementById("msgText").textContent`, ctx)));
   check("3D toggle and Share are disabled placeholders", await evalJS(`document.querySelector('[data-mode="3d"]').disabled && document.getElementById("shareBtn").disabled`));
 
   // 1. first text message: project auto-created, reply streamed, both messages saved

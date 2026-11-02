@@ -27,8 +27,11 @@
   #msg small { display:block; font-size:15px; font-weight:400; margin-top:8px; color:#ccc; }
   #hint { position:fixed; bottom:8px; left:12px; font-size:12px; color:rgba(0,0,0,.55); z-index:2; pointer-events:none; }
   button, a.btn, label.btn { font-size:13px; padding:4px 10px; border-radius:6px; border:0; background:#2b6cff; color:#fff; cursor:pointer; text-decoration:none; white-space:nowrap; }
+  a.btn#homeBtn { background:transparent; box-shadow:inset 0 0 0 1px rgba(255,255,255,.35); }
   a.btn#newBtn { background:#7c3aed; font-weight:700; }
-  label.btn#redrawBtn { background:#0d9488; font-weight:700; }
+  /* Redraw re-scans the paper a level came from, so it only shows for your own drawing (not the demo levels) */
+  label.btn#redrawBtn { display:none; background:#0d9488; font-weight:700; }
+  body.mine label.btn#redrawBtn { display:inline-block; }
   #redrawInput { display:none; }
   body.touch .lbl { display:none; }
   /* drawn art toggle: only shown when the level has a picture to cut the art from */
@@ -137,7 +140,7 @@
   body.touch #touch { display:block; }
   body.touch #hint, body.touch .desktop { display:none !important; }
   /* embedded in the studio preview: the studio owns levels, history and sharing */
-  body.embed #newBtn, body.embed #redrawBtn, body.embed #phoneBtn, body.embed .desktop, body.embed #hint, body.embed #levelSelect, body.embed #thumb { display:none !important; }
+  body.embed #homeBtn, body.embed #newBtn, body.embed #redrawBtn, body.embed #phoneBtn, body.embed .desktop, body.embed #hint, body.embed #levelSelect, body.embed #thumb { display:none !important; }
   body.embed #hud { background:rgba(27,21,53,.85); }
   body.touch #hud { gap:8px; padding:0 8px; }
   body.touch #hud select { max-width:150px; }
@@ -160,17 +163,16 @@
 </head>
 <body>
 <div id="hud">
-  <a class="btn" id="newBtn" href="index.html" title="Scan another drawing">&#10010;<span class="lbl"> New level</span></a>
+  <a class="btn" id="homeBtn" href="index.html" title="Home">&#8592;<span class="lbl"> Home</span></a>
+  <a class="btn" id="newBtn" href="studio.html" title="Make your own game in the Studio">&#9998;<span class="lbl"> Make your own</span></a>
   <label class="btn" id="redrawBtn" for="redrawInput" title="Changed the drawing on paper? Snap it again and the level updates in place">&#9998; Redraw</label>
   <input type="file" id="redrawInput" accept="image/*" capture="environment">
   <label><span class="desktop">Level</span><select id="levelSelect"></select></label>
-  <label class="desktop">or file <input type="file" id="levelFile" accept=".json,application/json"></label>
   <button id="restartBtn" title="Restart (R)">&#8635;<span class="lbl"> Restart</span></button>
   <button id="muteBtn" title="Sound on/off (M)">&#128266;</button>
   <button id="artBtn" title="Use the drawing itself as the art, or simple shapes (G)">&#9998;<span class="lbl"> Drawn art</span></button>
   <button id="phoneBtn" class="desktop" title="Use your phone as the controller">&#128241; Play with your phone</button>
   <span id="phoneChip" title="Phone controller"><span class="dot"></span><span id="phoneChipText">0/4</span></span>
-  <a href="viewer.html" target="_blank" class="desktop">viewer</a>
   <span id="theme" class="desktop"></span>
   <span id="score">Coins 0/0</span>
 </div>
@@ -904,6 +906,7 @@ function showThumb(src) {
 function startLevel(level, name, thumbSrc) {
   if (!level || !Array.isArray(level.objects)) { showMsg("Invalid level JSON", "expected { theme, objects: [...] }"); return; }
   currentLevel = level; currentLevelName = name || null;
+  document.body.classList.toggle("mine", name === "your drawing");
   $("theme").textContent = (name ? name + " · " : "") + (level.theme || "");
   showThumb(thumbSrc);
   if (Array.isArray(level.fixes) && level.fixes.length) {
@@ -1303,12 +1306,6 @@ async function init() {
   await populateIndex();
 
   $("levelSelect").addEventListener("change", (e) => { e.target.blur(); loadLevelUrl(e.target.value); });
-  $("levelFile").addEventListener("change", async (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    e.target.blur();
-    try { startLevel(JSON.parse(await f.text()), f.name.replace(/\.json$/, "")); }
-    catch (err) { showMsg("Invalid JSON file", err.message); }
-  });
   $("restartBtn").addEventListener("click", (e) => { e.target.blur(); restartScene(); });
   $("redrawInput").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) rescan(f); });
   $("phoneBtn").addEventListener("click", (e) => { e.target.blur(); openPhonePanel(); });
@@ -1349,7 +1346,7 @@ async function init() {
       else if (m.type === "playlab:state") publishState();
     });
     try { parent.postMessage({ type: "playlab:ready" }, "*"); } catch {}
-    showMsg("No game yet", "describe one in the chat, or attach a drawing");
+    showMsg("Your game appears here", "pick a way to start on the left");
     return;
   }
 

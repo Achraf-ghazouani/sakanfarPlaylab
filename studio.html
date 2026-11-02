@@ -505,7 +505,8 @@ $("sketchClose").addEventListener("click", () => $("sketchModal").classList.remo
 $("sketchUse").addEventListener("click", () => {
   const upload = Sketch.canvas.toDataURL("image/jpeg", 0.85);
   const tc = document.createElement("canvas"); tc.width = 320; tc.height = 240; tc.getContext("2d").drawImage(Sketch.canvas, 0, 0, 320, 240);
-  S.attachments.push({ name: "sketch.jpg", type: "image/jpeg", size: upload.length, upload, thumb: tc.toDataURL("image/jpeg", 0.7), sketch: true });
+  const ac = document.createElement("canvas"); ac.width = 720; ac.height = 540; ac.getContext("2d").drawImage(Sketch.canvas, 0, 0, 720, 540);
+  S.attachments.push({ name: "sketch.jpg", type: "image/jpeg", size: upload.length, upload, thumb: tc.toDataURL("image/jpeg", 0.7), art: ac.toDataURL("image/jpeg", 0.75), sketch: true });
   renderAttachments();
   $("sketchModal").classList.remove("show");
   if ($("composer").value.trim()) $("composer").focus(); else send();     // a drawing alone: build it right away
@@ -627,7 +628,7 @@ async function onCamLevel(msg) {
 async function addAttachment(file) {
   const a = { name: file.name, type: file.type || (file.name.endsWith(".glb") || file.name.endsWith(".gltf") ? "model/gltf-binary" : "application/octet-stream"), size: file.size };
   if (a.type.startsWith("image/")) {
-    try { const img = await PhotoUtil.loadImage(file); a.upload = PhotoUtil.toJpeg(img, PhotoUtil.UPLOAD_SIDE, 0.85); a.thumb = PhotoUtil.toJpeg(img, 320, 0.7); } catch { toast("Could not read that image"); return; }
+    try { const img = await PhotoUtil.loadImage(file); a.upload = PhotoUtil.toJpeg(img, PhotoUtil.UPLOAD_SIDE, 0.85); a.thumb = PhotoUtil.toJpeg(img, 320, 0.7); a.art = PhotoUtil.toJpeg(img, PhotoUtil.THUMB_SIDE, 0.75); } catch { toast("Could not read that image"); return; }
   }
   S.attachments.push(a);
   renderAttachments();
@@ -675,7 +676,7 @@ async function runScan(img) {
     hideTyping();
     const lvl = data.level, problems = data.meta?.playtest?.before?.problems || [];
     const what = img.sketch ? "sketch" : "picture";
-    await applyLevel(lvl, { note: `from ${what}`, thumb: img.thumb, toastText: `Built from your ${what}: ${lvl.objects.length} objects` });
+    await applyLevel(lvl, { note: `from ${what}`, thumb: img.art || img.thumb, toastText: `Built from your ${what}: ${lvl.objects.length} objects` });
     const d = lvl.diff?.short;
     await addCard({ icon: img.sketch ? "&#9998;" : "&#128444;", title: `Level from your ${what}`, text: `${lvl.objects.length} objects · ${lvl.theme}${d ? ` · ${d}` : ""}${problems.length ? ` · quick-fixed ${problems.length} impossible part${problems.length > 1 ? "s" : ""}` : " · every jump reachable"}` });
     await streamAssistant(`Done. I found ${lvl.objects.length} things (${lvl.theme}). It is playable on the right${problems.length ? ", and I fixed what was impossible" : ""}.`);

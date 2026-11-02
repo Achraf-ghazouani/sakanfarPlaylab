@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js" defer></script>
 <script src="shared/photo.js"></script>
+<script src="shared/inkart.js"></script>
 <script src="shared/phonelink.js" defer></script>
 <script src="shared/auth.js"></script>
 <style>
@@ -30,6 +31,10 @@
   label.btn#redrawBtn { background:#0d9488; font-weight:700; }
   #redrawInput { display:none; }
   body.touch .lbl { display:none; }
+  /* drawn art toggle: only shown when the level has a picture to cut the art from */
+  #artBtn { display:none; background:#6b7280; }
+  #artBtn.show { display:inline-block; }
+  #artBtn.on { background:#db2777; font-weight:700; }
 
   /* phone controller panel */
   #phoneBtn { background:#0ea5e9; }
@@ -162,6 +167,7 @@
   <label class="desktop">or file <input type="file" id="levelFile" accept=".json,application/json"></label>
   <button id="restartBtn" title="Restart (R)">&#8635;<span class="lbl"> Restart</span></button>
   <button id="muteBtn" title="Sound on/off (M)">&#128266;</button>
+  <button id="artBtn" title="Use the drawing itself as the art, or simple shapes (G)">&#9998;<span class="lbl"> Drawn art</span></button>
   <button id="phoneBtn" class="desktop" title="Use your phone as the controller">&#128241; Play with your phone</button>
   <span id="phoneChip" title="Phone controller"><span class="dot"></span><span id="phoneChipText">0/4</span></span>
   <a href="viewer.html" target="_blank" class="desktop">viewer</a>
@@ -203,7 +209,7 @@
   <div class="pp-players" id="phonePlayers">0/4 players connected</div>
   <div class="pp-tip">The keyboard keeps working too. Close this panel and play.</div>
 </div></div>
-<div id="hint">Move: arrows / A D &nbsp;·&nbsp; Jump: space / up / W (hold for higher) &nbsp;·&nbsp; Stomp enemies from above &nbsp;·&nbsp; R restarts &nbsp;·&nbsp; M sound</div>
+<div id="hint">Move: arrows / A D &nbsp;·&nbsp; Jump: space / up / W (hold for higher) &nbsp;·&nbsp; Stomp enemies from above &nbsp;·&nbsp; R restarts &nbsp;·&nbsp; M sound &nbsp;·&nbsp; G drawn art</div>
 
 <script>
 // ---------------------------------------------------------------------------
@@ -294,6 +300,24 @@ const hex = (n) => "#" + n.toString(16).padStart(6, "0");
 let currentLevel = null;   // level JSON currently loaded
 let currentLevelName = null;
 let game = null;
+// Drawn art (shared/inkart.js): sprites cut out of the level's picture, by object index.
+let levelArt = {};
+let artGen = 0;            // bumps on every level load; texture keys carry it so old crops can be dropped
+let artOn = (() => { try { return localStorage.getItem("playlab.art") !== "0"; } catch { return true; } })();
+function refreshArtBtn() {
+  const b = $("artBtn"), has = Object.keys(levelArt).length > 0;
+  b.classList.toggle("show", has); b.classList.toggle("on", has && artOn);
+}
+function setArtOn(on) {
+  artOn = !!on;
+  try { localStorage.setItem("playlab.art", artOn ? "1" : "0"); } catch {}
+  refreshArtBtn();
+  if (Object.keys(levelArt).length) {
+    const s = playScene();
+    if (s?.player && s.state === "play") pendingSpawn = { x: s.player.x / s.ax, y: s.player.body.bottom };   // keep the player's spot
+    restartScene();
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Sound effects: tiny synth on the Web Audio API, no audio files.
@@ -416,6 +440,17 @@ class PlayScene extends Phaser.Scene {
     this.created = new Map();                       // object index -> game objects (for pop-in after a re-scan)
     const mark = (i, ...gos) => this.created.set(i, (this.created.get(i) || []).concat(gos));
 
+    // Drawn art: the crop of the picture for object i, as an image over its padded box (null = draw the shape).
+    for (const k of this.textures.getTextureKeys()) if (k.startsWith("ink") && !k.startsWith(`ink${artGen}_`)) this.textures.remove(k);
+    const art = artOn ? levelArt : {};
+    const artSprite = (i, depth = 1) => {
+      const a = art[i]; if (!a) return null;
+      const key = `ink${artGen}_${i}`;
+      if (!this.textures.exists(key)) this.textures.addCanvas(key, a.canvas);
+      const b = a.box, X = b.x * this.ax, Wd = b.w * this.ax;
+      return this.add.image(X + Wd / 2, b.y + b.h / 2, key).setDisplaySize(Wd, b.h).setDepth(depth);
+    };
+
     // Pass 1: solid platforms, so everything else can snap onto them.
     for (let i = 0; i < L.objects.length; i++) {
       const o = L.objects[i];
@@ -425,6 +460,9 @@ class PlayScene extends Phaser.Scene {
       this.platforms.add(r);
       solids.push({ left: X, right: X + Wd, top: Y, bottom: Y + Ht });
       mark(i, r);
+      // With art the drawn line is the platform; a faint fill still shows where you can stand.
+      const img = artSprite(i);
+      if (img) { r.setFillStyle(COLORS.platform, 0.2).setStrokeStyle(2, 0x4a2f12, 0.3); mark(i, img); }
     }
 
     // Pass 2: everything else.
@@ -445,6 +483,8 @@ class PlayScene extends Phaser.Scene {
           const range = Math.min(MOVER_RANGE * this.ax, cx - Wd / 2, this.W - cx - Wd / 2);
           r.setData("minX", cx - range); r.setData("maxX", cx + range);
           if (range > 10) r.body.setVelocityX(MOVER_SPEED * this.ax);
+          const img = artSprite(i);
+          if (img) { r.setFillStyle(COLORS.moving_platform, 0.2).setStrokeStyle(2, 0x1d4ed8, 0.3); r.setData("art", img); r.setData("artDx", img.x - cx); mark(i, img); }
           break;
         }
 
@@ -454,6 +494,11 @@ class PlayScene extends Phaser.Scene {
           this.coinGroup.add(c);
           this.totalCoins++;
           mark(i, c);
+          const img = artSprite(i, 3);
+          if (img) {
+            c.setVisible(false); c.setData("art", img); mark(i, img);
+            this.tweens.add({ targets: img, y: img.y - 6, duration: 600 + (i % 5) * 60, yoyo: true, repeat: -1, ease: "Sine.InOut" });
+          }
           break;
         }
 
@@ -470,12 +515,25 @@ class PlayScene extends Phaser.Scene {
             : { left: cx - 120 * this.ax, right: cx + 120 * this.ax };
           e.setData("patrol", patrol);
           e.setData("dir", -1);
-          e.setData("eyes", this.makeEyes(6));
-          mark(i, e);
+          // Drawn enemies keep the physics box (invisible) and wear the drawing, scaled to the same box.
+          const img = artSprite(i, 4);
+          if (img) {
+            e.isFilled = false; e.isStroked = false;
+            const dh = eh * (art[i].box.h / o.h);
+            const dy = dh * (0.5 - (art[i].canvas.inkBottom ?? 1)) + eh / 2;   // lowest stroke on the enemy's feet
+            img.setDisplaySize(ew * (art[i].box.w / o.w), dh).setPosition(e.x, e.y + dy);
+            e.setData("art", img); e.setData("artDy", dy); e.setData("eyes", []);
+            mark(i, e, img);
+          } else {
+            e.setData("eyes", this.makeEyes(6));
+            mark(i, e);
+          }
           break;
         }
 
         case "spike": {
+          const img = artSprite(i, 2);
+          if (img) { this.hazards.add(this.add.zone(cx, Y + Ht * 0.7, Wd * 0.9, Ht * 0.6)); mark(i, img); break; }
           const g = this.add.graphics();
           g.fillStyle(COLORS.spike); g.lineStyle(2, 0x4b5563);
           const teeth = Math.max(1, Math.round(Wd / Math.max(12, Ht * 0.9)));
@@ -492,6 +550,12 @@ class PlayScene extends Phaser.Scene {
         }
 
         case "goal": {
+          const img = artSprite(i, 2);
+          if (img) {
+            this.goals.add(this.add.zone(cx, cy, Wd, Ht)); mark(i, img);
+            this.tweens.add({ targets: img, angle: { from: -3, to: 3 }, duration: 900, yoyo: true, repeat: -1, ease: "Sine.InOut" });
+            break;
+          }
           const g = this.add.graphics();
           const poleX = X + Wd * 0.25;
           g.fillStyle(0x6b7280); g.fillRect(poleX - 3, Y, 6, Ht);
@@ -509,6 +573,8 @@ class PlayScene extends Phaser.Scene {
         }
 
         default: { // decoration
+          const img = artSprite(i, -5);
+          if (img) { mark(i, img); break; }
           const rect = this.add.rectangle(cx, cy, Wd, Ht, COLORS.decoration, 0.12).setStrokeStyle(2, COLORS.decoration, 0.5).setDepth(-5);
           const text = this.add.text(cx, cy, o.label || "", { fontFamily: "system-ui, sans-serif", fontSize: "20px", color: "#7c3aed" })
             .setOrigin(0.5).setAlpha(0.8).setDepth(-5);
@@ -554,6 +620,7 @@ class PlayScene extends Phaser.Scene {
     this.input.keyboard.on("keydown-R", () => this.scene.restart());
     this.input.keyboard.on("keydown-P", () => { if (this.state === "paused") this.resume(); else this.pause(); });
     this.input.keyboard.on("keydown-M", () => SFX.setMuted(!SFX.muted));
+    this.input.keyboard.on("keydown-G", () => setArtOn(!artOn));
 
     // Camera: slightly zoomed in, follows the player smoothly, clamped to the level.
     this.layout();
@@ -687,7 +754,9 @@ class PlayScene extends Phaser.Scene {
         }
         e.body.setVelocityX(dir * ENEMY_SPEED * this.ax);
       }
-      this.placeEyes(e.getData("eyes"), e.x, e.y - e.height / 2 + 10, dir, 6);
+      const img = e.getData("art");
+      if (img) { img.setPosition(e.x, e.y + e.getData("artDy")).setFlipX(dir > 0).setAngle(Math.sin(now / 110 + e.x * 0.01) * 5); }
+      else this.placeEyes(e.getData("eyes"), e.x, e.y - e.height / 2 + 10, dir, 6);
     }
 
     // Moving platforms: bounce between their bounds and carry whoever stands on them.
@@ -705,6 +774,7 @@ class PlayScene extends Phaser.Scene {
       }
       if (mb.velocity.x > 0 && m.x >= m.getData("maxX")) mb.setVelocityX(-MOVER_SPEED * this.ax);
       else if (mb.velocity.x < 0 && m.x <= m.getData("minX")) mb.setVelocityX(MOVER_SPEED * this.ax);
+      m.getData("art")?.setX(mb.center.x + m.getData("artDx"));
     }
 
     for (const av of this.avatars) if (!av.dead && av.obj.y - PLAYER_H / 2 > this.H + 60) this.die("fell", av);
@@ -743,6 +813,8 @@ class PlayScene extends Phaser.Scene {
 
   collectCoin(c, av) {
     if (this.state !== "play" || !c.active) return;
+    const img = c.getData("art");
+    if (img) { this.tweens.killTweensOf(img); this.tweens.add({ targets: img, y: img.y - 40, alpha: 0, duration: 220, onComplete: () => img.destroy() }); }
     c.destroy();
     this.coins++;
     updateScore(this);
@@ -758,6 +830,8 @@ class PlayScene extends Phaser.Scene {
     // Squash it and bounce.
     eb.enable = false;
     for (const g of e.getData("eyes")) g.destroy();
+    const img = e.getData("art");
+    if (img) this.tweens.add({ targets: img, scaleY: img.scaleY * 0.15, y: eb.bottom - 4, angle: 0, duration: 120, onComplete: () => img.destroy() });
     this.tweens.add({ targets: e, scaleY: 0.15, y: eb.bottom - 4, duration: 120, onComplete: () => e.destroy() });
     pb.setVelocityY(-JUMP_VEL * 0.6);
     av.lastGroundedAt = -1e9;
@@ -836,6 +910,15 @@ function startLevel(level, name, thumbSrc) {
     showToast(`<b>&#128295; Playtest agent</b> made this level beatable: ${level.fixes.map(esc).join(" &middot; ")}`);
   }
   try { localStorage.setItem("playlab.level", JSON.stringify(level)); } catch {}
+  // Cut the drawn art out of the picture first (a few ms for a data URL); never wait more than 1.5 s for it.
+  const gen = ++artGen;
+  levelArt = {}; refreshArtBtn();
+  if (!thumbSrc || !window.InkArt) return runLevel();
+  const ready = InkArt.build(level, thumbSrc).then((a) => { if (gen === artGen) { levelArt = a; refreshArtBtn(); } }).catch(() => {});
+  Promise.race([ready, new Promise((r) => setTimeout(r, 1500))]).then(() => { if (gen === artGen) runLevel(); });
+}
+
+function runLevel() {
   if (!game) {
     const parent = $("game");
     game = new Phaser.Game({
@@ -1238,6 +1321,7 @@ async function init() {
   if ((isScreen || sessionStorage.getItem("playlab.room")) && !isTouch) startHost();   // retries until the deferred scripts are in
   window.addEventListener("pagehide", () => { try { host?.destroy(); } catch {} });   // free the room id quickly
   $("muteBtn").addEventListener("click", (e) => { e.target.blur(); SFX.setMuted(!SFX.muted); });
+  $("artBtn").addEventListener("click", (e) => { e.currentTarget.blur(); setArtOn(!artOn); });
   try { SFX.setMuted(localStorage.getItem("playlab.muted") === "1"); } catch {}
   // Browsers only allow audio after a user gesture: unlock on the first key or tap.
   window.addEventListener("keydown", () => SFX.ensure());
@@ -1257,6 +1341,7 @@ async function init() {
       } else if (m.type === "playlab:restart") restartScene();
       else if (m.type === "playlab:phone") openPhonePanel();
       else if (m.type === "playlab:mute") SFX.setMuted(!!m.muted);
+      else if (m.type === "playlab:art") setArtOn(!!m.on);
       else if (m.type === "playlab:input") remoteInput(m.slot, m);
       else if (m.type === "playlab:jump") remoteJump(m.slot, !!m.down);
       else if (m.type === "playlab:players") setRemotePlayers(m.players);

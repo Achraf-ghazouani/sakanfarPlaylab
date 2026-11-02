@@ -54,6 +54,24 @@ Scanning the QR opens `pad.html?room=CODE` on the phone: a landscape controller 
 - The room code is kept for the page session, so reloading the game keeps the same QR.
 - Rooms are temporary and need no database.
 
+## Your drawing is the art
+
+When a level comes from a picture (photo, phone camera, sketch pad), the game wears your own pen strokes instead of
+colored shapes: the cactus you drew is the enemy that walks (and turns around), your circles are the coins that bob,
+your flag waves at the goal, your cloud drifts with the moving platform. `shared/inkart.js` does it in the browser
+with no AI call and no credits:
+
+- Each object's box (the level grid covers the whole picture) is cut from the picture at 720 px, grown by 10% because
+  the AI boxes are tight, and the paper is keyed out: per-crop paper brightness, dark or colored ink becomes opaque.
+- Printed notebook rules are thin and light, so light ink only stays where it survives a small opening; dark strokes
+  always stay. Ink inside platform boxes belongs to the platform, so an enemy standing on the ground does not carry
+  the ground line along, and an undrawn flag on the ground does not "find" it.
+- A crop with almost no ink (something the chat added, or a box that missed the drawing) keeps the usual shape.
+- Physics boxes do not change; only the visuals do. **Drawn art** in the top bar (or `G`) switches to simple shapes
+  and back, and the choice is remembered.
+
+The Studio and the phone save the picture at 720 px for this (chat thumbnails stay small).
+
 ## The playtest agent
 
 `shared/reach.mjs` simulates the game's jump physics (max height 252 units, flat jump about 300 across, platforms solid from below) and walks the level graph from the start:
@@ -143,7 +161,7 @@ Other commands:
 | `npm run test:studio` | Headless Chrome drives `studio.html`: chat, saved projects, versions, undo, sketch pad, reload, mobile tabs (needs `npm run dev` and Supabase) |
 | `node tests/studio-camera.test.mjs` | Two headless Chromes: the Studio camera link and a phone with the synthetic sheet, level lands in the chat (needs the dev server and the PeerServer or the relay) |
 
-Controls: arrows / WASD to move, space / up / W to jump (hold for a higher jump), stomp enemies from above, R restarts, M toggles sound. Phones get on-screen buttons in landscape.
+Controls: arrows / WASD to move, space / up / W to jump (hold for a higher jump), stomp enemies from above, R restarts, M toggles sound, G switches between your drawn art and simple shapes. Phones get on-screen buttons in landscape.
 
 ## Deploy to Vercel
 
@@ -194,6 +212,7 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | `shared/reach.mjs` | Reachability checker + algorithmic fixer (pure JS, used by server and pages) |
 | `shared/diff.mjs` | What changed between two scans of the same drawing (added / removed / moved) |
 | `shared/photo.js` | Browser photo resize helper used by index.html and game.html |
+| `shared/inkart.js` | Drawn art: cuts every object out of the level's picture and keys out the paper |
 | `lib/fix-level.mjs` | Playtest agent orchestration: AI repair, validation, auto fallback |
 | `lib/ai.mjs` | OpenAI-compatible chat client for Meta (default) and Baseten |
 | `lib/scan-level.mjs` | Scan prompt, JSON extraction, level normalization, image size / EXIF |

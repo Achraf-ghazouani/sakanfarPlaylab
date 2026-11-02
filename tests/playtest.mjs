@@ -224,6 +224,17 @@ try {
   const theme = await evalJS(`document.getElementById("theme").textContent`);
   check("dropdown switches level", theme.includes("level1") && s.total === 0, { theme, total: s.total });
 
+  // 12c. drawn art: level1 has its photo, so its platforms and flag wear the cut-out pen strokes; G toggles shapes
+  const artOf = `(() => ({ art: Object.keys(levelArt).length, images: ${S}.children.list.filter((g) => g.type === "Image").length, on: artOn }))()`;
+  const art1 = await evalJS(artOf);
+  check("level1 uses the drawing as art", art1.art >= 4 && art1.images === art1.art && art1.on, art1);
+  await hold("KeyG", 71, 50); await sleep(400);
+  const art2 = await evalJS(artOf);
+  check("G switches to simple shapes", !art2.on && art2.images === 0, art2);
+  await hold("KeyG", 71, 50); await sleep(400);
+  const art3 = await evalJS(artOf);
+  check("G switches the drawn art back on", art3.on && art3.images === art1.images, art3);
+
   // 13. phone controllers: a second character for slot 2, independent input, respawn without restart, menu + state
   await evalJS(`(() => { const sel = document.getElementById("levelSelect"); sel.value = "levels/sample.json"; sel.dispatchEvent(new Event("change")); return true; })()`);
   await sleep(1000);

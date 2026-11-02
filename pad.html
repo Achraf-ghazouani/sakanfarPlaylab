@@ -303,8 +303,8 @@ function capture(kind) {
     const flatCanvas = document.createElement("canvas"); flatCanvas.width = 1200; flatCanvas.height = 900;
     flatCanvas.getContext("2d").putImageData(new ImageData(flat.data, 1200, 900), 0, 0);
     const jpeg = flatCanvas.toDataURL("image/jpeg", 0.85);
-    const tc = document.createElement("canvas"); tc.width = 480; tc.height = 360; tc.getContext("2d").drawImage(flatCanvas, 0, 0, 480, 360);
-    const thumb = tc.toDataURL("image/jpeg", 0.7);
+    const tc = document.createElement("canvas"); tc.width = 720; tc.height = 540; tc.getContext("2d").drawImage(flatCanvas, 0, 0, 720, 540);
+    const thumb = tc.toDataURL("image/jpeg", 0.75);   // also the source of the drawn art in the game
     // ink mask for the instant layer on the PC, and the change-detection reference (same path as quickMask)
     const IW = 600, IH = 450;
     const inkImg = Paper.inkMask(Paper.downsample(flat, IW, IH));

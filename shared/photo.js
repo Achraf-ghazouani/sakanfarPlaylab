@@ -23,5 +23,5 @@ window.PhotoUtil = {
     return c.toDataURL("image/jpeg", quality);
   },
   UPLOAD_SIDE: 1600,
-  THUMB_SIDE: 480,
+  THUMB_SIDE: 720,          // also the source of the drawn art (shared/inkart.js), so not too small
 };

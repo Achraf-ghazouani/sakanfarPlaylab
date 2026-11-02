@@ -205,6 +205,15 @@
   .user .av img { width:100%; height:100%; object-fit:cover; }
   .user .credits { background:var(--lav); color:var(--purple-deep); border-radius:999px; padding:2px 8px; font-size:12px; }
   .user .pop a { text-decoration:none; color:var(--ink); }
+  .user .credits.up { animation:creditUp .7s; } .user .credits.down { animation:creditDown .7s; }
+  @keyframes creditUp { 30% { background:#bbf7d0; color:#15803d; transform:scale(1.12); } }
+  @keyframes creditDown { 30% { background:#fecaca; color:#b91c1c; transform:scale(1.12); } }
+  .cost { display:inline-block; margin-left:5px; font-size:10px; font-weight:700; background:var(--lav); color:var(--purple-deep); border-radius:999px; padding:1px 6px; vertical-align:1px; }
+  .cost.free { background:#dcfce7; color:#15803d; }
+  .cost.soon { background:#f3f4f6; color:#6b7280; }
+  #sendCost { font-size:11px; color:var(--muted); margin-top:6px; min-height:15px; }
+  #noCredits .sheet { width:min(420px, 96vw); text-align:center; padding:24px; }
+  #noCredits .big { font:700 44px Fredoka, sans-serif; color:var(--purple-deep); }
   .demo-badge { background:#fef3c7; color:#92400e; border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700; }
   body.phone #phoneBtn { display:none; }   /* the phone is the device: nothing to link */
   #phoneBtn.live { border-color:var(--green); box-shadow:0 0 0 2px rgba(34,197,94,.25); }
@@ -281,6 +290,7 @@
             <textarea id="composer" rows="1" placeholder="Describe your game, or paste / drop a drawing..."></textarea>
             <button class="ib" id="sendBtn" title="Send (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
           </div>
+          <div id="sendCost"></div>
           <div class="chips" id="chips">
             <button class="chip">Make it harder</button><button class="chip">Add more coins</button><button class="chip">Change theme</button><button class="chip">Playtest it</button>
           </div>
@@ -326,7 +336,7 @@
     </header>
     <div class="body">
       <canvas id="sketchCanvas" width="1200" height="900"></canvas>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="hint">Draw like on paper: a ground line, boxes to stand on, circles for coins, a monster, a flag at the end.</span><span class="spacer"></span><button class="tb primary" id="sketchUse">Use drawing</button></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="hint">Draw like on paper: a ground line, boxes to stand on, circles for coins, a monster, a flag at the end.</span><span class="spacer"></span><button class="tb primary" id="sketchUse">Use drawing <span class="cost" data-cost="scan"></span></button></div>
     </div>
   </div>
 </div>
@@ -336,12 +346,19 @@
     <header><b>&#128241; Phone</b><span id="camStatus">starting the link...</span><button class="tool" id="camClose">Close</button></header>
     <div class="body">
       <div class="cam-grid">
-        <div><div class="qr" id="camQr"></div><div class="code" id="camCode">....</div><div class="url" id="camUrl"></div><p class="hint" id="camHint">Scan the code with your phone (same Wi-Fi is best). Point the phone at a drawing: it captures by itself and the level appears here. Keep drawing and it re-scans.</p><div class="hint" id="camPlayers"></div></div>
+        <div><div class="qr" id="camQr"></div><div class="code" id="camCode">....</div><div class="url" id="camUrl"></div><p class="hint" id="camHint">Scan the code with your phone (same Wi-Fi is best). Point the phone at a drawing: it captures by itself and the level appears here. Keep drawing and it re-scans.</p><div class="hint">Each picture the phone reads costs <b data-cost="scan"></b>, from this account.</div><div class="hint" id="camPlayers"></div></div>
         <div class="cam-view" id="camView"><video id="camVideo" autoplay playsinline muted></video><canvas id="camInk" width="600" height="450"></canvas><span class="tag" id="camTag">waiting for the phone</span></div>
       </div>
     </div>
   </div>
 </div>
+<div class="modal" id="noCredits"><div class="sheet">
+  <div style="font-size:42px">&#129689;</div>
+  <h2 style="font-family:Fredoka,sans-serif;margin:6px 0">Not enough credits</h2>
+  <p class="hint" id="noCreditsText" style="font-size:14px"></p>
+  <div class="big" id="noCreditsBal">0</div><p class="hint">credits left</p>
+  <div style="display:flex;gap:8px;justify-content:center;margin-top:14px"><a class="tb primary" href="profile.html#credits" style="text-decoration:none">Get more credits</a><button class="tb" id="noCreditsClose">OK</button></div>
+</div></div>
 <div id="camPip" title="Phone camera (click to open)"><video id="camPipVideo" autoplay playsinline muted></video></div>
 
 <script>
@@ -362,7 +379,9 @@ layout();
 async function api(path, { method = "GET", body } = {}) {
   const r = await PlayAuth.api(path, { method, body });   // adds the login token; 401/403 send the user to the login page
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error(data.error || `${method} ${path} failed (${r.status})`); e.status = r.status; throw e; }
+  if (typeof data?.credits?.balance === "number") setBalance(data.credits.balance);
+  if (r.status === 402) showNoCredits(data);
+  if (!r.ok) { const e = new Error(data.error || `${method} ${path} failed (${r.status})`); e.status = r.status; e.data = data; throw e; }
   return data;
 }
 function toast(text, ms = 2500) { const t = $("toast"); t.textContent = text; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), ms); }
@@ -378,7 +397,7 @@ window.addEventListener("message", (e) => {
   if (m.type === "playlab:state" && m.state) Cam.host?.broadcast(m.state);                                                            // phones show level, coins, paused
 });
 function pushLevel(level, { name = "studio", thumb = null, keepPlayer = false, toastText = null, quiet = false } = {}) {
-  S.level = level; layout();
+  S.level = level; layout(); queueMicrotask(updateCosts);
   const n = level?.objects?.length || 0;
   $("previewStatus").textContent = `${n} objects${S.versions[0] ? ` · v${S.versions[0].n}` : ""}${level?.theme ? ` · ${level.theme}` : ""}`;
   if (S.previewReady) preview().postMessage({ type: "playlab:level", level, name, thumb: thumb || S.project?.photo || null, keepPlayer, toast: quiet ? null : toastText }, "*");
@@ -706,10 +725,11 @@ async function addAttachment(file) {
   renderAttachments();
 }
 function renderAttachments() {
+  queueMicrotask(updateCosts);
   $("attachments").innerHTML = S.attachments.map((a, i) => `<div class="attach">${a.thumb ? `<img src="${a.thumb}" alt="">` : `<span>&#128230;</span>`}<span>${esc(a.name)}</span><button class="x" data-i="${i}" title="Remove">&times;</button></div>`).join("");
   $("attachments").querySelectorAll(".x").forEach((b) => b.addEventListener("click", () => { S.attachments.splice(Number(b.dataset.i), 1); renderAttachments(); }));
 }
-$("chips").addEventListener("click", (e) => { const c = e.target.closest(".chip"); if (!c) return; $("composer").value = c.textContent; send(); });
+$("chips").addEventListener("click", (e) => { const c = e.target.closest(".chip"); if (!c) return; $("composer").value = c.dataset.label || c.textContent; send(); });
 $("composer").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
 $("composer").addEventListener("input", () => { const c = $("composer"); c.style.height = "auto"; c.style.height = Math.min(140, c.scrollHeight) + "px"; });
 $("sendBtn").addEventListener("click", send);
@@ -830,6 +850,49 @@ $("overlay").addEventListener("click", () => { $("sidebar").classList.remove("op
 // ---------------------------------------------------------------------------
 // Account: name, avatar, credits, menu
 // ---------------------------------------------------------------------------
+/** Count the badge up or down to the new balance. */
+function setBalance(n) {
+  if (!S.me || typeof n !== "number") return;
+  const from = Number(S.me.balance) || 0; S.me.balance = n;
+  const el = $("creditNum"), badge = $("creditBadge");
+  if (from === n) { el.textContent = n; return; }
+  badge.classList.remove("up", "down"); void badge.offsetWidth; badge.classList.add(n > from ? "up" : "down");
+  const t0 = performance.now(), dur = 600;
+  const tick = (t) => { const k = Math.min(1, (t - t0) / dur); el.textContent = Math.round(from + (n - from) * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+  updateCosts();
+}
+function showNoCredits(data) {
+  const c = data?.credits || {};
+  $("noCreditsText").textContent = data?.error || "This action costs more credits than you have.";
+  $("noCreditsBal").textContent = typeof c.balance === "number" ? c.balance : (S.me?.balance ?? 0);
+  $("noCredits").classList.add("show");
+}
+$("noCreditsClose").addEventListener("click", () => $("noCredits").classList.remove("show"));
+
+/** Prices from api/costs (display only; the server decides the real charge). */
+S.costs = {};
+const price = (action) => S.costs[action]?.credits;
+const CHIP_COST = { "Make it harder": "edit_2d", "Add more coins": "edit_2d", "Change theme": "edit_2d", "Playtest it": "playtest", "Generate art": "soon", "Make it 3D": "soon", "Share": "free" };
+function costTag(action) {
+  if (action === "soon") return `<span class="cost soon">soon</span>`;
+  if (action === "free") return `<span class="cost free">free</span>`;
+  const n = price(action); return n === undefined ? "" : n === 0 ? `<span class="cost free">free</span>` : `<span class="cost">${n}</span>`;
+}
+function updateCosts() {
+  document.querySelectorAll("#chips .chip").forEach((c) => { const label = c.dataset.label || (c.dataset.label = c.textContent); c.innerHTML = esc(label) + costTag(CHIP_COST[label]); });
+  document.querySelectorAll("[data-cost]").forEach((el) => { const n = price(el.dataset.cost); el.textContent = n === undefined ? "" : n + " credits"; });
+  const hasImg = S.attachments.some((a) => a.upload), text = $("composer").value.trim();
+  const action = hasImg ? "scan" : S.level ? "edit_2d" : "create_2d";
+  const n = price(action);
+  $("sendCost").textContent = n === undefined || (!text && !hasImg) ? "" : `Send · ${n} credit${n === 1 ? "" : "s"} (${hasImg ? "read the picture" : S.level ? "change the game" : "new game"}) · you have ${S.me?.balance ?? 0}`;
+}
+async function loadCosts() {
+  try { const d = await (await fetch("api/costs", { cache: "no-store" })).json(); S.costs = d.costs || {}; S.models = d.models || []; } catch {}
+  updateCosts();
+}
+$("composer").addEventListener("input", updateCosts);
+
 function renderUser() {
   const p = S.me; if (!p) return;
   const name = p.display_name || p.username || p.email.split("@")[0];
@@ -849,6 +912,7 @@ $("logoutBtn").addEventListener("click", async (e) => { e.preventDefault(); try 
 (async () => {
   S.me = await PlayAuth.requireLogin();   // not logged in or blocked -> login page
   renderUser();
+  loadCosts();
   bindExamples();
   const projects = await loadProjects();
   const last = (() => { try { return localStorage.getItem("playlab.studio.project"); } catch { return null; } })();

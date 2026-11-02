@@ -9,6 +9,7 @@ import { scanLevelFromImage, aspectFromImage, normalizeLevel } from "../lib/scan
 import { playtestAndFix } from "../lib/fix-level.mjs";
 import { diffLevels } from "../shared/diff.mjs";
 import { requireUser } from "../lib/auth.mjs";
+import { paid } from "../lib/credits.mjs";
 
 const MAX_BASE64 = 8_000_000;                 // ~6 MB of image; the page sends ~0.3-0.8 MB
 const OK_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -42,13 +43,17 @@ export default async function handler(req, res) {
   // Optional provider choice (live re-scans use Baseten to save Meta credits); unknown values are ignored.
   const wantProvider = ["meta", "baseten"].includes(String(body.provider || "").toLowerCase()) ? body.provider.toLowerCase() : undefined;
 
-  let scanned;
+  // Credits: one scan at the price of the chosen model (live re-scans on Baseten use Muse Spark Open's multiplier).
+  const model = typeof body.model === "string" ? body.model.slice(0, 60) : wantProvider === "baseten" ? "muse-spark-open" : null;
+  let scanned, credits;
   try {
-    scanned = await scanLevelFromImage({ base64, mime, aspect, previous, provider: wantProvider });
+    const out = await paid(user, res, "scan", { model }, (c) => scanLevelFromImage({ base64, mime, aspect, previous, provider: c.provider || wantProvider }));
+    if (!out) return;   // 402 / 403 already sent
+    scanned = out.result; credits = out.credits;
   } catch (err) {
     console.error("scan failed:", err.message);
     const status = err.status === 401 || err.status === 403 ? 500 : 502;   // never leak auth details, just say the AI failed
-    return res.status(status).json({ error: friendly(err) });
+    return res.status(status).json({ error: friendly(err), credits: { refunded: !!err.refunded, balance: err.balance } });
   }
 
   // Playtest agent, quick pass: check every jump and apply the instant algorithmic fix so the level is
@@ -68,8 +73,8 @@ export default async function handler(req, res) {
 
   if (previous) level.diff = diffLevels(previous, level);
 
-  const { provider, model, ms, usage, fallback } = scanned;
-  return res.status(200).json({ level, original, meta: { provider, model, ms, usage, fallback: !!fallback, playtest } });
+  const { provider, ms, usage, fallback } = scanned;
+  return res.status(200).json({ level, original, meta: { provider, model: scanned.model, ms, usage, fallback: !!fallback, playtest }, credits });
 }
 
 function friendly(err) {

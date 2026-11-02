@@ -200,7 +200,7 @@ try {
   check("sidebar thumbnail uses the photo", !!(await waitFor(`document.querySelector(".proj img") !== null`)));
 
   // 4. playtest chip -> agent action -> /api/fix (mocked) -> card
-  await evalJS(`[...document.querySelectorAll(".chip")].find((c) => c.textContent === "Playtest it").click(); true`); await idle();
+  await evalJS(`[...document.querySelectorAll(".chip")].find((c) => (c.dataset.label || c.textContent) === "Playtest it").click(); true`); await idle();
   check("playtest chip hits /api/fix", await evalJS(`window.__fixCalls`) === 1);
   check("playtest card says reachable", /every platform, coin and goal is reachable/.test(await evalJS(`document.body.innerText`)));
 

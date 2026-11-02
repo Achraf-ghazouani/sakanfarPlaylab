@@ -133,6 +133,17 @@ PlayLab is invite-only. Visitors can join the waitlist on the landing page and p
 - **Phones need no account**: in the Studio and on the big screen the phone sends its picture to the logged-in computer, which runs the scan and sends the result back.
 - **Server key**: a few server-only database functions (waitlist inserts, rate limits, admin sync, test accounts) require `PLAYLAB_SERVER_KEY`; the database stores only its SHA-256. It never reaches a page.
 
+**Credits** (`lib/credits.mjs`, `db/004_credits.sql`): every AI call costs credits, charged in one database transaction before the call (`public.charge`: price × model multiplier, rounded up; balance; optional daily limit; ledger row) and refunded automatically when the AI call fails.
+
+| Action | Credits | When |
+| --- | --- | --- |
+| `create_2d` | 10 | a chat turn with no game yet |
+| `edit_2d` | 2 | a chat turn on an existing game |
+| `scan` | 8 | a photo, sketch or camera picture |
+| `playtest` | 3 | only when the level needs the AI repair (free when it is already fine; refunded when the instant fix is used instead) |
+
+Models: Muse Spark 1.3 ×1 (default), 1.2 ×0.8, 1.1 ×0.6, Muse Spark Open on Baseten ×0.5 (live re-scans from the phone use it). Replies that need no AI are free. A short balance answers 402 before any AI call, and the Studio shows the price of each action next to its button. Prices and multipliers are edited in the admin panel; `GET /api/costs` is the public price list.
+
 Database: `db/schema.sql` (games), then `db/002_accounts.sql`, `db/003_server_users.sql`, `db/004_credits.sql` and `db/005_admin.sql` in the Supabase SQL editor.
 
 ## Admin panel (`admin.html`)
@@ -169,6 +180,7 @@ Other commands:
 | `npm run playtest` | Headless Chrome drives the game through 36 checks (needs `npm run dev` running) |
 | `npm run test:auth` | Waitlist, approval gate, logins, roles, blocked accounts and row-level security against the real Supabase project (needs `npm run dev`) |
 | `npm run test:db` | Round trip against the real Supabase tables as two throwaway accounts |
+| `node tests/credits.test.mjs` | Prices, multipliers, the atomic charge, refunds, daily limits, parallel charges, admin grants and one real AI call (needs `npm run dev`) |
 | `npm run test:admin` | The admin API against the real Supabase project with a throwaway admin and user: access, credits, limits, suspend, passwords, accounts, waitlist, prices, models, activity (needs `npm run dev`) |
 | `npm run test:studio` | Headless Chrome drives `studio.html`: chat, saved projects, versions, undo, sketch pad, reload, mobile tabs (needs `npm run dev` and Supabase) |
 | `node tests/studio-camera.test.mjs` | Two headless Chromes: the Studio camera link and a phone with the synthetic sheet, level lands in the chat (needs the dev server and the PeerServer or the relay) |

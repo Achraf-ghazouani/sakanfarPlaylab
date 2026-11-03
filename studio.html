@@ -1200,6 +1200,17 @@ function offerUndo3D(a, model) {
   });
   row.appendChild(b); el.appendChild(row);
 }
+/** Choices the agent offers (a kind of game it cannot make: the closest two): each chip sends its words as the next message. */
+function suggestChips(items) {
+  const el = appendMessage({ role: "tool", content: "", meta: { card: { icon: "&#128161;", title: "Pick one, or describe something else", text: "" } } });
+  const row = document.createElement("div"); row.className = "choices";
+  for (const item of items.slice(0, 4)) {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = String(item).slice(0, 120);
+    b.addEventListener("click", () => { if (S.busy) return; row.remove(); $("composer").value = b.textContent; send(); });
+    row.appendChild(b);
+  }
+  el.appendChild(row);
+}
 /** A picture landed in a 3D game: it stays 3D (cut-outs, textures, UI), with one chip back to 2D. */
 function offerSwitch2D() {
   const el = appendMessage({ role: "tool", content: "", meta: { card: { icon: "&#128161;", title: "Still 3D", text: "Pictures work in 3D too (cut-outs, textures, UI)." } } });
@@ -1415,6 +1426,7 @@ async function askAgent(text, history) {
 /** Actions the page runs itself with the existing endpoints. */
 async function runAction(action) {
   if (action.type === "mode") { setDim(action.mode); return; }
+  if (action.type === "chips" && Array.isArray(action.items)) { suggestChips(action.items); return; }
   if (action.type === "view" && isArena(S.level)) {
     S.level = { ...S.level, view: action.view };
     toPreview({ type: "playlab:view", view: action.view });
@@ -1596,6 +1608,11 @@ function updateCosts() {
     return;
   }
   const hasImg = false;
+  // a kind of game the engines do not have (racing, puzzle, sports...): the agent answers for free and offers the closest (lib/agent.mjs unsupportedKind)
+  const shooterish = /\b(shooter|fps|tps|first.?person|third.?person|top.?down|zombies?|horde|waves?\s+of|survive|survival|arena|platformer|platform game)\b/i.test(text);
+  if (!shooterish && /\b(racing|race ?cars?|car race|karts?|karting|formula ?(1|one)|grand prix|rally|driving game|cars? game|puzzle|tetris|sudoku|card game|poker|solitaire|chess|checkers|board game|football|soccer|basketball|tennis|golf|hockey|tower defen[cs]e|rpg|role.?playing|rhythm game|fighting game)\b/i.test(text)) {
+    $("sendCost").textContent = "Send · free (PlayLab builds platformers and arena shooters; I will offer the closest one)"; return;
+  }
   const d3 = S.mode === "3d" || /\b3d\b/i.test(text) || /\b(shooter|fps|tps|first.?person|third.?person|top.?down|zombies?|horde|waves?\s+of|survive|survival|arena)\b/i.test(text);
   const action = hasImg ? "scan" : S.level ? (d3 ? "edit_3d" : "edit_2d") : (d3 ? "create_3d" : "create_2d");
   const n = price(action);

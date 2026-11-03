@@ -115,6 +115,7 @@ const inject = `
     if (/api\\/agent$/.test(u)) {
       window.__agentCalls++; const b = JSON.parse(init.body); window.__lastAgentBody = b;
       if (/playtest/i.test(b.message)) return json({ reply: "Running the playtest agent.", actions: [{ type: "playtest" }] });
+      if (/racing/i.test(b.message)) return json({ reply: "PlayLab builds two kinds of games today. Pick one below.", actions: [{ type: "chips", items: ["A platformer laid out like a race track: 3 laps of coins, rival cars as enemies", "A top-down arena: dodge 4 rival drivers, 3 waves"] }] });
       if (/top.?down/i.test(b.message) && b.level && b.level.genre === "arena") return json({ reply: "Top-down it is.", actions: [{ type: "view", view: "top" }] });
       if (/shooter|zombie/i.test(b.message)) return json({ reply: "Zombies incoming!", level: AR, kind: "create", note: "zombie graveyard, 5 waves", playtest: { ok: true, fixed: 0, fixes: [] }, actions: [] });
       if (/lava castle/i.test(b.message)) return json({ reply: "Built a lava castle with a ledge and a guard.", level: { ...LA, checked: true, fixes: [] }, kind: "create", note: "lava castle, one ledge", playtest: { ok: true, fixed: 0 }, actions: [] });
@@ -446,6 +447,14 @@ try {
   check("camera button on a phone opens the device camera", (await evalJS(`window.__capClicked`)) === 1 && (await evalJS(`document.getElementById("cameraInput").getAttribute("capture")`)) === "environment" && !(await evalJS(`document.getElementById("camModal").classList.contains("show")`)));
   await send("Emulation.setTouchEmulationEnabled", { enabled: false });
   await send("Emulation.clearDeviceMetricsOverride");
+
+  // 8b. a kind of game the engines do not have: the agent offers the closest two as chips, a chip sends its words
+  await click("#newGameBtn");
+  await type("a car racing game with 3 laps"); await sendMsg(); await idle();
+  const chips = await evalJS(`[...document.querySelectorAll(".card .choices button")].map((b) => b.textContent)`);
+  check("the racing request got a choice card with two chips and no game", chips.length === 2 && /platformer[^]*race track/.test(chips[0]) && /arena/.test(chips[1]) && (await evalJS(`!S.level`)), chips);
+  await evalJS(`[...document.querySelectorAll(".card .choices button")][0].click(); true`); await idle();
+  check("the chip sent its words as the next message and the game was built from them", await evalJS(`S.messages.some((m) => m.role === "user" && /platformer laid out like a race track/.test(m.content)) && !!S.level && document.querySelectorAll(".card .choices button").length === 0`));
 
   // 9. another owner cannot see the project through the API
   const foreign = await fetch(`${BASE}/api/projects?id=${pid}`);

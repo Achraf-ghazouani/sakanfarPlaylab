@@ -124,6 +124,7 @@ const inject = `
     if (/api\\/art$/.test(u)) {
       const b = JSON.parse(init.body); (window.__artCalls = window.__artCalls || []).push(b.task);
       if (b.task === "classify") return json({ ...(window.__classifyAs || { kind: "level", role: null, name: "a level" }), confidence: 0.9, credits: { spent: 1 } });
+      if (b.task === "cutout") return new Response(JSON.stringify({ error: "mock: no SAM here" }), { status: 502, headers: { "Content-Type": "application/json" } });   // the page falls back to its free fill
       return json({ image: b.image, kind: b.kind, role: b.role, credits: { spent: 15 } });   // the "sprite" is the picture itself
     }
     if (/api\\/fix$/.test(u)) { window.__fixCalls++; const lvl = JSON.parse(init.body).level; return json({ level: { ...lvl, checked: true, fixes: [] }, report: { before: { ok: true, problems: [] }, after: { ok: true, problems: [] }, fixes: [], fixedBy: null } }); }

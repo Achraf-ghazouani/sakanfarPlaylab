@@ -875,8 +875,9 @@ async function send() {
 // ---------------------------------------------------------------------------
 // Pictures: a level, the player, or an object. The words or the picture's toggle can say which; otherwise Muse Spark
 // looks at it (api/art classify). Characters and objects are redrawn by Muse Image as clean sprites (api/art sprite),
-// cut out of their white background (shared/cutout.js) and saved on the game (project.art.player / art.sprites[role]).
-// "as is" keeps the original picture (cut out, no AI, free). If Muse Image fails, the original is used too.
+// cut out of their flat white background by the page (shared/cutout.js, free) and saved on the game (project.art.player /
+// art.sprites[role]). "as is" keeps the person's own picture: SAM 3.1 finds the character or object in it (api/art cutout,
+// 1 credit) and the page cuts it out; if SAM cannot, the free fill does its best. If Muse Image fails, the original is used too.
 // ---------------------------------------------------------------------------
 const PLAYER_WORDS = /\b(player|character|hero|heroine|avatar|mascot|playable|play as|main guy|main girl)\b/i;
 const LEVEL_WORDS = /\b(level|map|stage|world|course|track|platforms?)\b/i;
@@ -930,14 +931,28 @@ async function makePictureSprite(img, plan, text) {
       toast("Muse Image could not draw it, so I used your picture: " + err.message, 5000);
     }
   }
-  let cut;
-  try { cut = await Cutout.character(src); } catch { hideTyping(); await streamAssistant("I could not read that picture. Try a PNG or JPEG."); return; }
-  const drawn = how === "muse" ? "Muse Image drew it as a game sprite" : cut.keyed ? "I cut it out of your picture" : "I used your picture as it is";
+  let cut = null;
+  if (how === "muse") { try { cut = await Cutout.character(src); } catch {} }          // Muse's flat white: the free fill
+  if (!cut?.keyed) cut = (await samCutout(src, plan)) || cut;                           // the person's own picture: SAM 3.1 finds the subject
+  if (!cut) { try { cut = await Cutout.character(src); } catch { hideTyping(); await streamAssistant("I could not read that picture. Try a PNG or JPEG."); return; } }
+  const drawn = how === "muse" ? "Muse Image drew it as a game sprite" : cut.how === "sam" ? "SAM 3.1 cut it out of your picture" : cut.keyed ? "I cut it out of your picture" : "I used your picture as it is";
   if (kind === "character") {
     await setPlayerArt(cut.src, S.level ? `${drawn}: it is the player now. Try it on the right!` : `${drawn}! Now describe a level or draw one, and they will play it.`);
   } else {
     const what = ROLE_LABEL[plan.role];
     await setObjectSprite(plan.role, cut.src, S.level ? `${drawn}: every ${what} in the game uses it now.` : `${drawn}. Every ${what} in your next level will use it.`);
+  }
+}
+/** SAM 3.1 (api/art cutout, 1 credit) finds the character or object in the picture and the page cuts it out; null when it cannot (no credits, an error). */
+async function samCutout(src, plan) {
+  let prep; try { prep = await Cutout.prepare(src); } catch { return null; }
+  showTyping();
+  try {
+    const r = await api("api/art", { method: "POST", body: { task: "cutout", image: prep.src, phrase: plan.name || "", width: prep.width, height: prep.height } });
+    return await Cutout.character(prep.src, { sam: r });
+  } catch (err) {
+    if (err.status !== 402) toast("SAM 3.1 could not cut it out, so I used the plain cutout: " + err.message, 4000);
+    return null;
   }
 }
 async function saveArt(art) {
@@ -1157,7 +1172,7 @@ function updateCosts() {
     const as = pictureRole(text, img).as, sprite = price("art"), look = price("classify"), scan = price("scan");
     $("sendCost").textContent = as === "level" ? `Send · ${scan} credits (read the level)`
       : as === "auto" ? `Send · ${look ?? 1} credit to look at the picture, then ${scan} for a level or ${sprite} for a sprite`
-      : AS_IS.test(text) ? "Send · free (your picture as it is)" : `Send · ${sprite} credits (Muse Image draws the ${as === "player" ? "player" : "sprite"})`;
+      : AS_IS.test(text) ? `Send · ${price("cutout") ?? 1} credit (SAM 3.1 cuts your picture out)` : `Send · ${sprite} credits (Muse Image draws the ${as === "player" ? "player" : "sprite"})`;
     return;
   }
   const hasImg = false;

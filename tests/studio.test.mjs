@@ -164,6 +164,8 @@ try {
   check("studio.html?camera=1 opens the camera link", !!(await waitFor(`typeof S === "object" && document.getElementById("camModal").classList.contains("show")`, { timeout: 15_000 })));
   await send("Page.navigate", { url: `${BASE}/studio.html` });
   await waitFor(`typeof S === "object" && document.body.classList.contains("fresh")`);
+  check("the loading screen is gone once the Studio is on screen", !!(await waitFor(`!document.getElementById("boot") || document.getElementById("boot").classList.contains("off")`)));
+  check("the loading screen has its words and its failure hooks", await evalJS(`typeof bootDone === "function" && typeof bootError === "function" && Array.isArray(window.__bootWords) && window.__bootWords.length === 5`));
   check("studio loads on the welcome screen", await evalJS(`getComputedStyle(document.getElementById("emptyState")).display === "flex"`));
   check("my games list is empty for a fresh owner", await evalJS(`document.querySelectorAll(".proj").length`) === 0);
   check("preview iframe reports ready", !!(await waitFor(`S.previewReady`, { timeout: 20_000 })));

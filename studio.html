@@ -5,13 +5,47 @@
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fbfaff">
+<!-- the loading screen: styled inline so the first paint shows it, before any other file has arrived -->
+<style>
+  body { margin:0; background:#fbfaff; }
+  #boot { position:fixed; inset:0; z-index:50; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:radial-gradient(900px 500px at 50% 30%, #f3eeff, #fbfaff); color:#5b21b6; font-family:Inter, system-ui, sans-serif; text-align:center; padding:24px; transition:opacity .3s; }
+  #boot.off { opacity:0; pointer-events:none; }
+  #boot img { width:88px; height:88px; border-radius:24px; box-shadow:0 14px 40px rgba(91,33,182,.18); animation:bootbob 1.4s ease-in-out infinite; }
+  #boot .t { font-size:17px; font-weight:700; }
+  #boot .s { font-size:13px; color:#6b6480; max-width:420px; }
+  #boot .bar { width:200px; height:6px; border-radius:999px; background:#e2d9ff; overflow:hidden; }
+  #boot .bar i { display:block; width:40%; height:100%; border-radius:999px; background:linear-gradient(90deg, #a78bfa, #7c3aed); animation:bootslide 1.1s ease-in-out infinite; }
+  #boot .err { display:none; font-size:14px; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; border-radius:12px; padding:10px 14px; max-width:460px; }
+  #boot.failed .bar, #boot.failed img { animation:none; } #boot.failed .err { display:block; }
+  #boot .err a { color:#5b21b6; font-weight:700; }
+  @keyframes bootbob { 0%, 100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
+  @keyframes bootslide { 0% { transform:translateX(-120%); } 100% { transform:translateX(300%); } }
+</style>
+<script>
+  // The splash's words in the browser's language (shared/i18n.js has not loaded yet), its failure states, and bootDone().
+  (function () {
+    var L = String(navigator.language || "en").toLowerCase().slice(0, 2);
+    var T = { en: ["Loading PlayLab Studio\u2026", "Checking your login and your games", "Still loading. Slow connection? ", "Reload", "The Studio could not start: "],
+              fr: ["Chargement de PlayLab Studio\u2026", "V\u00e9rification de votre connexion et de vos jeux", "Toujours en chargement. Connexion lente ? ", "Recharger", "Le Studio n'a pas pu d\u00e9marrer : "],
+              ar: ["\u062c\u0627\u0631\u064d \u062a\u062d\u0645\u064a\u0644 PlayLab Studio\u2026", "\u0646\u062a\u062d\u0642\u0642 \u0645\u0646 \u062a\u0633\u062c\u064a\u0644 \u062f\u062e\u0648\u0644\u0643 \u0648\u0623\u0644\u0639\u0627\u0628\u0643", "\u0645\u0627 \u0632\u0627\u0644 \u064a\u062d\u0645\u0651\u0644. \u0627\u062a\u0635\u0627\u0644 \u0628\u0637\u064a\u0621\u061f ", "\u0623\u0639\u062f \u0627\u0644\u062a\u062d\u0645\u064a\u0644", "\u062a\u0639\u0630\u0651\u0631 \u0628\u062f\u0621 \u0627\u0644\u0627\u0633\u062a\u0648\u062f\u064a\u0648: "] }[L] ||
+            ["Loading PlayLab Studio\u2026", "Checking your login and your games", "Still loading. Slow connection? ", "Reload", "The Studio could not start: "];
+    window.__bootWords = T;
+    var done = false, slow = null;
+    window.bootDone = function () { done = true; clearTimeout(slow); var b = document.getElementById("boot"); if (b) { b.classList.add("off"); setTimeout(function () { b.remove(); }, 400); } };
+    window.bootError = function (msg) { if (done) return; clearTimeout(slow); var b = document.getElementById("boot"); if (!b) return; b.classList.add("failed"); b.querySelector(".err").innerHTML = T[4] + String(msg || "").replace(/[<>]/g, "") + ' <a href="studio.html">' + T[3] + "</a>"; };
+    window.addEventListener("error", function (e) { if (!done && e.message && !/ResizeObserver/.test(e.message)) window.bootError(e.message); });
+    window.addEventListener("unhandledrejection", function (e) { if (!done) window.bootError(e.reason && e.reason.message || String(e.reason || "")); });
+    slow = setTimeout(function () { if (done) return; var b = document.getElementById("boot"); if (b) { b.classList.add("failed"); b.querySelector(".err").innerHTML = T[2] + '<a href="studio.html">' + T[3] + "</a>"; } }, 20000);
+  })();
+</script>
 <title>PlayLab Studio</title>
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet"></noscript>
 <script src="shared/i18n.js"></script>
 <script src="shared/photo.js"></script>
 <script src="shared/cutout.js"></script>
@@ -323,6 +357,8 @@
 </style>
 </head>
 <body>
+<div id="boot" role="status" aria-live="polite"><img src="assets/mark-256.webp" alt=""><div class="t"></div><div class="s"></div><div class="bar"><i></i></div><div class="err"></div></div>
+<script>(function () { var T = window.__bootWords; document.querySelector("#boot .t").textContent = T[0]; document.querySelector("#boot .s").textContent = T[1]; })();</script>
 <div class="app">
   <aside id="sidebar">
     <a class="brand" href="index.html"><span class="logo"><img src="assets/mark-256.webp" alt=""></span>PlayLab Studio</a>
@@ -1588,6 +1624,7 @@ $("logoutBtn").addEventListener("click", async (e) => { e.preventDefault(); try 
 // Boot
 // ---------------------------------------------------------------------------
 (async () => {
+  try {
   S.me = await PlayAuth.requireLogin();   // not logged in or blocked -> login page
   showCapNote(S.me.cap);
   renderUser();
@@ -1599,6 +1636,7 @@ $("logoutBtn").addEventListener("click", async (e) => { e.preventDefault(); try 
   loadCosts();
   bindExamples();
   const projects = await loadProjects();
+  if (typeof bootDone === "function") bootDone();   // the Studio is on screen: the loading screen goes
   const last = (() => { try { return localStorage.getItem("playlab.studio.project"); } catch { return null; } })();
   const params = new URLSearchParams(location.search);
   // Arriving (after login, from the landing page) starts on the fresh screen; a reload keeps the game you were on.
@@ -1623,6 +1661,7 @@ $("logoutBtn").addEventListener("click", async (e) => { e.preventDefault(); try 
   }
   if (params.get("camera") === "1") { if (isPhoneNow()) toast("Tap the camera button to take a picture of your drawing", 4000); else openCamLink(); }
   if (params.get("sketch") === "1") $("sketchModal").classList.add("show");
+  } catch (err) { console.error("boot:", err); if (typeof bootError === "function") bootError(err.message); throw err; }
 })();
 </script>
 </body>

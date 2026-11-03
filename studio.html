@@ -417,6 +417,12 @@
   .card b { color:#000; font-weight:500; }
   .card .ic { display:none; }
   .card > div { white-space:pre-line; }
+  #micBtn.rec { background:var(--danger); color:#fff; border-radius:50%; animation:micpulse 1.2s ease-in-out infinite; }
+  #micBtn.wait { opacity:.45; cursor:progress; }
+  @keyframes micpulse { 50% { box-shadow:0 0 0 7px rgba(196,17,47,.16); } }
+  /* a phone on the welcome screen: the words get their own line too, so the mic and Send fit */
+  @media (max-width: 640px) { body.fresh .box { flex-wrap:wrap; row-gap:4px; padding:8px; } body.fresh #composer { order:-1; flex-basis:100%; padding:4px 6px; } body.fresh #micBtn { margin-inline-start:auto; } .box .code { display:none; } }
+  @media (prefers-reduced-motion: reduce) { #micBtn.rec { animation:none; } }
   .card.think { border-left-color:var(--line); }
   .card.think .th .ic { display:none; }
   .card.think .steps .dot { width:6px; height:6px; background:var(--line); }
@@ -559,6 +565,7 @@
             <button class="ib" id="sketchBtn" title="Sketch a level"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg></button>
             <button class="ib" id="cameraBtn" title="Camera: take a picture on a phone, or link your phone camera from a computer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
             <textarea id="composer" rows="1" placeholder="Describe your game, or paste / drop a drawing..." data-i18n-placeholder="studio.placeholder"></textarea>
+            <button class="ib" id="micBtn" type="button" title="Say it: tap to talk, tap again to stop" data-i18n-title="mic.title" aria-label="Say it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
             <button class="ib" id="sendBtn" title="Send (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
           </div>
           <div id="capNote" hidden></div>
@@ -1109,6 +1116,70 @@ $("chips").addEventListener("click", (e) => { const c = e.target.closest(".chip"
 $("composer").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
 $("composer").addEventListener("input", () => { const c = $("composer"); c.style.height = "auto"; c.style.height = Math.min(140, c.scrollHeight) + "px"; });
 $("sendBtn").addEventListener("click", send);
+$("micBtn").addEventListener("click", micToggle);
+
+// ---------------------------------------------------------------------------
+// Voice: "Say a game." The mic records the person (Web Audio, mono), the page packs a 16 kHz WAV, Muse Voice Transcribe (Meta,
+// api/agent.js task voice, free) writes it down, and the words land in the chat box to read and send: a change to a game costs
+// credits, so nothing is sent on its own. One tap starts, one tap stops; it stops by itself after MIC_MAX_S seconds.
+const MIC_MAX_S = 45;
+const Mic = { rec: null, busy: false, placeholder: "" };
+async function micToggle() {
+  if (Mic.rec) return micStop();
+  if (Mic.busy) return;
+  if (!navigator.mediaDevices?.getUserMedia || !(window.AudioContext || window.webkitAudioContext)) return toast(I18N.t("mic.none"), 4000);
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();   // made inside the tap, so phones let it run
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } }); }
+  catch { ctx.close(); return toast(I18N.t("mic.denied"), 5000); }
+  const src = ctx.createMediaStreamSource(stream), node = ctx.createScriptProcessor(4096, 1, 1);
+  const rec = { ctx, stream, src, node, chunks: [], samples: 0, rate: ctx.sampleRate };
+  node.onaudioprocess = (e) => {
+    if (Mic.rec !== rec) return;
+    const d = e.inputBuffer.getChannelData(0); rec.chunks.push(new Float32Array(d)); rec.samples += d.length;
+    if (rec.samples > rec.rate * MIC_MAX_S) micStop();
+  };
+  src.connect(node); node.connect(ctx.destination);   // the processor only runs when connected; its output is silence
+  Mic.rec = rec;
+  $("micBtn").classList.add("rec");
+  Mic.placeholder = $("composer").placeholder; $("composer").placeholder = I18N.t("mic.listening");
+}
+async function micStop() {
+  const rec = Mic.rec; if (!rec) return;
+  Mic.rec = null;
+  try { rec.src.disconnect(); rec.node.disconnect(); } catch {}
+  rec.stream.getTracks().forEach((tr) => tr.stop());
+  rec.ctx.close().catch(() => {});
+  $("micBtn").classList.remove("rec");
+  if (rec.samples < rec.rate * 0.6) { $("composer").placeholder = Mic.placeholder; return toast(I18N.t("mic.short"), 3500); }
+  Mic.busy = true; $("micBtn").classList.add("wait"); $("composer").placeholder = I18N.t("mic.writing");
+  try {
+    const out = await api("/api/agent", { method: "POST", body: { task: "voice", audio: bytesToB64(wav16k(rec.chunks, rec.samples, rec.rate)), lang: I18N.lang } });
+    let said = String(out.text || "").trim(); said = said.charAt(0).toUpperCase() + said.slice(1);
+    if (!said) toast(I18N.t("mic.empty"), 3500);
+    else {
+      const c = $("composer"); c.value = (c.value.trim() ? c.value.trim() + " " : "") + said;
+      c.dispatchEvent(new Event("input")); c.focus(); c.setSelectionRange(c.value.length, c.value.length);
+    }
+  } catch (err) { toast(I18N.t("mic.failed") + err.message, 5000); }
+  Mic.busy = false; $("micBtn").classList.remove("wait"); $("composer").placeholder = Mic.placeholder;
+}
+/** Float32 chunks at the sound card's rate -> a 16 kHz mono 16-bit WAV (the format Muse Voice Transcribe takes). */
+function wav16k(chunks, total, rate) {
+  const all = new Float32Array(total); let o = 0; for (const c of chunks) { all.set(c.subarray(0, Math.min(c.length, total - o)), o); o += c.length; if (o >= total) break; }
+  const ratio = rate / 16000, n = Math.floor(total / ratio), pcm = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(i * ratio), b = Math.max(a + 1, Math.min(total, Math.floor((i + 1) * ratio)));
+    let s = 0; for (let j = a; j < b; j++) s += all[j];
+    pcm[i] = Math.max(-1, Math.min(1, s / (b - a))) * 0x7fff;
+  }
+  const buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf), str = (p, s) => { for (let i = 0; i < s.length; i++) v.setUint8(p + i, s.charCodeAt(i)); };
+  str(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); str(8, "WAVE"); str(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, "data"); v.setUint32(40, n * 2, true);
+  new Int16Array(buf, 44, n).set(pcm);
+  return new Uint8Array(buf);
+}
+function bytesToB64(bytes) { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); }
 $("dimSeg").addEventListener("click", (e) => { const b = e.target.closest("button[data-dim]"); if (!b) return; setDim(b.dataset.dim); toast(S.mode === "3d" ? "3D: the game is drawn in three dimensions" : "2D: the classic flat view"); $("composer").focus(); });
 // Paste a picture into the chat box, or drop it anywhere on the page: it becomes an attachment like the clip button.
 const imagesOf = (list) => [...(list || [])].filter((f) => f && f.type?.startsWith("image/"));

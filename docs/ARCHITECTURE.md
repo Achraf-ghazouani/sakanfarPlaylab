@@ -6,7 +6,7 @@ The deep end of the README: how every part works, the API, the database, the pho
 
 ```
 browser pages (plain HTML/JS, no build step)                 Vercel serverless functions (api/*.js, 10 of them)
-  index.html   landing, waitlist                                agent     plan / code (streamed build) / fix / look  (Muse Spark, Muse Wonder)
+  index.html   landing, waitlist                                agent     plan / code (streamed build) / fix / look / voice  (Muse Spark, Muse Wonder, Muse Voice Transcribe)
   demo.html    the three example games, in the sandbox          art       classify / sprite / cutout (Muse Spark, Muse Image, SAM 3.1)
   studio.html  the chat builder (login)                         play      /play/<id> pages, explore, likes, reports, remix
   pad.html     the phone: controller, camera                    projects, messages   saved games, versions, chat

@@ -43,6 +43,12 @@
   body.layout-arena #left, body.layout-arena #right, body.layout-arena #jump { display:none !important; }
   body.layout-arena #stickMove, body.layout-arena #stickAim, body.layout-arena #fire { display:block; }
   body.layout-arena #fire { display:flex; }
+  /* the pad is light: purple sticks and dark labels */
+  #pad .stick { background:rgba(124,58,237,.10); border-color:rgba(124,58,237,.45); }
+  #pad .stick.on { background:rgba(124,58,237,.18); }
+  #pad .stick .jk { background:#8b5cf6; box-shadow:0 3px 10px rgba(91,33,182,.35); }
+  #pad .stick .lbl { color:#6b6480; font-weight:700; }
+  #pad .hold { border-color:#fff; box-shadow:0 4px 14px rgba(239,68,68,.35); }
   #stickMove { left:max(26px, env(safe-area-inset-left)); bottom:46px; }
   #stickAim { right:max(26px, env(safe-area-inset-right)); bottom:46px; }
   #fire { right:calc(max(26px, env(safe-area-inset-right)) + 150px); bottom:62px; }

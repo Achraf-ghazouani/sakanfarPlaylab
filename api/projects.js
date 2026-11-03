@@ -12,12 +12,15 @@
 
 import { normalizeLevel } from "../lib/scan-level.mjs";
 import { normalizeArena } from "../shared/arena.mjs";
+import { ASSET_ROLES } from "../lib/image.mjs";
 import * as db from "../lib/db.mjs";
 import { requireUser } from "../lib/auth.mjs";
 
 const MAX_PHOTO = 200_000;   // data URL chars (a 480px JPEG is ~40 KB)
 const MAX_SPRITE = 400_000;  // data URL chars for the player picture (a 256px PNG is ~50-150 KB)
-const MAX_ART = 900_000;     // the whole art object (player + up to five object sprites, ~30-120 KB each)
+const MAX_ART = 6_000_000;   // the whole art object: player + object sprites (~30-120 KB each) + the asset list below
+const MAX_ASSET = 1_400_000; // one asset picture (a background JPEG, a tileset or a UI piece as PNG)
+const MAX_ASSETS = 40;
 const SPRITE_ROLES = new Set(["enemy", "coin", "goal", "spike", "decoration"]);
 
 export default async function handler(req, res) {
@@ -128,6 +131,18 @@ function pickFields(body) {
       for (const [k, v] of Object.entries(art.sprites)) {
         if (!SPRITE_ROLES.has(k)) return { error: `Unknown sprite type "${k}".` };
         if (v !== null && !okSprite(v)) return { error: `The ${k} sprite must be a small PNG or WebP image.` };
+      }
+    }
+    // art.assets: every other picture the maker uploaded (backgrounds, tilesets, sprite sheets, UI pieces), with its role (api/art classify)
+    if (art && art.assets != null) {
+      if (!Array.isArray(art.assets) || art.assets.length > MAX_ASSETS) return { error: `assets must be a list of at most ${MAX_ASSETS} pictures.` };
+      art.assets = art.assets.map((a) => a && typeof a === "object" ? {
+        id: String(a.id || "").slice(0, 40), role: String(a.role || ""), name: String(a.name || "").slice(0, 60), hint: String(a.hint || "").slice(0, 40),
+        src: a.src, w: Number(a.w) || 0, h: Number(a.h) || 0,
+      } : null);
+      for (const a of art.assets) {
+        if (!a || !a.id || !ASSET_ROLES.includes(a.role)) return { error: "Each asset needs an id and a known role." };
+        if (typeof a.src !== "string" || !/^data:image\/(png|webp|jpeg);base64,/.test(a.src) || a.src.length > MAX_ASSET) return { error: `The ${a.name || a.role} picture must be a PNG, WebP or JPEG under ${Math.round(MAX_ASSET / 1_400_000)} MB.` };
       }
     }
     if (art && JSON.stringify(art).length > MAX_ART) return { error: "Game art is too large." };

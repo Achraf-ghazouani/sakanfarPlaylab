@@ -1,5 +1,7 @@
 // api/art.js — pictures in the Studio (Vercel serverless function, login required).
-//   POST { task: "classify", image, hint? }                       -> { kind: "level"|"character"|"object", role, name, confidence, credits }
+//   POST { task: "classify", image, hint?, facts? }               -> { role, kind, objRole, name, confidence, hint, credits }
+//        role: level | player | enemy | collectible | hazard | goal | texture | tileset | spritesheet | background | decoration | ui_* (lib/image.mjs ASSET_ROLES);
+//        facts: what shared/assetcheck.js measured locally (the page only asks when its own checks are not sure)
 //   POST { task: "sprite", image, kind, role?, name?, wish? }     -> { image: "data:image/png;base64,...", credits }
 //   POST { task: "cutout", image, width, height, phrase?, point? } -> { box, mask, how, phrase, matches, credits }
 // classify: Muse Spark vision, the "classify" price. sprite: Muse Image 1.0, the "art" price on the muse-image-1.0 model.
@@ -27,10 +29,10 @@ export default async function handler(req, res) {
 
   try {
     if (b.task === "classify") {
-      const out = await paid(user, res, "classify", {}, (c) => classifyPicture({ base64, mime, hint: String(b.hint || ""), provider: c.provider }));
+      const out = await paid(user, res, "classify", {}, (c) => classifyPicture({ base64, mime, hint: String(b.hint || ""), facts: String(b.facts || ""), provider: c.provider }));
       if (!out) return;
-      const { kind, role, name, confidence } = out.result;
-      return res.status(200).json({ kind, role, name, confidence, credits: out.credits });
+      const { role, kind, objRole, name, confidence, hint } = out.result;
+      return res.status(200).json({ role, kind, objRole, name, confidence, hint, credits: out.credits });
     }
     if (b.task === "sprite") {
       const kind = b.kind === "object" ? "object" : "character";

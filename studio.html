@@ -13,6 +13,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
 <script src="shared/photo.js"></script>
 <script src="shared/cutout.js"></script>
+<script src="shared/assetcheck.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js" defer></script>
@@ -166,6 +167,13 @@
   .attach img { width:56px; height:42px; object-fit:cover; border-radius:6px; }
   .attach .role { border:1px solid var(--lav-2); background:#fff; color:var(--purple-deep); border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700; white-space:nowrap; }
   .attach .role.player { background:var(--purple); color:#fff; border-color:var(--purple); }
+  .attach .role.object { background:#fef3c7; border-color:#fde68a; color:#92400e; }
+  .attach .role.ui { background:#dcfce7; border-color:#bbf7d0; color:#166534; }
+  .attach .role.asset { background:#e0f2fe; border-color:#bae6fd; color:#075985; }
+  .attach .role small { font-weight:500; opacity:.8; }
+  .card .choices { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .card .choices button { border:1px solid var(--lav-2); background:#fff; color:var(--purple-deep); border-radius:999px; padding:4px 10px; font-size:12px; font-weight:700; cursor:pointer; }
+  .card .choices button:hover { background:var(--lav); }
   .attach .x { border:0; background:var(--lav); border-radius:50%; width:20px; height:20px; font-size:12px; line-height:1; }
   .box { display:flex; align-items:flex-end; gap:8px; border:1px solid var(--lav-2); border-radius:16px; padding:8px 8px 8px 12px; background:#fff; }
   .box:focus-within { border-color:var(--purple); box-shadow:0 0 0 3px rgba(124,58,237,.12); }
@@ -794,10 +802,13 @@ async function onCamLevel(msg) {
     await saveMessage("assistant", `Built ${lvl.objects.length} objects from the phone camera.`);
   } catch (err) { toast("Could not save the level: " + err.message); }
 }
+const readAsDataUrl = (file) => new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(null); fr.readAsDataURL(file); });
 async function addAttachment(file) {
   const a = { name: file.name, type: file.type || (file.name.endsWith(".glb") || file.name.endsWith(".gltf") ? "model/gltf-binary" : "application/octet-stream"), size: file.size };
   if (a.type.startsWith("image/")) {
     try { const img = await PhotoUtil.loadImage(file); a.upload = PhotoUtil.toJpeg(img, PhotoUtil.UPLOAD_SIDE, 0.85); a.thumb = PhotoUtil.toJpeg(img, 320, 0.7); a.art = PhotoUtil.toJpeg(img, PhotoUtil.THUMB_SIDE, 0.75); } catch { toast("Could not read that image"); return; }
+    if (/image\/(png|webp)/i.test(a.type) && file.size <= 1_400_000) a.raw = await readAsDataUrl(file);   // the original keeps its transparency (sprites, UI pieces)
+    try { a.check = await AssetCheck.inspect(a.raw || a.upload); } catch {}                                  // cheap local checks: what does it look like?
   }
   if (S.nextRole && a.upload) { a.role = S.nextRole; S.nextRole = null; }
   S.attachments.push(a);
@@ -806,12 +817,14 @@ async function addAttachment(file) {
 }
 function renderAttachments() {
   queueMicrotask(updateCosts);
-  // A picture builds a level by default; its toggle (or words like "use this as the player") makes it the player instead.
+  // A picture's toggle says what it is for; the words can say it too ("use this as the player", "this is my pause button");
+  // on Auto the local checks decide when they are sure, Muse Spark otherwise.
   const roleOf = (a) => pictureRole($("composer").value, a).as;
-  const LABEL = { auto: "&#10024; Auto", level: "&#128506;&#65039; Level", player: "&#127918; Player", object: "&#129513; Object" };
-  $("attachments").innerHTML = S.attachments.map((a, i) => `<div class="attach">${a.thumb ? `<img src="${a.thumb}" alt="">` : `<span>&#128230;</span>`}<span>${esc(a.name)}</span>${a.upload ? `<button class="role ${roleOf(a)}" data-r="${i}" title="What this picture is for (Auto: Muse Spark decides)">${LABEL[roleOf(a)]}</button>` : ""}<button class="x" data-i="${i}" title="Remove">&times;</button></div>`).join("");
+  const LABEL = { auto: "&#10024; Auto", level: "&#128506;&#65039; Level", player: "&#127918; Player", object: "&#129513; Object", ui: "&#128433;&#65039; UI", asset: "&#127912; Asset" };
+  const guessOf = (a) => a.check ? ` <small>· ${a.check.sure ? "" : "maybe "}${ROLE_WORDS[a.check.guess.role] || a.check.guess.role}</small>` : "";
+  $("attachments").innerHTML = S.attachments.map((a, i) => `<div class="attach">${a.thumb ? `<img src="${a.thumb}" alt="">` : `<span>&#128230;</span>`}<span>${esc(a.name)}</span>${a.upload ? `<button class="role ${roleOf(a)}" data-r="${i}" title="What this picture is for (Auto: the local checks, then Muse Spark)">${LABEL[roleOf(a)]}${roleOf(a) === "auto" ? guessOf(a) : ""}</button>` : ""}<button class="x" data-i="${i}" title="Remove">&times;</button></div>`).join("");
   $("attachments").querySelectorAll(".x").forEach((b) => b.addEventListener("click", () => { S.attachments.splice(Number(b.dataset.i), 1); renderAttachments(); }));
-  $("attachments").querySelectorAll(".role").forEach((b) => b.addEventListener("click", () => { const a = S.attachments[Number(b.dataset.r)]; const order = ["auto", "level", "player", "object"]; a.role = order[(order.indexOf(roleOf(a)) + 1) % 4]; renderAttachments(); }));
+  $("attachments").querySelectorAll(".role").forEach((b) => b.addEventListener("click", () => { const a = S.attachments[Number(b.dataset.r)]; const order = ["auto", "level", "player", "object", "ui", "asset"]; a.role = order[(order.indexOf(roleOf(a)) + 1) % order.length]; renderAttachments(); }));
 }
 $("chips").addEventListener("click", (e) => { const c = e.target.closest(".chip"); if (!c) return; $("composer").value = c.dataset.label || c.textContent; send(); });
 $("composer").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
@@ -889,34 +902,113 @@ const OBJECT_WORDS = [
 ];
 const AS_IS = /\b(as is|as-is|original|don'?t redraw|no redraw|keep it like)\b/i;
 const ROLE_LABEL = { enemy: "enemy", coin: "coin", goal: "goal", spike: "spikes", decoration: "decoration" };
-/** What the words say a picture is for: { as: "level"|"player"|"object", role? } or null (let Muse Spark decide). */
+// UI pieces and other assets the words can name: [asset role, words, hint words]
+const UI_WORDS = [
+  ["ui_button", /\b(buttons?)\b/i, [["pause", /\bpause\b/i], ["start", /\b(start|play)\b/i], ["restart", /\b(restart|retry|again)\b/i], ["menu", /\bmenu\b/i], ["gameover", /\b(game ?over|lose|lost)\b/i]]],
+  ["ui_panel", /\b(panel|window|dialog|frame|popup)\b/i, []],
+  ["ui_hud", /\b(hud|health bar|life bar|coin counter|counter|timer box|score box)\b/i, [["health", /\b(health|life|hp)\b/i], ["coins", /\bcoins?\b/i], ["timer", /\b(timer|time)\b/i], ["score", /\bscore\b/i]]],
+  ["ui_icon", /\b(icons?)\b/i, [["heart", /\bhearts?\b/i], ["coin", /\bcoins?\b/i], ["star", /\bstars?\b/i], ["timer", /\b(timer|clock)\b/i]]],
+  ["ui_logo", /\b(logo|title screen|game title)\b/i, []],
+  ["ui_cursor", /\b(cursor|pointer)\b/i, []],
+  ["ui_font", /\b(font|letters|digits|numbers sheet)\b/i, []],
+  ["ui_mockup", /\b(mockup|mock-up|ui design|menu design|whole menu|whole hud)\b/i, []],
+];
+const ASSET_WORDS = [["spritesheet", /\b(sprite ?sheet|animation frames|frames)\b/i], ["tileset", /\b(tile ?set|tiles)\b/i], ["texture", /\b(texture|surface|material)\b/i], ["background", /\b(background|backdrop|sky|skybox|parallax)\b/i]];
+/** The words in people's terms for every role (chips, cards, the Detected line). */
+const ROLE_WORDS = { level: "level drawing", player: "player character", enemy: "enemy", collectible: "collectible", hazard: "hazard", goal: "goal", texture: "texture", tileset: "tileset", spritesheet: "sprite sheet", background: "background", decoration: "decoration",
+  ui_button: "UI button", ui_panel: "UI panel", ui_hud: "HUD piece", ui_icon: "UI icon", ui_logo: "logo", ui_cursor: "cursor", ui_font: "font sheet", ui_mockup: "UI mockup" };
+const OBJECT_SLOT = { enemy: "enemy", collectible: "coin", hazard: "spike", goal: "goal", decoration: "decoration" }, SLOT_ROLE = { enemy: "enemy", coin: "collectible", spike: "hazard", goal: "goal", decoration: "decoration" };
+/** What the words say a picture is for: { as: "level"|"player"|"object"|"ui"|"asset", role?, hint? } or null (let the checks and Muse Spark decide). */
 function wordsRole(text) {
+  for (const [role, re, hints] of UI_WORDS) if (re.test(text)) return { as: "ui", role, hint: (hints.find(([, h]) => h.test(text)) || [""])[0] };
+  for (const [role, re] of ASSET_WORDS) if (re.test(text)) return { as: "asset", role };
   if (LEVEL_WORDS.test(text) && !PLAYER_WORDS.test(text)) return { as: "level" };
   if (PLAYER_WORDS.test(text)) return { as: "player" };
   for (const [role, re] of OBJECT_WORDS) if (re.test(text)) return { as: "object", role };
   return null;
 }
+/** A role from the checks or Muse Spark -> the plan the picture follows. */
+function planFromRole(role, extra = {}) {
+  if (role === "level") return { as: "level" };
+  if (role === "player") return { as: "player", name: extra.name };
+  if (OBJECT_SLOT[role]) return { as: "object", role: OBJECT_SLOT[role], assetRole: role, name: extra.name };
+  if (/^ui_/.test(role)) return { as: "ui", role, hint: extra.hint || "", name: extra.name };
+  return { as: "asset", role, name: extra.name };
+}
+/** "pause button", "player character", "background"... for a plan. */
+const planWords = (plan) => plan.as === "player" ? "player character" : plan.as === "object" ? `${ROLE_LABEL[plan.role]}${plan.name ? ` (${plan.name})` : ""}` : plan.as === "level" ? "level drawing" : `${plan.hint ? plan.hint + " " : ""}${ROLE_WORDS[plan.role] || plan.role}${plan.name && !plan.hint && plan.name !== ROLE_WORDS[plan.role] ? ` (${plan.name})` : ""}`;
 /** The toggle wins, then the words, then auto. */
-const pictureRole = (text, a) => (a.role && a.role !== "auto" ? { as: a.role, role: a.objRole || wordsRole(text)?.role } : wordsRole(text)) || { as: "auto" };
+const pictureRole = (text, a) => { const w = wordsRole(text); if (a.role && a.role !== "auto") return { as: a.role, role: a.objRole || (w && w.as === a.role ? w.role : a.role === "ui" ? "ui_button" : a.role === "asset" ? "background" : undefined), hint: a.hint || w?.hint, name: a.name }; return w || { as: "auto" }; };
 const asPlayer = (text, a) => pictureRole(text, a).as === "player";
 const resetsPlayer = (text) => /\b(default|normal|original|old|remove|reset)\b/i.test(text) && /\b(player|character|hero)\b/i.test(text) && !LEVEL_WORDS.test(text);
 
-/** Returns true when the picture became the player or an object sprite; false means: scan it as a level. */
+/** Returns true when the picture was used (player, sprite, UI piece, asset, or a question asked); false means: scan it as a level. */
 async function handlePicture(img, text) {
   let plan = pictureRole(text, img);
   if (plan.as === "auto") {
-    showTyping();
-    try {
-      const c = await api("api/art", { method: "POST", body: { task: "classify", image: img.art || img.upload, hint: text } });
-      plan = c.kind === "character" ? { as: "player", name: c.name } : c.kind === "object" ? { as: "object", role: c.role, name: c.name } : { as: "level" };
-      hideTyping();
-      if (plan.as !== "level") await addCard({ icon: "&#128269;", title: "Looked at your picture", text: plan.as === "player" ? `a character (${c.name})` : `${c.name}: it will be the ${ROLE_LABEL[plan.role]}` });
-    } catch (err) { hideTyping(); if (err.status === 402) return true; plan = { as: "level" }; }   // could not tell: treat it as a level drawing
+    const local = img.check;
+    if (local?.sure) {                                                          // the pixels say it: no credit spent
+      plan = planFromRole(local.guess.role, { name: local.guess.role === "player" ? "" : ROLE_WORDS[local.guess.role] });
+      if (plan.as !== "level") await addCard({ icon: "&#128269;", title: "Looked at your picture", text: `${planWords(plan)}: ${local.guess.why} (no credits)` });
+    } else {
+      showTyping();
+      try {
+        const c = await api("api/art", { method: "POST", body: { task: "classify", image: img.raw || img.art || img.upload, hint: text, facts: AssetCheck.describe(local) } });
+        hideTyping();
+        const role = c.role || (c.kind === "character" ? "player" : c.kind === "object" ? SLOT_ROLE[c.role] || "decoration" : "level");
+        plan = planFromRole(role, { name: c.name, hint: c.hint });
+        if (c.confidence < 0.5 && plan.as !== "level") { await askRole(img, text, plan, c); return true; }
+        if (plan.as !== "level") await addCard({ icon: "&#128269;", title: "Looked at your picture", text: plan.as === "player" ? `a character (${c.name})` : plan.as === "object" ? `${c.name}: it will be the ${ROLE_LABEL[plan.role]}` : `${c.name}: ${planWords(plan)}` });
+      } catch (err) { hideTyping(); if (err.status === 402) return true; plan = { as: "level" }; }   // could not tell: treat it as a level drawing
+    }
   }
+  return applyPicturePlan(img, plan, text);
+}
+/** Carries out a plan for one picture. Returns false for a level drawing (the scanner takes it). */
+async function applyPicturePlan(img, plan, text) {
   if (plan.as === "level") return false;
   if (plan.as === "object" && !plan.role) plan.role = "decoration";
-  await makePictureSprite(img, plan, text);
+  if (plan.as === "player" || plan.as === "object") await makePictureSprite(img, plan, text);
+  else await saveAsset(img, plan);
+  await detectedCard([plan]);
   return true;
+}
+/** Nobody is sure: a card with chips; the pick carries on with that role. */
+async function askRole(img, text, plan, c) {
+  const el = appendMessage({ role: "tool", content: "", meta: { card: { icon: "&#10067;", title: "What is this picture?", text: `I think it is a ${planWords(plan)}, but I am not sure.` } } });
+  const row = document.createElement("div"); row.className = "choices";
+  const uiRole = plan.as === "ui" ? plan.role : "ui_button", assetRole = plan.as === "asset" ? plan.role : "background";
+  for (const [label, as] of [["A character", "player"], ["An enemy", "object:enemy"], ["A collectible", "object:coin"], [plan.as === "ui" ? `A ${ROLE_WORDS[plan.role]}` : "A UI element", "ui:" + uiRole], [plan.as === "asset" ? `A ${ROLE_WORDS[plan.role]}` : "A background", "asset:" + assetRole], ["A level drawing", "level"]]) {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = label;
+    b.addEventListener("click", async () => {
+      if (S.busy) return;
+      row.remove(); S.busy = true; $("sendBtn").disabled = true;
+      const [kind, role] = as.split(":"); img.role = kind; img.objRole = role; img.name = c?.name; img.hint = kind === "ui" && plan.as === "ui" ? plan.hint : "";
+      try { if (!(await applyPicturePlan(img, pictureRole(text, img), text))) await runScan(img); } catch (err) { hideTyping(); toast(err.message, 4000); }
+      S.busy = false; $("sendBtn").disabled = false;
+    });
+    row.appendChild(b);
+  }
+  el.appendChild(row);
+}
+/** A background, tileset, sprite sheet, texture or UI piece: kept on the game with its role (the engines pick it up from there). */
+async function saveAsset(img, plan) {
+  showTyping();
+  const asset = { id: Math.random().toString(36).slice(2, 10), role: plan.role, name: (plan.name || ROLE_WORDS[plan.role] || plan.role).slice(0, 60), hint: plan.hint || "", src: img.raw || img.upload, w: img.check?.width || 0, h: img.check?.height || 0 };
+  const assets = [...(S.project?.art?.assets || []).filter((a) => !(a.role === asset.role && a.hint === asset.hint && /^ui_/.test(asset.role) && asset.hint)), asset];   // a new pause button replaces the old one
+  await saveArt({ ...(S.project?.art || {}), assets });
+  hideTyping();
+  const what = planWords(plan), ui = /^ui_/.test(plan.role);
+  await addCard({ icon: ui ? "&#128433;&#65039;" : "&#127912;", title: ui ? "Saved to the UI kit" : "Saved as a game asset", text: `${what}${asset.w ? ` · ${asset.w} x ${asset.h}` : ""}` });
+  await streamAssistant(ui ? `Got it: a ${what}. It is in your game's UI kit; the next update puts the kit into the game's menus and HUD.` : `Got it: a ${what}. It is in your game's assets; the next update puts backgrounds, tilesets and sprite sheets into the game.`);
+  await saveMessage("assistant", `Saved a ${what}.`);
+}
+/** "Detected: 1 player character, 1 pause UI button. Game is 2D." */
+async function detectedCard(plans) {
+  const counts = new Map();
+  for (const p of plans) { const k = planWords(p); counts.set(k, (counts.get(k) || 0) + 1); }
+  const list = [...counts].map(([k, n]) => `${n} ${k}`).join(", ");
+  await addCard({ icon: "&#129516;", title: "Detected", text: `${list}. Game is ${S.mode === "3d" ? "3D" : "2D"}.` });
 }
 
 async function makePictureSprite(img, plan, text) {
@@ -1184,7 +1276,8 @@ function updateCosts() {
   if (img) {
     const as = pictureRole(text, img).as, sprite = price("art"), look = price("classify"), scan = price("scan");
     $("sendCost").textContent = as === "level" ? `Send · ${scan} credits (read the level)`
-      : as === "auto" ? `Send · ${look ?? 1} credit to look at the picture, then ${scan} for a level or ${sprite} for a sprite`
+      : as === "auto" ? (img.check?.sure ? `Send · free to tell (it looks like a ${ROLE_WORDS[img.check.guess.role]}), then ${scan} for a level or ${sprite} for a sprite` : `Send · ${look ?? 1} credit to look at the picture, then ${scan} for a level or ${sprite} for a sprite`)
+      : as === "ui" || as === "asset" ? "Send · free (saved on your game with its role)"
       : AS_IS.test(text) ? `Send · ${price("cutout") ?? 1} credit (SAM 3.1 cuts your picture out)` : `Send · ${sprite} credits (Muse Image draws the ${as === "player" ? "player" : "sprite"})`;
     return;
   }

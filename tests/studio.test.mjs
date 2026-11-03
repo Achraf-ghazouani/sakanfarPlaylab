@@ -123,7 +123,7 @@ const inject = `
     if (/api\\/scan$/.test(u)) { window.__scanCalls++; try { window.__lastScanImage = JSON.parse(init.body).image; } catch {} const lvl = window.__scanCalls === 1 ? LB : LC; return json({ level: { ...lvl, checked: true, fixes: [] }, original: lvl, meta: { provider: "mock", playtest: { before: { ok: true, problems: [] } } } }); }
     if (/api\\/art$/.test(u)) {
       const b = JSON.parse(init.body); (window.__artCalls = window.__artCalls || []).push(b.task);
-      if (b.task === "classify") return json({ ...(window.__classifyAs || { kind: "level", role: null, name: "a level" }), confidence: 0.9, credits: { spent: 1 } });
+      if (b.task === "classify") return json({ ...(window.__classifyAs || { role: "level", kind: "level", objRole: null, name: "a level" }), confidence: 0.9, hint: "", credits: { spent: 1 } });
       if (b.task === "cutout") return new Response(JSON.stringify({ error: "mock: no SAM here" }), { status: 502, headers: { "Content-Type": "application/json" } });   // the page falls back to its free fill
       return json({ image: b.image, kind: b.kind, role: b.role, credits: { spent: 15 } });   // the "sprite" is the picture itself
     }
@@ -294,7 +294,7 @@ try {
 
   // 5e. a picture with no words: Muse Spark looks at it (mocked: an enemy), Muse Image draws it, every enemy wears it
   await evalJS(`(async () => {
-    window.__artCalls = []; window.__classifyAs = { kind: "object", role: "enemy", name: "red blob" };
+    window.__artCalls = []; window.__classifyAs = { role: "enemy", kind: "object", objRole: "enemy", name: "red blob" };
     const c = document.createElement("canvas"); c.width = 300; c.height = 300; const g = c.getContext("2d");
     g.fillStyle = "#ffffff"; g.fillRect(0, 0, 300, 300); g.fillStyle = "#dc2626"; g.beginPath(); g.ellipse(150, 170, 90, 70, 0, 0, 7); g.fill();
     const blob = await new Promise((r) => c.toBlob(r, "image/png"));

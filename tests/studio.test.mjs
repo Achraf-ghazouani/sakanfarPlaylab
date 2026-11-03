@@ -37,6 +37,7 @@ const PHOTO = path.resolve("photos/level1.jpg");
 
 const chrome = spawn(CHROME, [
   "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars", "--mute-audio",
+  "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader",   // WebGL in software: the 3D view and baking a model
   `--remote-debugging-port=${PORT}`, `--user-data-dir=${path.join(OUT, "chrome-profile")}`, "--window-size=1280,800", "about:blank",
 ], { stdio: "ignore" });
 
@@ -365,6 +366,29 @@ try {
   await click(".proj");
   await waitFor(`S.project && S.project.id === ${JSON.stringify(pid)}`);
   check("clicking a game in the list opens it", await evalJS(`S.project.id`) === pid);
+
+  // 7b. a 3D model switches the game to 3D and becomes the player; "Undo, stay 2D" bakes it into a sprite sheet
+  await evalJS(`setDim("2d"); true`);
+  await evalJS(`(async () => { const b = await (await fetch("tests/samples/cube.glb", { cache: "no-store" })).blob(); await addFiles([new File([b], "cube.glb", { type: "model/gltf-binary" })]); return true; })()`);
+  check("a .glb attaches with its bytes and no review grid", await evalJS(`S.attachments.length === 1 && S.attachments[0].model === true && /^data:/.test(S.attachments[0].modelSrc || "") && !document.getElementById("reviewModal").classList.contains("show")`));
+  await sendMsg(); await idle();
+  check("the game switched to 3D with the message, the model saved as the player", await evalJS(`S.mode === "3d" && /switched the game to 3D/.test(document.getElementById("messages").innerText) && S.project.art.model?.role === "player" && S.project.art.model.name === "cube.glb"`), await evalJS(`({ mode: S.mode, model: S.project.art.model && S.project.art.model.name })`));
+  check("the game type is saved as 3d-side and the model with the art", (await api(`api/projects?id=${pid}`)).project?.mode === "3d-side" && /^data:/.test((await api(`api/projects?id=${pid}`)).project?.art?.model?.src || ""));
+  check("Detected names the model", /Detected[^]*?1 3D model \(player\)\. Game is 3D\./.test(await evalJS(`document.getElementById("messages").innerText`)));
+  check("an Undo, stay 2D chip is offered", await evalJS(`!![...document.querySelectorAll(".card .choices button")].find((b) => /stay 2D/.test(b.textContent))`));
+  await evalJS(`[...document.querySelectorAll(".card .choices button")].find((b) => /stay 2D/.test(b.textContent)).click(); true`);
+  await waitFor(`S.mode === "2d" && !S.busy && /baked/i.test(document.getElementById("messages").innerText)`, { timeout: 40_000 }); await idle();
+  const baked = (await api(`api/projects?id=${pid}`)).project?.art?.assets?.find((a) => /baked/.test(a.name));
+  check("back in 2D with the model baked into a 4-frame sprite sheet", !!baked && baked.role === "spritesheet" && baked.grid?.cols === 4 && baked.grid.rows === 1 && /^data:image\/png/.test(baked.src) && baked.w === 4 * Math.round(baked.h * 0.9), baked ? { name: baked.name, grid: baked.grid, w: baked.w, h: baked.h } : await evalJS(`document.getElementById("messages").innerText.slice(-300)`));
+  check("the game type is back to 2d", (await api(`api/projects?id=${pid}`)).project?.mode === "2d");
+  // a picture into a 3D game keeps 3D and offers the way back
+  await evalJS(`setDim("3d"); true`);
+  await evalJS(`(async () => { const b = await (await fetch("tests/samples/panel.png", { cache: "no-store" })).blob(); await addFiles([new File([b], "panel.png", { type: "image/png" })]); return true; })()`);
+  await type("this is my panel"); await sendMsg(); await idle();
+  check("a picture in a 3D game stays 3D and offers Switch to 2D instead", await evalJS(`S.mode === "3d" && !![...document.querySelectorAll(".card .choices button")].find((b) => /Switch to 2D/.test(b.textContent))`));
+  await evalJS(`[...document.querySelectorAll(".card .choices button")].find((b) => /Switch to 2D/.test(b.textContent)).click(); true`);
+  await sleep(300);
+  check("one tap and it is 2D again", await evalJS(`S.mode === "2d"`));
 
   // 8. a shooter: the (mocked) agent answers with an arena, the preview switches to arena.html, 2D locks, views switch
   await click("#newGameBtn");

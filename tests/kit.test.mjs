@@ -94,6 +94,24 @@ try {
   check("the pad's buttons wear the uploaded button and its colour", pad.kit && /url\(/.test(pad.image) && pad.radius === "18px" && pad.purple === "#4338ca", pad);
   const pad2 = await evalJS(`(() => { __padShowState({ t: "state", level: "kit", state: "play", coins: 0, total: 2, muted: false, players: [], layout: "2d", kit: null }); return { kit: document.body.classList.contains("kit"), image: getComputedStyle(document.getElementById("jump")).backgroundImage, purple: getComputedStyle(document.documentElement).getPropertyValue("--purple").trim() }; })()`);
   check("without a kit the pad is back to its own look", !pad2.kit && pad2.image === "none" && pad2.purple === "#7c3aed", pad2);
+
+  // ---- 3D models: the main character in the 3D view and in the arena ----
+  const LOAD_MODEL = `(async () => { const b = await (await fetch("tests/samples/cube.glb", { cache: "no-store" })).blob(); window.__M = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); }); return window.__M.length; })()`;
+  await send("Page.navigate", { url: `${BASE}/game.html?embed=1` });
+  check("game.html is up again", !!(await waitFor(`!!window.__playlab`)));
+  check("the cube model loads as a data URL", (await evalJS(LOAD_MODEL)) > 100);
+  await evalJS(`window.postMessage({ type: "playlab:level", level: ${LEVEL}, name: "model", assets: [], model: { src: window.__M, name: "cube.glb", role: "player", size: 1000 }, mode: "3d-side" }, "*"); true`);
+  const m3 = await waitFor(`(() => { const s = window.__playlab.scene(); if (!s || !s.avatars || !s.avatars.length || !View3D.on || !View3D.model) return null; const d = View3D.debug(); return d.meshes.length && d.meshes[0].model ? d : null; })()`, 40_000);
+  check("the 3D view shows the uploaded model as the main character", !!m3 && m3.model && m3.meshes[0].model && m3.meshes[0].kids > 0, m3);
+  await evalJS(`window.postMessage({ type: "playlab:model", model: null }, "*"); true`);
+  const m3off = await waitFor(`(() => { if (View3D.model) return null; const d = View3D.debug(); return d.meshes.length && !d.meshes[0].model ? d : null; })()`, 10_000);
+  check("without the model the character is a block again", !!m3off, m3off);
+  await send("Page.navigate", { url: `${BASE}/arena.html?embed=1` });
+  check("arena.html is up again", !!(await waitFor(`!!window.__arena`)));
+  check("the cube model loads in the arena page", (await evalJS(LOAD_MODEL)) > 100);
+  await evalJS(`window.postMessage({ type: "playlab:level", level: ${arena}, name: "model", assets: [], model: { src: window.__M, name: "cube.glb", role: "player", size: 1000 } }, "*"); true`);
+  const am = await waitFor(`(() => { const A = window.__arena; return A.G.player && A.G.player.mesh.userData.model ? { model: true, kids: A.G.player.mesh.children.length } : null; })()`, 40_000);
+  check("the arena's player body is the uploaded model", !!am && am.kids > 0, am);
 } catch (err) { console.log("ERROR", err.message); fails++; }
 finally { try { ws.close(); } catch {} chrome.kill(); }
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED");

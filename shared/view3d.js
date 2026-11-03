@@ -13,6 +13,7 @@ window.View3D = (() => {
   let on = false, built = null;  // built = the Phaser scene the 3D scene was made from
   let mirror = [];               // [{ go, mesh, kind, ... }] dynamic things synced each frame
   let avatarMeshes = new Map();  // avatar -> mesh
+  let playerModel = null, playerModelSrc = null, playerModelGen = 0, modelMixer = null, lastSync = 0;   // the main character's 3D model (shared/model3d.js)
   let texCache = new Map();      // Phaser texture key -> THREE.Texture
   const camPos = { x: 0, y: 0, ready: false };
 
@@ -210,23 +211,38 @@ window.View3D = (() => {
 
   function avatarMesh(av, ctx) {
     let m = avatarMeshes.get(av);
-    if (m && m.userData.sprite === !!av.sprite) return m;
+    const wantModel = av.slot === 1 && !!playerModel;   // the main character wears the uploaded 3D model
+    if (m && m.userData.sprite === !!av.sprite && !!m.userData.model === wantModel && (!wantModel || m === playerModel.object)) return m;
     if (m) { scene3.remove(m); avatarMeshes.delete(av); }
-    if (av.sprite) {
-      m = cutout(av.skin) || new THREE.Group();
-      m.userData.sprite = true;
-    } else {
-      m = blockBody(ctx.playerW, ctx.playerH, 34, av.color);
-      m.userData.sprite = false;
-    }
+    if (wantModel) { m = playerModel.object; m.userData.sprite = false; }
+    else if (av.sprite) { m = cutout(av.skin) || new THREE.Group(); m.userData.sprite = true; }
+    else { m = blockBody(ctx.playerW, ctx.playerH, 34, av.color); m.userData.sprite = false; }
     scene3.add(m); avatarMeshes.set(av, m);
     return m;
+  }
+  /** The main character's 3D model from the Studio ({ src, name } or null); the mesh is swapped on the next frame. */
+  async function setModel(model) {
+    const src = model?.src || null;
+    if (src === playerModelSrc) return false;
+    playerModelSrc = src; const gen = ++playerModelGen;
+    playerModel = null; modelMixer = null;
+    if (!src) return true;
+    try {
+      await load();
+      const loaded = await window.Model3D.load(model, 1);
+      if (gen !== playerModelGen) return false;
+      playerModel = loaded;
+      if (loaded.clips.length) { modelMixer = new THREE.AnimationMixer(loaded.raw); modelMixer.clipAction(loaded.clips.find((c) => /idle|walk|run/i.test(c.name)) || loaded.clips[0]).play(); }
+    } catch (err) { console.warn("3D model:", err.message); playerModel = null; }
+    return true;
   }
 
   /** Copy the Phaser scene's state into the 3D scene and draw a frame. Called after each Phaser update. */
   function sync(s, ctx) {
     if (!on || !THREE || !renderer || built !== s || !scene3) return;
     const W = s.W, H = s.H, X = (x) => x - W / 2, Y = (y) => H - y, now = performance.now();
+    if (modelMixer) modelMixer.update(Math.min(0.1, (now - (lastSync || now)) / 1000));
+    lastSync = now;
     for (const it of mirror) {
       const go = it.go;
       if (go && (!go.active || go.visible === false && it.kind !== "go")) { it.mesh.visible = false; continue; }
@@ -250,7 +266,12 @@ window.View3D = (() => {
       seen.add(av);
       const m = avatarMesh(av, ctx), sk = av.skin;
       const feet = sk.y;
-      if (av.sprite) {
+      if (m.userData.model) {
+        const h = ctx.playerH * 1.3;   // the model is 1 unit tall: scale it like the player picture, squash it like the body
+        m.position.set(X(sk.x), Y(feet), 8);
+        m.scale.set(h * (sk.scaleX / (av.baseSX || 1)), h * (sk.scaleY / (av.baseSY || 1)), h);
+        m.rotation.y = av.facing > 0 ? Math.PI / 2 : -Math.PI / 2;
+      } else if (av.sprite) {
         m.position.set(X(sk.x), Y(feet) + sk.displayHeight / 2, 8);
         m.scale.set(sk.displayWidth * (sk.flipX ? -1 : 1), sk.displayHeight, 1);
         m.material.color.set(av.dead ? 0xff7070 : 0xffffff);
@@ -292,5 +313,6 @@ window.View3D = (() => {
     return true;
   }
 
-  return { setOn, build, sync, load, get on() { return on; }, get ready() { return !!THREE; } };
+  return { setOn, build, sync, load, setModel, get on() { return on; }, get ready() { return !!THREE; }, get model() { return !!playerModel; },
+    debug: () => ({ model: !!playerModel, meshes: [...avatarMeshes.values()].map((m) => ({ model: !!m.userData.model, sprite: !!m.userData.sprite, kids: m.children.length })) }) };
 })();

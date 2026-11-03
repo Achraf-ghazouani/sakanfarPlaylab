@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fbfaff">
 <title>PlayLab Studio</title>
@@ -15,6 +16,7 @@
 <script src="shared/cutout.js"></script>
 <script src="shared/assetcheck.js"></script>
 <script src="shared/zip.js"></script>
+<script src="shared/model3d.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js" defer></script>
@@ -501,7 +503,7 @@ function pushLevel(level, { name = "studio", thumb = null, keepPlayer = false, t
   const want = isArena(level) ? "arena.html?embed=1" : "game.html?embed=1";
   if ($("preview").getAttribute("src") !== want) { S.previewReady = false; $("preview").setAttribute("src", want); }
   $("previewStatus").textContent = `${n} objects${S.versions[0] ? ` · v${S.versions[0].n}` : ""}${level?.theme ? ` · ${level.theme}` : ""}${isArena(level) ? ` · ${VIEW_NAME[level.view] || level.view} shooter · ${level.waves} waves` : S.mode === "3d" ? " · 3D" : ""}`;
-  if (S.previewReady) preview().postMessage({ type: "playlab:level", level, name, thumb: thumb || S.project?.photo || null, player: S.project?.art?.player || null, sprites: S.project?.art?.sprites || null, assets: S.project?.art?.assets || [], mode: S.mode, keepPlayer, toast: quiet ? null : toastText }, "*");
+  if (S.previewReady) preview().postMessage({ type: "playlab:level", level, name, thumb: thumb || S.project?.photo || null, player: S.project?.art?.player || null, sprites: S.project?.art?.sprites || null, assets: S.project?.art?.assets || [], model: S.project?.art?.model || null, mode: S.mode, keepPlayer, toast: quiet ? null : toastText }, "*");
 }
 
 // ---------------------------------------------------------------------------
@@ -823,7 +825,10 @@ async function onCamLevel(msg) {
 const readAsDataUrl = (file) => new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(null); fr.readAsDataURL(file); });
 async function addAttachment(file) {
   const a = { name: file.name, type: file.type || (file.name.endsWith(".glb") || file.name.endsWith(".gltf") ? "model/gltf-binary" : "application/octet-stream"), size: file.size };
-  if (/\.(glb|gltf|fbx)$/i.test(file.name)) { a.model = true; a.file = file; }   // a 3D model: the review grid shows it, the 3D step uses it
+  if (/\.(glb|gltf|fbx)$/i.test(file.name)) {   // a 3D model: the main character of a 3D game (or an enemy, when the words say so)
+    a.model = true;
+    if (file.size <= 1_800_000) a.modelSrc = await readAsDataUrl(file); else toast(`3D models up to 1.8 MB, please (this one is ${Math.round(file.size / 1024)} KB)`, 5000);
+  }
   if (a.type.startsWith("image/")) {
     try { const img = await PhotoUtil.loadImage(file); a.upload = PhotoUtil.toJpeg(img, PhotoUtil.UPLOAD_SIDE, 0.85); a.thumb = PhotoUtil.toJpeg(img, 320, 0.7); a.art = PhotoUtil.toJpeg(img, PhotoUtil.THUMB_SIDE, 0.75); } catch { toast("Could not read that image"); return; }
     if (/image\/(png|webp)/i.test(a.type) && file.size <= 1_400_000) a.raw = await readAsDataUrl(file);   // the original keeps its transparency (sprites, UI pieces)
@@ -899,7 +904,7 @@ async function send() {
     else if (img && await handlePicture(img, text)) { /* the picture became the player or an object sprite */ }
     else {
       if (img) await runScan(img);                                   // a picture goes through the scanner, like the phone flow
-      if (model3d && !img && !text) await streamAssistant("3D models come with the 3D modes in a later step. For now send drawings, pictures or words.");
+      if (model3d && !img) await handleModel(model3d, text);          // a 3D model: the game goes 3D and the model is the player
       else if (text || !img) await askAgent(text, history);           // the agent gets the words (after the scan, if there was one)
     }
   } catch (err) {
@@ -1033,16 +1038,73 @@ async function saveAsset(img, plan) {
 async function detectedCard(plans) {
   const groups = new Map();
   for (const p of plans) {
-    const key = p.as === "level" ? "level" : p.as === "player" ? "player" : p.as === "object" ? "object:" + p.role : p.role;
+    const key = p.as === "level" ? "level" : p.as === "player" ? "player" : p.as === "object" ? "object:" + p.role : p.as === "model" ? "model:" + p.role : p.role;
     const g = groups.get(key) || { n: 0, words: [] }; g.n++;
-    const w = p.as === "object" ? (p.name && p.name !== ROLE_LABEL[p.role] ? p.name : "") : p.as === "level" || p.as === "player" ? "" : (p.hint || (p.name && p.name !== ROLE_WORDS[p.role] ? p.name : ""));
+    const w = p.as === "object" ? (p.name && p.name !== ROLE_LABEL[p.role] ? p.name : "") : p.as === "level" || p.as === "player" || p.as === "model" ? "" : (p.hint || (p.name && p.name !== ROLE_WORDS[p.role] ? p.name : ""));
     if (w && !g.words.includes(w)) g.words.push(w);
     groups.set(key, g);
   }
   const plural = (base, n) => n === 1 ? base : /s$/.test(base) ? base : base.replace(/y$/, "ie") + "s";
-  const label = (key) => key === "level" ? "level drawing" : key === "player" ? "player character" : key.startsWith("object:") ? ROLE_LABEL[key.slice(7)] : ROLE_WORDS[key] || key;
+  const label = (key) => key === "level" ? "level drawing" : key === "player" ? "player character" : key.startsWith("object:") ? ROLE_LABEL[key.slice(7)] : key.startsWith("model:") ? `3D model (${key.slice(6)})` : ROLE_WORDS[key] || key;
   const list = [...groups].map(([key, g]) => `${g.n} ${g.words.length === 1 && g.n === 1 ? g.words[0] + " " : ""}${plural(label(key), g.n)}${g.words.length && !(g.words.length === 1 && g.n === 1) ? ` (${g.words.join(", ")})` : ""}`).join(", ");
   await addCard({ icon: "&#129516;", title: "Detected", text: `${list || "nothing"}. Game is ${S.mode === "3d" ? "3D" : "2D"}.` });
+  if (S.mode === "3d" && !isArena(S.level) && !plans.some((p) => p.as === "model")) offerSwitch2D();   // pictures in a 3D game: kept in 3D, one tap back to 2D
+}
+
+// ---------------------------------------------------------------------------
+// 3D models: a .glb / .gltf / .fbx makes the game 3D (three.js) and becomes the player (or an enemy, when the words say so).
+// Undo, stay 2D bakes the model into a sprite sheet (shared/model3d.js) so the 2D player wears it instead.
+// ---------------------------------------------------------------------------
+async function handleModel(a, text) {
+  if (!a.modelSrc) { await streamAssistant(`${a.name} is too big: 3D models up to 1.8 MB, please.`); return; }
+  showTyping();
+  const role = /\b(enemy|enemies|monster|zombie|villain|bad guy)\b/i.test(text || "") ? "enemy" : "player";
+  const model = { src: a.modelSrc, name: a.name, role, size: a.size || 0 };
+  const was = S.mode;
+  try { await saveArt({ ...(S.project?.art || {}), model }); }
+  catch (err) { hideTyping(); await streamAssistant("I could not save the model: " + err.message); return; }
+  if (S.mode !== "3d") setDim("3d");
+  toPreview({ type: "playlab:model", model });
+  hideTyping();
+  await addCard({ icon: "&#129513;", title: "3D model", text: `${a.name} · ${Math.round((a.size || 0) / 1024)} KB · the ${role}` });
+  if (S.batch) S.batch.plans.push({ as: "model", role, name: a.name }); else await detectedCard([{ as: "model", role, name: a.name }]);
+  if (was !== "3d") {
+    await streamAssistant(`You uploaded a 3D model, so I switched the game to 3D: ${a.name} is the ${role} now, and 3D prices apply from here.${S.level ? "" : " Describe a level, or a shooter, and it is built in 3D."}`);
+    if (!S.batch) offerUndo3D(a, model);
+  } else await streamAssistant(`Got it: ${a.name} is the ${role} of your 3D game now.`);
+  await saveMessage("assistant", `3D model ${a.name} is the ${role}.`);
+}
+/** A card with one chip: back to 2D, the model baked into a sprite sheet the 2D player wears. */
+function offerUndo3D(a, model) {
+  const el = appendMessage({ role: "tool", content: "", meta: { card: { icon: "&#8617;&#65039;", title: "Rather stay in 2D?", text: "I can bake the model into a sprite sheet for the 2D game." } } });
+  const row = document.createElement("div"); row.className = "choices";
+  const b = document.createElement("button"); b.type = "button"; b.textContent = "Undo, stay 2D";
+  b.addEventListener("click", async () => {
+    if (S.busy) return;
+    row.remove(); S.busy = true; $("sendBtn").disabled = true; showTyping();
+    try {
+      setDim("2d");
+      const sheet = await Model3D.bake(model, { frames: 4, height: 256 });
+      const asset = { id: Math.random().toString(36).slice(2, 10), role: "spritesheet", name: `${a.name} (baked)`, hint: "", src: sheet.src, w: sheet.w, h: sheet.h, grid: sheet.grid };
+      const assets = [...(S.project?.art?.assets || []).filter((x) => x.role !== "spritesheet"), asset];
+      await saveArt({ ...(S.project?.art || {}), assets });
+      toPreview({ type: "playlab:assets", assets });
+      hideTyping();
+      await addCard({ icon: "&#127912;", title: "Baked into a sprite sheet", text: `${asset.name} · 4 frames` });
+      await streamAssistant("Back to 2D. I baked the model into a 4-frame sprite sheet and the player wears it; 2D prices apply again.");
+      await saveMessage("assistant", "Back to 2D with the model baked into a sprite sheet.");
+    } catch (err) { hideTyping(); await streamAssistant("Back to 2D, but I could not bake the model: " + err.message); }
+    S.busy = false; $("sendBtn").disabled = false;
+  });
+  row.appendChild(b); el.appendChild(row);
+}
+/** A picture landed in a 3D game: it stays 3D (cut-outs, textures, UI), with one chip back to 2D. */
+function offerSwitch2D() {
+  const el = appendMessage({ role: "tool", content: "", meta: { card: { icon: "&#128161;", title: "Still 3D", text: "Pictures work in 3D too (cut-outs, textures, UI)." } } });
+  const row = document.createElement("div"); row.className = "choices";
+  const b = document.createElement("button"); b.type = "button"; b.textContent = "Switch to 2D instead";
+  b.addEventListener("click", () => { row.remove(); setDim("2d"); toast("2D: the classic flat view", 2500); });
+  row.appendChild(b); el.appendChild(row);
 }
 
 // ---------------------------------------------------------------------------
@@ -1081,10 +1143,10 @@ function renderReview() {
   if (!review) return;
   const items = review.items, has3d = items.some((i) => i.att.model);
   $("reviewSummary").textContent = `${items.filter((i) => !i.att.model).length} picture${items.filter((i) => !i.att.model).length === 1 ? "" : "s"}${has3d ? ` · ${items.filter((i) => i.att.model).length} 3D model${items.filter((i) => i.att.model).length === 1 ? "" : "s"}` : ""}${review.words ? ` · "${review.words}"` : ""}`;
-  $("reviewEngine").innerHTML = has3d ? "Game: <b>3D</b> (a 3D model is in the files; models land in the game in the next update)" : `Game: <b>${S.mode === "3d" ? "3D" : "2D"}</b>`;
+  $("reviewEngine").innerHTML = has3d ? "Game: <b>3D</b> (a 3D model is in the files: the game switches to 3D, pictures become cut-outs, textures and UI)" : `Game: <b>${S.mode === "3d" ? "3D" : "2D"}</b>`;
   $("reviewGrid").innerHTML = items.map((it, i) => {
     const a = it.att, g = a.check?.guess;
-    if (a.model) return `<div class="rcard model"><div class="pic">&#129513;</div><div class="name" title="${esc(a.name)}">${esc(a.name)}</div><div class="why">3D model · ${Math.round(a.size / 1024)} KB · the player, in 3D (next update)</div></div>`;
+    if (a.model) return `<div class="rcard model"><div class="pic">&#129513;</div><div class="name" title="${esc(a.name)}">${esc(a.name)}</div><div class="why">3D model · ${Math.round(a.size / 1024)} KB · ${a.modelSrc ? "the player: the game goes 3D" : "too big (1.8 MB max)"}</div></div>`;
     return `<div class="rcard"><div class="pic"><img src="${a.thumb}" alt=""></div><div class="name" title="${esc(a.name)}">${esc(a.name)}</div>
       <select data-role data-i="${i}">${REVIEW_ROLES.map(([v, l]) => `<option value="${v}"${it.role === v ? " selected" : ""}>${l}${v === "auto" && g && !a.check.sure ? ` · maybe ${ROLE_WORDS[g.role]}` : ""}</option>`).join("")}</select>
       ${REVIEW_HINTS[it.role] ? `<select data-hint data-i="${i}">${REVIEW_HINTS[it.role].map((h) => `<option value="${h}"${it.hint === h ? " selected" : ""}>${h}</option>`).join("")}</select>` : ""}
@@ -1109,6 +1171,7 @@ async function applyReview() {
   try {
     await ensureProject(r.words || `Game from ${r.items.length} files`);
     await saveMessage("user", r.words, { attachments: attMeta });
+    for (const it of models) await handleModel(it.att, r.words);   // models first: they switch the engine
     for (const it of items) {
       const a = it.att;
       if (it.role === "auto") { a.role = "auto"; a.objRole = undefined; a.hint = ""; }
@@ -1117,7 +1180,6 @@ async function applyReview() {
       catch (err) { hideTyping(); toast(`${a.name}: ${err.message}`, 5000); }
     }
     await detectedCard(S.batch.plans);
-    if (models.length) await streamAssistant(`${models.length === 1 ? "The 3D model" : "The 3D models"} (${models.map((m) => m.att.name).join(", ")}) will be used by the 3D update that is coming next.`);
   } catch (err) { hideTyping(); await streamAssistant("Something went wrong: " + err.message); }
   S.batch = null;
   S.busy = false; $("sendBtn").disabled = false; layout(); $("composer").focus();

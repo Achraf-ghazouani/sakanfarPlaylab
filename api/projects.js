@@ -18,7 +18,8 @@ import { requireUser } from "../lib/auth.mjs";
 
 const MAX_PHOTO = 200_000;   // data URL chars (a 480px JPEG is ~40 KB)
 const MAX_SPRITE = 400_000;  // data URL chars for the player picture (a 256px PNG is ~50-150 KB)
-const MAX_ART = 6_000_000;   // the whole art object: player + object sprites (~30-120 KB each) + the asset list below
+const MAX_ART = 4_200_000;   // the whole art object: player + object sprites + the asset list + a 3D model (a Vercel request body stays under 4.5 MB)
+const MAX_MODEL = 2_600_000; // one 3D model (GLB / GLTF / FBX) as a data URL (about 1.8 MB of file)
 const MAX_ASSET = 1_400_000; // one asset picture (a background JPEG, a tileset or a UI piece as PNG)
 const MAX_ASSETS = 40;
 const SPRITE_ROLES = new Set(["enemy", "coin", "goal", "spike", "decoration"]);
@@ -146,7 +147,14 @@ function pickFields(body) {
         if (typeof a.src !== "string" || !/^data:image\/(png|webp|jpeg);base64,/.test(a.src) || a.src.length > MAX_ASSET) return { error: `The ${a.name || a.role} picture must be a PNG, WebP or JPEG under ${Math.round(MAX_ASSET / 1_400_000)} MB.` };
       }
     }
-    if (art && JSON.stringify(art).length > MAX_ART) return { error: "Game art is too large." };
+    // art.model: the uploaded 3D model, the main character of a 3D game (or an enemy)
+    if (art && art.model != null) {
+      const m = art.model;
+      if (typeof m !== "object" || typeof m.src !== "string" || !/^data:(model\/gltf-binary|model\/gltf\+json|model\/fbx|application\/octet-stream|);base64,/.test(m.src) || m.src.length > MAX_MODEL) return { error: "The 3D model must be a GLB, GLTF or FBX under 1.8 MB." };
+      if (!/\.(glb|gltf|fbx)$/i.test(String(m.name || ""))) return { error: "The 3D model needs a .glb, .gltf or .fbx name." };
+      art.model = { src: m.src, name: String(m.name).slice(0, 80), role: m.role === "enemy" ? "enemy" : "player", size: Number(m.size) || 0 };
+    }
+    if (art && JSON.stringify(art).length > MAX_ART) return { error: "Game art is too large (4 MB in all): remove a picture or a model." };
     out.art = art;
   }
   return out;

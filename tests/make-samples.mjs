@@ -66,6 +66,28 @@ function figure(s, x, y, body, skin) {   // a little character: head, body, legs
 // texture: a square opaque brick pattern
 { const s = surface(128, 128, [150, 75, 40, 255]); for (let r = 0; r < 8; r++) for (let c = 0; c < 4; c++) { const off = r % 2 ? 16 : 0; s.rect((c * 32 + off + 2) % 128, r * 16 + 2, 28, 12, [190 + (rnd() * 30 | 0), 100, 60]); } s.save("texture.png"); }
 
+// cube.glb: the smallest useful 3D model, a blue box with a lighter top (one mesh, 8 vertices, 12 triangles), as a GLB
+{
+  const V = [[-0.4, 0, -0.4], [0.4, 0, -0.4], [0.4, 0, 0.4], [-0.4, 0, 0.4], [-0.4, 1.2, -0.4], [0.4, 1.2, -0.4], [0.4, 1.2, 0.4], [-0.4, 1.2, 0.4]];
+  const I = [0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7];
+  const pos = Buffer.alloc(V.length * 12); V.forEach((v, i) => v.forEach((c, k) => pos.writeFloatLE(c, i * 12 + k * 4)));
+  const idx = Buffer.alloc(I.length * 2); I.forEach((n, i) => idx.writeUInt16LE(n, i * 2));
+  const bin = Buffer.concat([pos, idx, Buffer.alloc((4 - (pos.length + idx.length) % 4) % 4)]);
+  const json = Buffer.from(JSON.stringify({
+    asset: { version: "2.0", generator: "tests/make-samples.mjs" }, scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0, name: "hero" }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }] }],
+    materials: [{ pbrMetallicRoughness: { baseColorFactor: [0.16, 0.36, 0.93, 1], metallicFactor: 0, roughnessFactor: 0.8 } }],
+    buffers: [{ byteLength: bin.length }],
+    bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: pos.length, target: 34962 }, { buffer: 0, byteOffset: pos.length, byteLength: idx.length, target: 34963 }],
+    accessors: [{ bufferView: 0, componentType: 5126, count: V.length, type: "VEC3", min: [-0.4, 0, -0.4], max: [0.4, 1.2, 0.4] }, { bufferView: 1, componentType: 5123, count: I.length, type: "SCALAR" }],
+  }));
+  const jsonPad = Buffer.concat([json, Buffer.alloc((4 - json.length % 4) % 4, 0x20)]);
+  const chunk = (type, data) => { const h = Buffer.alloc(8); h.writeUInt32LE(data.length, 0); h.writeUInt32LE(type, 4); return Buffer.concat([h, data]); };
+  const body = Buffer.concat([chunk(0x4e4f534a, jsonPad), chunk(0x004e4942, bin)]);
+  const head = Buffer.alloc(12); head.writeUInt32LE(0x46546c67, 0); head.writeUInt32LE(2, 4); head.writeUInt32LE(12 + body.length, 8);
+  fs.writeFileSync(path.join(OUT, "cube.glb"), Buffer.concat([head, body]));
+}
+
 // pack.zip: a few of the samples in one ZIP (stored and deflated entries, a folder, some junk) to drop into the Studio
 {
   const entries = [["button.png", false], ["pics/background.png", true], ["pics/spritesheet.png", true], ["pics/tileset.png", true], ["ui/icon_heart.png", false], ["character.png", true], ["__MACOSX/._button.png", false], ["readme.txt", true]];

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111111">
 <title>PlayLab Arena</title>
@@ -9,6 +10,7 @@
 <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <script src="shared/joystick.js"></script>
+<script src="shared/model3d.js"></script>
 <style>
   html, body { margin:0; height:100%; overflow:hidden; background:#111; font-family:system-ui, sans-serif; color:#eee; user-select:none; -webkit-user-select:none; }
   #c { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
@@ -157,6 +159,7 @@ const G = { level: null, name: null, view: "fps", theme: DEFAULT_THEME, scene: n
   wave: 0, pending: 0, nextSpawn: 0, kills: 0, total: 0, state: "none", nextWaveAt: 0, lastShot: 0, firing: false, yaw: 0, pitch: -0.08, aim: new THREE.Vector3(0, 0, -1), mouse: { x: 0, y: 0 }, keys: {}, tracer: null, tracerUntil: 0, hurtUntil: 0 };
 let playerSkin = null, enemySkin = null;   // <img> from the Studio: the player picture and the enemy sprite
 let bgImg = null, texImg = null;            // <img> from the Studio's assets: a background (sky dome) and a texture (the floor)
+let playerModel = null, playerModelSrc = null;   // the uploaded 3D model (shared/model3d.js): the player's body
 // Sticks: from the phone pad through the Studio (playlab:stick / playlab:fire) or from the on-screen sticks on a touch
 // device. m = move (x right, y forward), a = aim / turn, fire = hold. turn = the old left/right pad buttons.
 const R = { m: [0, 0], a: [0, 0], fire: false, turn: 0 };
@@ -180,6 +183,12 @@ function eyes(w, h, d, parent) {
     const p = new THREE.Mesh(new THREE.SphereGeometry(Math.max(1.4, w * 0.07), 8, 6), black); p.position.set(sx * w * 0.2, h * 0.3, d / 2 + Math.max(2.5, w * 0.13));
     parent.add(e, p);
   }
+}
+/** The uploaded 3D model as the player's body: PLAYER_H tall, facing the way the player looks (-z at yaw 0). */
+function modelBody(pm) {
+  const g = new THREE.Group(), o = pm.object;
+  o.rotation.y = Math.PI; o.scale.setScalar(PLAYER_H * 1.1); g.add(o); g.userData.model = true;
+  return g;
 }
 /** A block body with eyes (origin at the feet), or a flat picture when there is one. */
 function body(w, h, d, color, skin) {
@@ -263,7 +272,7 @@ function build(level, name) {
     } else if (o.type === "start") start = { x: cx, z: cz };
   }
   // the player: a visible body in third person and top-down (hidden in first person)
-  const p = body(30, PLAYER_H, 22, 0x22c55e, playerSkin);
+  const p = playerModel ? modelBody(playerModel) : body(30, PLAYER_H, 22, 0x22c55e, playerSkin);
   const sp = start || { x: 500, z: 500 };
   p.position.set(sp.x, 0, sp.z); S.add(p);
   G.player = { mesh: p, x: sp.x, z: sp.z, sx: sp.x, sz: sp.z, hp: HP0, ammo: AMMO0, lastBite: 0 };
@@ -527,8 +536,12 @@ function stateSnapshot() {
 let lastState = null;
 function publishState() { lastState = stateSnapshot(); if (isEmbed) { try { parent.postMessage({ type: "playlab:state", state: lastState }, "*"); } catch {} } }
 const loadImg = (src) => new Promise((resolve) => { if (!src || !/^data:image\/(png|webp|jpeg);base64,/.test(src)) return resolve(null); const i = new Image(); i.onload = () => resolve(i); i.onerror = () => resolve(null); i.src = src; });
-async function setSkins({ player, sprites, assets } = {}) {
+async function setSkins({ player, sprites, assets, model } = {}) {
   let changed = false;
+  if (model !== undefined) {
+    const src = model?.src || null;
+    if (src !== playerModelSrc) { playerModelSrc = src; playerModel = null; if (src) { try { playerModel = await Model3D.load(model, 1); } catch (err) { console.warn("3D model:", err.message); } } changed = true; }
+  }
   if (assets !== undefined) {
     const list = Array.isArray(assets) ? assets : [], bg = list.find((a) => a?.role === "background"), tx = list.find((a) => a?.role === "texture");
     const [bi, ti] = await Promise.all([loadImg(bg?.src), loadImg(tx?.src)]);
@@ -546,7 +559,7 @@ if (isEmbed) {
   addEventListener("message", async (e) => {
     const m = e.data; if (!m || typeof m !== "object" || typeof m.type !== "string") return;
     if (m.type === "playlab:level" && m.level && Array.isArray(m.level.objects)) {
-      await setSkins({ player: m.player, sprites: m.sprites, assets: m.assets });
+      await setSkins({ player: m.player, sprites: m.sprites, assets: m.assets, model: m.model });
       startLevel(m.level, m.name || "studio");
       if (m.toast) showToastMsg(String(m.toast).replace(/<[^>]+>/g, ""));
     } else if (m.type === "playlab:snapshot") {
@@ -561,6 +574,7 @@ if (isEmbed) {
     else if (m.type === "playlab:jump") { R.fire = !!m.down; if (R.fire && G.state === "ready") startPlay(); }   // and JUMP shoots
     else if (m.type === "playlab:players") { if (!(m.players || []).length) { R.m = [0, 0]; R.a = [0, 0]; R.fire = false; R.turn = 0; } }
     else if (m.type === "playlab:assets") { if (await setSkins({ assets: m.assets || [] })) restart(); }
+    else if (m.type === "playlab:model") { if (await setSkins({ model: m.model || null })) restart(); }
     else if (m.type === "playlab:player" || m.type === "playlab:sprites") { if (await setSkins(m.type === "playlab:player" ? { player: m.image ?? null } : { sprites: m.sprites || {} })) restart(); }
     else if (m.type === "playlab:menu") { if (m.action === "restart") restart(); else if (m.action === "pause") { if (G.state === "play") togglePause(); } else if (m.action === "resume") { if (G.state === "paused") startPlay(); } else if (m.action === "toggle-pause") togglePause(); else if (m.action === "mute") SFX.setMuted(!SFX.muted); }
     else if (m.type === "playlab:state") publishState();

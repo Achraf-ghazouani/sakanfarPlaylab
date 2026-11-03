@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>PlayLab Game</title>
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
@@ -14,6 +15,7 @@
 <script src="shared/photo.js"></script>
 <script src="shared/inkart.js"></script>
 <script src="shared/view3d.js"></script>
+<script src="shared/model3d.js"></script>
 <script src="shared/phonelink.js" defer></script>
 <script src="shared/auth.js"></script>
 <style>
@@ -1532,6 +1534,7 @@ async function init() {
         if (m.player !== undefined && okSkin(m.player)) await setPlayerSkin(m.player);
         if (m.sprites !== undefined) await setObjectSprites(m.sprites);
         if (m.assets !== undefined) await setAssets(m.assets);
+        if (m.model !== undefined) await View3D.setModel(m.model);
         if (m.mode !== undefined) viewMode = String(m.mode).startsWith("3d") ? "3d" : "2d";   // the new scene builds the right view
         startLevel(m.level, m.name || "studio", m.thumb || null);
         if (m.toast) showToast(m.toast, 6000);
@@ -1543,6 +1546,8 @@ async function init() {
         const s = playScene();
         if (s?.player && s.state === "play") pendingSpawn = { x: s.player.x / s.ax, y: s.player.body.bottom };
         if (currentLevel) restartScene();
+      } else if (m.type === "playlab:model") {
+        await View3D.setModel(m.model || null);   // the 3D view swaps the character's mesh on its next frame
       } else if (m.type === "playlab:assets") {
         // new assets (a background, a texture, a sheet, UI pieces): restart in place so the player keeps their spot
         if (!(await setAssets(m.assets))) return;

@@ -1,12 +1,12 @@
 // Headless Chrome checks the generated-game runtime: shared/coderun.mjs wraps, scans and mounts a game in a sandboxed iframe
 // (no origin of its own, a strict policy), and shared/playlab-sdk.js inside it reports ready / state / events / errors /
-// blank canvases, takes input from the host, answers the menu and screenshots. The three example games of lib/code-examples.mjs
+// blank canvases, takes input from the host, answers the menu and screenshots. The three example games of shared/code-examples.mjs
 // (plain canvas, Phaser 3 from cdnjs, three.js from jsdelivr) run through it too, so what Muse Wonder is shown works.
 // Samples of what must fail are in tests/samples/. Needs the dev server:   node tests/sdk.test.mjs [baseUrl]
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { EXAMPLES } from "../lib/code-examples.mjs";
+import { EXAMPLES } from "../shared/code-examples.mjs";
 
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const PORT = 9345, BASE = process.argv[2] || "http://localhost:3000";

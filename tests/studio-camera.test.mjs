@@ -1,12 +1,13 @@
 // Phone camera inside the Studio: two headless Chromes. The "computer" opens studio.html and the camera link,
-// the "phone" opens pad.html with the synthetic sheet (?fakepaper=1): paper detection, auto-capture, ink layer,
-// scan (mocked on the phone) and the level lands in the Studio chat as a version.
+// the "phone" opens pad.html with the synthetic sheet (?fakepaper=1): paper detection, auto-capture, the shot read into an AI
+// code plan on the computer (mocked); then the phones play a game written as code in the sandbox (layout, input, menu, 2 players).
 // Needs the dev server (node serve.mjs) and either the public PeerServer or the Supabase relay in .env.
 //   node tests/studio-camera.test.mjs [baseUrl]
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { EXAMPLES } from "../shared/code-examples.mjs";
 
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const BASE = process.argv[2] || "http://localhost:3000";
@@ -22,7 +23,6 @@ const made = await srv("srv_create_user", { p_email: null, p_password: PASSWORD,
 if (made.status !== 200) { console.log("SKIP  this test needs a throwaway account: run db/003_server_users.sql (" + made.status + ")"); process.exit(0); }
 const USER_ID = made.data;
 let TOKEN = "";
-const LEVEL = { theme: "fake paper", aspect: 1.333, objects: [{ type: "platform", label: "ground", x: 0, y: 900, w: 1000, h: 60 }, { type: "start", x: 40, y: 840, w: 40, h: 60 }, { type: "goal", x: 900, y: 840, w: 40, h: 60 }, { type: "platform", label: "ledge", x: 300, y: 760, w: 200, h: 30 }, { type: "coin", x: 380, y: 700, w: 30, h: 30 }, { type: "enemy", x: 600, y: 850, w: 40, h: 50 }] };
 
 let fails = 0;
 function check(name, cond, extra) { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${extra !== undefined ? "  -> " + JSON.stringify(extra).slice(0, 220) : ""}`); if (!cond) fails++; }
@@ -52,11 +52,11 @@ try {
   await pc.send("Page.addScriptToEvaluateOnNewDocument", { source: `
     try { sessionStorage.removeItem("playlab.studio.room"); } catch {}
     window.__pcScans = 0; window.__pcPlans = [];
-    const LEVEL = ${JSON.stringify(LEVEL)}; const realFetch = window.fetch.bind(window);
+    const realFetch = window.fetch.bind(window);
     const PLAN = { title: "Paper Maze", genre: "maze", engine: "canvas", goal: "reach the exit", controls: "d-pad", controller: "dpad+jump", win: "exit", lose: "-", entities: ["walls"], opponents: "none", levels: "1", players: 1, notes: "", picture: "a hand-drawn maze" };
     window.fetch = (url, init) => {
       if (/api\\/agent$/.test(String(url))) { const b = JSON.parse(init.body); if (b.task === "plan") { window.__pcPlans.push(b); return Promise.resolve(new Response(JSON.stringify({ plan: PLAN, meta: { model: "mock", ms: 1 } }), { status: 200, headers: { "Content-Type": "application/json" } })); } }
-      if (/api\\/scan$/.test(String(url))) { window.__pcScans++; return Promise.resolve(new Response(JSON.stringify({ level: { ...LEVEL, checked: true, fixes: [] }, meta: { provider: "mock", ms: 1, playtest: { before: { ok: true, problems: [] } } } }), { status: 200, headers: { "Content-Type": "application/json" } })); } return realFetch(url, init); };` });
+      return realFetch(url, init); };` });
   await pc.send("Page.navigate", { url: `${BASE}/index.html` }); await pc.waitFor(`document.readyState === "complete"`);
   await pc.evalJS(`localStorage.clear(); sessionStorage.clear(); true`);   // the browser profile is reused between runs: drop old sessions
   await pc.send("Page.navigate", { url: `${BASE}/login.html?next=studio.html` });
@@ -85,61 +85,36 @@ try {
   // a new game: nothing is made without AI code, so the camera shot is read into a plan on the computer (no classic scan)
   check("on a new game the camera shot goes to an AI code plan on the computer (the picture, no scan), not from the phone", !!(await pc.waitFor(`window.__pcPlans.length >= 1 && /^data:image\\/jpeg/.test(window.__pcPlans[0].image || "") || (window.__pcPlans.length >= 1 && (window.__pcPlans[0].image || "").length > 1000)`, 20_000)) && (await pc.evalJS(`window.__pcScans`)) === 0 && (await phone.evalJS(`window.__phoneApiCalls`)) === 0);
   check("the plan card names the picture; the phone says AI code is reading it", !!(await pc.waitFor(`!!S.pendingPlan && /From your picture: a hand-drawn maze/.test(document.body.innerText)`, 20_000)) && !!(await phone.waitFor(`/AI code is reading your drawing|still busy/.test(document.getElementById("camStatus").textContent)`, 10_000)));
-  // an older game made with the classic engine still scans: the classic path for the controller checks below
-  await pc.evalJS(`S.pendingPlan = null; renderCodeMode(); applyLevel(${JSON.stringify({ ...LEVEL, note: "older classic game" })}, { note: "older classic game" }); true`);
-  await pc.waitFor(`S.level && !S.level.genre && S.versions.length >= 1`, 20_000);
-  await phone.evalJS(`window.__camScans = 0; window.__camCaptures = 0; Cam.pending = null; document.getElementById("captureBtn").click(); true`);   // the sheet did not change: capture by hand
-  check("on an older classic game the camera still scans on the computer, not on the phone", !!(await pc.waitFor(`window.__pcScans >= 1`, 40_000)) && (await phone.evalJS(`window.__phoneApiCalls`)) === 0);
-  check("the phone got the result back", !!(await phone.waitFor(`window.__camLevel && window.__camLevel.objects.length === 6`, 20_000)));
-
-  // the studio: ink arrives first, then the level becomes a version + card + reply
-  const ink = await pc.waitFor(`window.__studioInkSeq`, 20_000);
-  check("ink layer reached the studio", !!ink, ink);
-  const seq = await pc.waitFor(`window.__studioPhoneLevelSeq`, 30_000);
-  check("level reached the studio", !!seq, seq);
-  await pc.waitFor(`!S.busy && S.versions.length >= 2`, 20_000);
-  check("the classic game got a new version from the phone camera", await pc.evalJS(`S.level && S.level.objects.length === 6 && S.versions[0] && S.versions[0].n === 2`), await pc.evalJS(`S.versions.map((v) => v.n + ":" + v.note)`));
-  const chatText = await pc.waitFor(`/Redrawn on paper|Level from the phone camera/.test(document.body.innerText)`, 20_000);
-  check("card and reply in the chat", !!chatText);
-  check("project photo is the phone thumbnail", String(await pc.evalJS(`S.project && S.project.photo || ""`)).startsWith("data:image/jpeg"));
+  // the phones play a game written as code: the snake example, saved as a version and running in the sandbox
+  await pc.evalJS(`S.pendingPlan = null; renderCodeMode(); applyLevel(${JSON.stringify({ genre: "code", engine: "canvas", title: "Snake", theme: "snake", note: "snake v1", prompt: "a snake game", plan: { title: "Snake", genre: "snake", engine: "canvas", goal: "eat", controls: "d-pad", controller: "dpad+jump", win: "-", lose: "-", entities: [], opponents: "none", levels: "-", players: 1, notes: "" }, html: EXAMPLES.snake, notes: { note: "snake v1", built: "x", missing: "" }, objects: [] })}, { note: "snake v1" }); true`);
+  check("the code game runs in the sandbox on the computer", !!(await pc.waitFor(`S.level && S.level.genre === "code" && S.codeRun && S.codeRun.ready`, 20_000)));
   const video = await pc.evalJS(`!!document.getElementById("camVideo").srcObject`);
   console.log(`  live video on the studio: ${video ? "yes" : "no (relay or no WebRTC between the two headless browsers)"}`);
-  const player = await pc.waitFor(`(() => { try { const f = document.getElementById("preview").contentWindow; return !!(f.document.querySelector("canvas")); } catch { return false; } })()`, 10_000);
-  check("preview is running", !!player);
-  // the phone switches to the controller: it drives the main character in the preview; menu + state sync
-  const scene = `document.getElementById("preview").contentWindow.__playlab.scene()`;
+  // the phone switches to the controller: it shows the layout the game asked for, its input reaches the game, menu + state sync
   await phone.evalJS(`window.__padClient.sendMode("pad"); true`);
-  const pads = await pc.waitFor(`(() => { const p = document.getElementById("preview").contentWindow.__playlab.players(); return p.length === 1 && p[0].slot === 1 ? p : null; })()`, 10_000);
-  check("phone in controller mode is player 1 in the preview", !!pads, pads);
-  const x0 = await pc.evalJS(`Math.round(${scene}.player.x)`);
-  await phone.evalJS(`window.__padClient.sendInput({ l: 0, r: 1 }, true); true`); await sleep(600);
-  await phone.evalJS(`window.__padClient.sendInput({ l: 0, r: 0 }, true); true`); await sleep(150);
-  const x1 = await pc.evalJS(`Math.round(${scene}.player.x)`);
-  check("phone input moves the character in the preview", x1 > x0 + 60, { x0, x1 });
+  check("the phone switches to the layout the game asked for (a 4-way d-pad and JUMP)", !!(await phone.waitFor(`window.__padLayout === "dpad+jump" && document.body.classList.contains("pad-dpad")`, 15_000)));
+  const shot0 = await pc.evalJS(`askSnapshot()`);
+  await phone.evalJS(`window.__padClient.sendInput({ l: 0, r: 0, u: 0, d: 1 }, true); true`); await sleep(900);
+  await phone.evalJS(`window.__padClient.sendInput({ l: 0, r: 0, u: 0, d: 0 }, true); true`);
+  const shot1 = await pc.evalJS(`askSnapshot()`);
+  check("phone input (down on the d-pad) reaches the game in the sandbox: the screen changed", !!shot0 && !!shot1 && shot0 !== shot1);
+  await pc.evalJS(`S.code.send({ type: "playlab:menu", action: "restart" }); true`); await sleep(300);
   await phone.evalJS(`window.__padClient.send({ t: "menu", action: "toggle-pause" }); true`);
   const padState = await phone.waitFor(`window.__padState && window.__padState.state === "paused" && window.__padState`, 10_000);
-  check("pause from the phone reaches the game and the state comes back", !!padState && (await pc.evalJS(`${scene}.state`)) === "paused" && padState.total > 0, padState);
+  check("pause from the phone reaches the game and the state comes back (title and score on the phone)", !!padState && (await pc.evalJS(`S.codeRun.lastState`)) === "paused" && /score/.test(await phone.evalJS(`document.getElementById("gameState").textContent`)), padState);
   await phone.evalJS(`window.__padClient.send({ t: "menu", action: "toggle-pause" }); true`);
-  await pc.waitFor(`${scene}.state === "play"`, 5000);
-  check("resume from the phone", (await pc.evalJS(`${scene}.state`)) === "play");
+  check("resume from the phone", !!(await pc.waitFor(`S.codeRun.lastState === "play"`, 5000)));
 
-  // a second phone joins as a controller and gets its own character
+  // a second phone joins as a controller in slot 2; both are players of the game
   const phone2 = await browser("phone2", 9345);
   try {
     await phone2.send("Page.navigate", { url: `${BASE}/pad.html?room=${code}` });
     const w2 = await phone2.waitFor(`window.__padWelcome && window.__padWelcome`, 30_000);
     check("second phone welcomed as a controller in slot 2", !!w2 && w2.slot === 2 && w2.mode === "pad", w2);
-    const two = await pc.waitFor(`(() => { const s = ${scene}; return s.avatars.length === 2 ? s.avatars.map((a) => a.slot) : null; })()`, 10_000);
-    check("preview shows two characters", !!two && two.join() === "1,2", two);
-    const p1 = await pc.evalJS(`Math.round(${scene}.player.x)`), p2 = await pc.evalJS(`Math.round(${scene}.avatars[1].obj.x)`);
-    await phone2.evalJS(`window.__padClient.sendInput({ l: 0, r: 1 }, true); true`); await sleep(600);
-    await phone2.evalJS(`window.__padClient.sendInput({ l: 0, r: 0 }, true); true`); await sleep(150);
-    const q1 = await pc.evalJS(`Math.round(${scene}.player.x)`), q2 = await pc.evalJS(`Math.round(${scene}.avatars[1].obj.x)`);
-    check("second phone moves only its own character", q2 > p2 + 60 && Math.abs(q1 - p1) < 5, { p1, p2, q1, q2 });
-    const listed = await pc.evalJS(`document.getElementById("camPlayers").textContent`);
-    check("studio lists both phones", /player 1/.test(listed) && /player 2/.test(listed), listed);
+    const listed = await pc.waitFor(`/player 1/.test(document.getElementById("camPlayers").textContent) && /player 2/.test(document.getElementById("camPlayers").textContent) && document.getElementById("camPlayers").textContent`, 10_000);
+    check("studio lists both phones", !!listed, listed);
     const state2 = await phone2.waitFor(`window.__padState && window.__padState.players && window.__padState.players.length === 2 && window.__padState`, 10_000);
-    check("second phone sees both players in the state", !!state2, state2 && state2.players);
+    check("the game knows both players (PlayLab.players) and the second phone sees them, with the game's layout", !!state2 && (await phone2.evalJS(`window.__padLayout`)) === "dpad+jump", state2 && state2.players);
   } finally { phone2.close(); }
 
   const own = pc.errors.filter((e) => !/Phaser|peerjs|supabase|WebSocket/i.test(e));

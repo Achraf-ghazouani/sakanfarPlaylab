@@ -1,21 +1,14 @@
-// Unit checks for "any game from a prompt" (lib/code.mjs, shared/codekinds.mjs, shared/codescan.mjs), no network: the
-// router between the engines and the code builder, the plan normaliser, the HTML parser and its notes, the engine
+// Unit checks for "any game from a prompt" (lib/code.mjs, shared/codescan.mjs), no network: the plan normaliser, the HTML parser and its notes, the engine
 // detector, the validator the projects API uses, the system prompt. Then live calls when MODEL_API_KEY is set: a plan from
 // Muse Spark (a few seconds) and, with PLAYLAB_LIVE_CODE=1, a whole game from Muse Wonder (about a minute).
 //   node tests/code.test.mjs
-import { codeKind, normalizePlan, parseGameHtml, engineOf, validateCodeLevel, systemPrompt, planGame, generateGame, actionFor, describePlan, ENGINES, LAYOUTS, makeFixToken, readFixToken, MAX_FIXES, cleanReport, describeFailure, repairGame, lookAtGame, LOOK_BRIEF, parsePatches, applyPatches, lineDiff, changeGame, describeAssets } from "../lib/code.mjs";
-import { EXAMPLES } from "../lib/code-examples.mjs";
+import { normalizePlan, parseGameHtml, engineOf, validateCodeLevel, systemPrompt, planGame, generateGame, actionFor, describePlan, ENGINES, LAYOUTS, makeFixToken, readFixToken, MAX_FIXES, cleanReport, describeFailure, repairGame, lookAtGame, LOOK_BRIEF, parsePatches, applyPatches, lineDiff, changeGame, describeAssets } from "../lib/code.mjs";
+import { EXAMPLES } from "../shared/code-examples.mjs";
 import { scan, wrap, csp } from "../shared/codescan.mjs";
 try { process.loadEnvFile(".env"); } catch {}
 
 let fails = 0;
 function check(name, cond, extra) { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${extra !== undefined ? "  -> " + JSON.stringify(extra).slice(0, 260) : ""}`); if (!cond) fails++; }
-
-// ---- the router: the nine test prompts go to the code builder, platformers and shooters stay on the engines ----
-const NINE = ["car racing with 3 laps and 4 AI cars", "a match-3 puzzle", "tower defense with 3 waves", "an endless runner", "a simple flight game through rings", "2-player soccer with phone controllers", "snake", "a dungeon crawler with keys and doors", "a memory card game"];
-check("every test prompt is routed to the code builder", NINE.every((t) => codeKind(t)), NINE.map((t) => [t, codeKind(t)]));
-check("platformers and shooters stay on the engines, even with race or car words", ["a lava castle with 3 ledges", "first person zombie shooter", "a platformer where you drive a car", "race to the flag in a lava castle", "A space level with floating platforms and lots of coins"].every((t) => codeKind(t) === null));
-check("kinds are named for people", codeKind("a tetris puzzle game") === "a puzzle game" && codeKind("chess against the computer") === "a board game" && codeKind("flappy bird") === "a classic arcade game" && codeKind("an rpg with quests") === "a role-playing game");
 
 // ---- the plan ----
 const p = normalizePlan({ title: "  Lap   Dash ", genre: "racing", engine: "3D", players: 9, entities: ["car", "", "track"], controller: "nope" });

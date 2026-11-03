@@ -1,8 +1,8 @@
 // shared/padroute.mjs — what a phone's message becomes for the game in the preview (window.PadRoute, also an ES module).
 // The phone (pad.html) sends the same few messages whatever the layout: input {l, r, u, d} for the d-pad and the steering
 // arrows, jump {down} for the A button (JUMP / GAS / A), fire {down} for the B button (FIRE / BRAKE / B), stick {m, a} for the
-// sticks, tap {nx, ny} for the tap pad, menu {action} for restart / pause / sound. The engines (game.html, arena.html) and the
-// PlayLab SDK inside generated games all read the playlab:* messages this returns, so one route serves every kind of game.
+// sticks, tap {nx, ny} for the tap pad, menu {action} for restart / pause / sound. The PlayLab SDK inside every game reads the
+// playlab:* messages this returns, so one route serves every game and every layout.
 // The layouts a generated game can ask for with PlayLab.controller({ type }), and what each shows on the phone.
 export const CODE_LAYOUTS = {
   "dpad+jump": { pad: "dpad", a: "JUMP", b: null },
@@ -12,7 +12,7 @@ export const CODE_LAYOUTS = {
   "steering+gas+brake": { pad: "steer", a: "GAS", b: "BRAKE" },
   "tap": { pad: "tap", a: null, b: null },
 };
-/** The phone layout for a state's layout: one of CODE_LAYOUTS, or null for the engines' own ("2d", "3d", "arena"). */
+/** The phone layout for a state's layout: one of CODE_LAYOUTS, or null when the game has not asked yet. */
 export function codeLayout(layout) { return Object.prototype.hasOwnProperty.call(CODE_LAYOUTS, layout) ? CODE_LAYOUTS[layout] : null; }
 
 const bit = (v) => (v ? 1 : 0);

@@ -59,7 +59,7 @@
     catch (err) { $("loading").textContent = "Could not load this game: " + err.message; return; }
     $("plays").textContent = game.plays; $("likes").textContent = game.likes;
     if (isCode()) mountCode();
-    else { iframe.src = game.kind === "arena" ? "/arena.html?embed=1" : "/game.html?embed=1"; pushGame(); }
+    else { $("loading").textContent = "This game was made with PlayLab's classic engine, which is retired. Remix it in the Studio to rebuild it with AI code."; }
     try { setLiked((await api(`/api/play?id=${encodeURIComponent(P.id)}&liked=${encodeURIComponent(voter)}`)).liked); } catch {}
     window.__play = { game: () => game, ready: () => ready, host: () => host, code: () => code, toGame };
   })();

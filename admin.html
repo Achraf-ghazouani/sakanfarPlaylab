@@ -576,7 +576,7 @@ async function loadPricing() {
 // ---------------------------------------------------------------------------
 // Games (published) and reports
 // ---------------------------------------------------------------------------
-const KIND_LABEL = { "2d": "2D", "3d": "3D", arena: "Arena" };
+const KIND_LABEL = { "2d": "2D (classic)", "3d": "3D (classic)", arena: "Arena (classic)", code: "AI code" };
 async function loadGames() {
   let games; try { ({ games } = await api({ action: "games", filter: $("gFilter").value })); } catch (err) { return toast(err.message, true); }
   $("gTable").innerHTML = `<thead><tr><th></th><th>Game</th><th>Maker</th><th>Kind</th><th>Visibility</th><th class="num">Plays</th><th class="num">Likes</th><th>Published</th><th></th></tr></thead><tbody>` +

@@ -1,5 +1,5 @@
 // shared/phonelink.js — phone <-> big screen link. Classic script: window.PhoneLink.
-// Host = game.html on the computer, Client = pad.html on the phone.
+// Host = the Studio or the play page on the computer, Client = pad.html on the phone.
 //
 // Transports
 //   1. WebRTC data channels through PeerJS (low latency, also carries the live video as a media call).

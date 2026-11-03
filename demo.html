@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1535">
+<title>Demo games · Sakanfar PlayLab</title>
+<meta name="description" content="Three games written as code the PlayLab way, running in the same sandbox as every AI-made game. No account needed.">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/play.css">
+<style>
+  .pick { display:flex; gap:8px; flex-wrap:wrap; padding:10px 16px; }
+  .pick button.on { color:#fff; background:var(--purple); border-color:var(--purple); }
+  .note { margin:0; padding:0 16px 14px; color:var(--muted); font-size:14px; }
+</style>
+</head>
+<body>
+<!-- demo.html — the landing page's "Play a demo": the three example games every Muse Wonder build is shown (shared/code-examples.mjs),
+     running in the same sandbox as AI-made games (shared/coderun.mjs), with Restart and Pause like the play page. -->
+<header class="top">
+  <a class="brand" href="index.html"><img src="assets/mark-256.webp" alt="">PlayLab</a>
+  <span class="spacer"></span>
+  <button class="tb" id="restartBtn">&#8635; <span class="lbl">Restart</span></button>
+  <button class="tb" id="pauseBtn">&#10074;&#10074; Pause</button>
+  <a class="tb primary" href="studio.html">Make your own</a>
+</header>
+<div class="pick" id="pick"><button data-g="snake">Snake (canvas)</button><button data-g="phaser">Star Catcher (Phaser 3)</button><button data-g="three">Ring Flight (three.js)</button></div>
+<p class="note" id="note"></p>
+<main id="stage"><iframe id="game" title="Demo game" allow="autoplay; pointer-lock"></iframe><div id="loading">Loading the game...</div></main>
+<script type="module">
+import { EXAMPLES } from "./shared/code-examples.mjs";
+import { mount } from "./shared/coderun.mjs";
+const $ = (id) => document.getElementById(id);
+const NOTES = { snake: "Arrows or WASD steer, Space plays again.", phaser: "Left and right move the ship: catch the stars, dodge the rocks.", three: "Arrows fly the plane, Space boosts: go through the golden rings." };
+let handle = null;
+function play(g) {
+  if (!EXAMPLES[g]) g = "snake";
+  document.querySelectorAll("#pick button").forEach((b) => b.classList.toggle("on", b.dataset.g === g));
+  $("note").textContent = NOTES[g] + " Every game in PlayLab is written like this one, as code, by Muse Wonder.";
+  $("loading").style.display = ""; $("loading").textContent = "Loading the game...";
+  if (handle) handle.destroy();
+  handle = mount($("game"), EXAMPLES[g], { on: (m) => {
+    if (m.type === "playlab:ready") $("loading").style.display = "none";
+    else if (m.type === "playlab:state" && m.state) { window.__demoState = m.state; $("pauseBtn").textContent = m.state.state === "paused" ? "▶ Resume" : "❚❚ Pause"; }
+    else if (m.type === "playlab:error") $("loading").textContent = "This game hit an error: " + m.message;
+  } });
+  history.replaceState(null, "", "?g=" + g);
+  setTimeout(() => $("game").focus(), 300);
+}
+$("pick").addEventListener("click", (e) => { const b = e.target.closest("button[data-g]"); if (b) play(b.dataset.g); });
+$("restartBtn").addEventListener("click", () => handle?.send({ type: "playlab:menu", action: "restart" }));
+$("pauseBtn").addEventListener("click", () => handle?.send({ type: "playlab:menu", action: "toggle-pause" }));
+play(new URLSearchParams(location.search).get("g") || "snake");
+window.__demo = { play, handle: () => handle };
+</script>
+</body>
+</html>

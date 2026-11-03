@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
-<meta name="description" content="Sakanfar PlayLab: draw a platformer level on paper, snap it with your phone, and play it in seconds. Powered by Meta Muse Spark.">
+<meta name="description" content="Sakanfar PlayLab: describe any game, or sketch it, and Meta's Muse Wonder writes it as code you can play, share and remix in seconds. Phones are the controllers.">
 <title>Sakanfar PlayLab</title>
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64.png">
@@ -141,10 +141,10 @@
   </div>
   <div class="hero-center">
     <img class="hero-logo" src="assets/logo.webp" alt="Sakanfar PlayLab" width="720" height="594">
-    <h1 class="tag" data-i18n="hero.tag">Draw a level on paper, or just describe it. Play it in seconds.</h1>
+    <h1 class="tag" data-i18n="hero.tag">Describe any game, or sketch it. AI writes it as code. Play it in minutes.</h1>
     <div class="cta-row">
       <a class="start" id="startBtn" href="studio.html" data-i18n="hero.start">START CREATING</a>
-      <a class="start ghost" href="game.html?level=levels/sample.json" data-i18n="hero.demo">PLAY A DEMO</a>
+      <a class="start ghost" href="demo.html" data-i18n="hero.demo">PLAY A DEMO</a>
     </div>
     <p class="beta-note" id="betaNote" data-i18n="hero.beta">Private beta. No invite yet? <a href="#waitlist">Join the waitlist</a></p>
   </div>
@@ -154,8 +154,8 @@
 <!-- ============ MANIFESTO ============ -->
 <section class="block lines" id="how">
   <div class="wrap">
-    <h2 class="big" data-i18n="manifesto.title">IF YOU CAN DRAW IT,<br>YOU CAN PLAY IT.</h2>
-    <p class="lead" data-i18n="manifesto.lead">Introducing Sakanfar PlayLab, an experimental game lab where a pen, a sheet of paper and a chat are the level editor. Sketch it, say it, play it. No coding, no symbols to learn.</p>
+    <h2 class="big" data-i18n="manifesto.title">IF YOU CAN SAY IT,<br>YOU CAN PLAY IT.</h2>
+    <p class="lead" data-i18n="manifesto.lead">Introducing Sakanfar PlayLab, an experimental game lab where a chat, a pen and a phone are the game engine. Racing, puzzles, platformers, shooters, sports: say it or sketch it, and Meta's Muse Wonder writes the whole game as code. No coding, no templates.</p>
   </div>
 </section>
 
@@ -163,9 +163,9 @@
 <section class="block lines">
   <div class="wrap">
     <div class="steps">
-      <div class="step"><span class="n">1</span><b>DRAW</b><p>A ground line, a stick figure where you start, a flag at the end. A cactus becomes an enemy, circles become coins. Or skip the paper and describe your game in the chat.</p></div>
-      <div class="step"><span class="n">2</span><b>SNAP</b><p>Take a photo, sketch on the pad, or point your phone camera at the paper. Muse Spark reads it in seconds, and your own pen strokes become the art.</p></div>
-      <div class="step"><span class="n">3</span><b>PLAY</b><p>A playtest agent makes every jump possible. Play on the keyboard, or turn phones into controllers for up to four players.</p></div>
+      <div class="step"><span class="n">1</span><b>SAY IT</b><p>"A car race with 3 laps and 4 AI cars." Or sketch a 2D level on the pad, or show a drawing to your phone camera. Muse Spark turns it into a short plan you can change for free.</p></div>
+      <div class="step"><span class="n">2</span><b>AI CODES IT</b><p>Muse Wonder writes the whole game as code (Phaser or three.js), tests it in a sandbox, fixes its own bugs and looks at the result. Ask for changes in words: it patches the code in seconds.</p></div>
+      <div class="step"><span class="n">3</span><b>PLAY</b><p>Play on the keyboard, or turn up to four phones into controllers: each shows the pad the game asks for. Publish it, share the link, let friends remix it.</p></div>
     </div>
     <div class="console">
       <div class="inner">
@@ -204,12 +204,12 @@
           </svg>
         </div>
         <div>
-          <h3>HI MAKER,<br>WHAT ARE WE DRAWING TODAY?</h3>
-          <p>Describe a game, or point your phone at the paper. Muse Spark reads what you meant, a playtest agent fixes every impossible jump, and the level builds itself next to the chat while you keep drawing.</p>
-          <div class="chips"><span class="chip"><b>stick figure</b> start</span><span class="chip"><b>flag</b> goal</span><span class="chip"><b>cloud</b> moving platform</span><span class="chip"><b>cactus</b> enemy</span><span class="chip"><b>circles</b> coins</span><span class="chip"><b>triangles</b> spikes</span></div>
+          <h3>HI MAKER,<br>WHAT ARE WE MAKING TODAY?</h3>
+          <p>Describe a game, sketch it, or point your phone at a drawing. Muse Spark plans it, Muse Wonder writes it as code, the sandbox plays it and the AI fixes what breaks, right next to the chat.</p>
+          <div class="chips"><span class="chip"><b>racing</b> 3 laps</span><span class="chip"><b>puzzle</b> match-3</span><span class="chip"><b>platformer</b> from a sketch</span><span class="chip"><b>3D</b> your GLB model</span><span class="chip"><b>sports</b> 2 phones</span><span class="chip"><b>anything</b> you can say</span></div>
           <div class="btnrow" id="start">
             <a class="btn primary" href="studio.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg>START CREATING</a>
-            <a class="btn" href="game.html?level=levels/sample.json">PLAY A DEMO</a>
+            <a class="btn" href="demo.html">PLAY A DEMO</a>
           </div>
         </div>
       </div>
@@ -220,7 +220,7 @@
 <!-- ============ DISCOVER ============ -->
 <section class="block lines" id="discover">
   <div class="discover-pill"><span>PLAY NOW</span></div>
-  <p class="sub-txt" style="margin-top:22px">Levels drawn on paper. Tap one to play, no account needed.</p>
+  <p class="sub-txt" style="margin-top:22px">Games written as code, the way Muse Wonder writes yours. Tap one to play, no account needed.</p>
   <div class="cards" id="cards"></div>
 </section>
 
@@ -233,7 +233,7 @@
       <form id="wlForm" novalidate>
         <div><label for="wlName">NAME</label><input id="wlName" name="name" autocomplete="name" maxlength="80" required></div>
         <div><label for="wlEmail">EMAIL</label><input id="wlEmail" name="email" type="email" autocomplete="email" maxlength="254" required></div>
-        <div class="full"><label for="wlMessage">WHAT GAME DO YOU WANT TO CREATE?</label><textarea id="wlMessage" name="message" maxlength="1000" placeholder="A lava castle my kids drew, a co-op platformer for my classroom..."></textarea></div>
+        <div class="full"><label for="wlMessage">WHAT GAME DO YOU WANT TO CREATE?</label><textarea id="wlMessage" name="message" maxlength="1000" placeholder="A racing game for my kids, a quiz for my classroom, a co-op platformer..."></textarea></div>
         <div class="full"><label for="wlSource">HOW DID YOU HEAR ABOUT US? (OPTIONAL)</label><input id="wlSource" name="source" maxlength="120" placeholder="A friend, the hackathon, social media..."></div>
         <div class="hp" aria-hidden="true"><label for="wlWebsite">Website</label><input id="wlWebsite" name="website" tabindex="-1" autocomplete="off"></div>
         <div class="err" id="wlErr" role="alert"></div>
@@ -243,17 +243,17 @@
     <div class="done" id="wlDone">
       <h2 id="wlDoneTitle">YOU'RE ON THE LIST!</h2>
       <div class="rank" id="wlRank">#1</div>
-      <p class="lead2" id="wlDoneText">We will email you as soon as your spot opens. Meanwhile, play the sample level.</p>
-      <div class="btnrow" style="justify-content:center"><a class="btn" href="game.html?level=levels/sample.json">SAMPLE LEVEL</a><a class="btn" href="login.html">LOG IN</a></div>
+      <p class="lead2" id="wlDoneText">We will email you as soon as your spot opens. Meanwhile, play a demo game.</p>
+      <div class="btnrow" style="justify-content:center"><a class="btn" href="demo.html">DEMO GAMES</a><a class="btn" href="login.html">LOG IN</a></div>
     </div>
   </div></div>
 </section>
 
 <!-- ============ FOOTER ============ -->
 <footer>
-  <div class="links"><span>Sakanfar Productions</span><span><a href="studio.html">Studio</a><a href="explore.html">Explore</a><a href="game.html?screen=1">Big screen</a><a href="login.html">Log in</a><a href="https://github.com/Achraf-ghazouani/sakanfarPlaylab" target="_blank" rel="noopener">GitHub</a></span></div>
+  <div class="links"><span>Sakanfar Productions</span><span><a href="studio.html">Studio</a><a href="explore.html">Explore</a><a href="demo.html">Demos</a><a href="login.html">Log in</a><a href="https://github.com/Achraf-ghazouani/sakanfarPlaylab" target="_blank" rel="noopener">GitHub</a></span></div>
   <div class="word">SAKANFAR<br>PLAYLAB</div>
-  <div class="bottom"><span>META HACKATHON 2026</span><span>MUSE SPARK</span><span>PHASER 3</span></div>
+  <div class="bottom"><span>META HACKATHON 2026</span><span>MUSE SPARK</span><span>MUSE WONDER</span></div>
 </footer>
 
 <script src="shared/i18n.js"></script>
@@ -379,54 +379,26 @@ $("wlForm").addEventListener("submit", async (e) => {
 });
 
 // ---------------------------------------------------------------------------
-// Discover: level cards rendered from levels/index.json
+// Discover: the three demo games written as code (demo.html runs them in the sandbox)
 // ---------------------------------------------------------------------------
-const COLORS = { start: "#4ade80", goal: "#facc15", platform: "#8b5a2b", moving_platform: "#60a5fa", coin: "#fbbf24", enemy: "#ef4444", spike: "#9ca3af", decoration: "#a78bfa" };
-function renderLevel(level, canvas) {
-  const w = 128, h = 160; canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (level.genre === "arena") {   // a shooter: the map from above
-    ctx.fillStyle = "#1a2320"; ctx.fillRect(0, 0, w, h);
-    const sx = (w - 8) / 1000, sy = (h - 8) / 1000;
-    ctx.strokeStyle = "#4b5563"; ctx.lineWidth = 2; ctx.strokeRect(4, 4, w - 8, h - 8);
-    for (const o of level.objects || []) {
-      const x = 4 + Math.round(o.x * sx), y = 4 + Math.round(o.y * sy), ow = Math.max(2, Math.round(o.w * sx)), oh = Math.max(2, Math.round(o.h * sy));
-      if (o.type === "wall") { ctx.fillStyle = "#9ca3af"; ctx.fillRect(x, y, ow, oh); }
-      else if (o.type === "prop") { ctx.fillStyle = "#a16207"; ctx.fillRect(x, y, ow, oh); }
-      else if (o.type === "spawner") { ctx.fillStyle = "#a78bfa"; ctx.beginPath(); ctx.arc(x + ow / 2, y + oh / 2, 4, 0, 7); ctx.fill(); }
-      else if (o.type === "start") { ctx.fillStyle = "#4ade80"; ctx.fillRect(x, y, 5, 5); }
-      else { ctx.fillStyle = o.type === "health" ? "#ef4444" : "#fbbf24"; ctx.fillRect(x, y, 3, 3); }
-    }
-    return;
-  }
-  const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#1e1b4b"); g.addColorStop(1, "#4c1d95"); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-  for (let i = 0; i < 40; i++) { ctx.fillStyle = i % 3 ? "#ffffff44" : "#fde68a66"; ctx.fillRect((i * 37) % w, (i * 53) % 90, 1, 1); }
-  const sx = w / 1000, sy = h / 1000;
-  for (const o of level.objects || []) {
-    ctx.fillStyle = COLORS[o.type] || "#fff";
-    const x = Math.round(o.x * sx), y = Math.round(o.y * sy), ow = Math.max(2, Math.round(o.w * sx)), oh = Math.max(2, Math.round(o.h * sy));
-    if (o.type === "coin") { ctx.fillRect(x, y, 3, 3); }
-    else if (o.type === "start" || o.type === "enemy") { ctx.fillRect(x, y + oh - 6, 4, 6); }
-    else if (o.type === "goal") { ctx.fillStyle = "#6b7280"; ctx.fillRect(x, y, 1, oh); ctx.fillStyle = COLORS.goal; ctx.fillRect(x + 1, y, 4, 3); }
-    else ctx.fillRect(x, y, ow, oh);
-  }
-}
-async function discover() {
+function discover() {
+  const GAMES = [
+    { g: "snake", genre: "CANVAS", title: "SNAKE", text: "Steer, eat apples, grow. Plain canvas, 3 KB of code.", colors: ["#101828", "#22c55e", "#ef4444"] },
+    { g: "phaser", genre: "PHASER 3", title: "STAR CATCHER", text: "Catch the stars, dodge the rocks. Arcade physics.", colors: ["#0b1020", "#7c5cff", "#ffd166"] },
+    { g: "three", genre: "THREE.JS", title: "RING FLIGHT", text: "Fly through golden rings in 60 seconds. 3D.", colors: ["#87ceeb", "#ff5533", "#ffd700"] },
+  ];
   const row = $("cards");
-  let levels = [];
-  try { levels = (await (await fetch("levels/index.json", { cache: "no-store" })).json()).levels; } catch {}
-  const genres = { sample: "PLATFORMER", level1: "NOTEBOOK", impossible: "FIXED BY AI" };
-  for (const l of levels) {
-    let level; try { level = await (await fetch("levels/" + l.file, { cache: "no-store" })).json(); } catch { continue; }
-    const name = l.file.replace(/\.json$/, "");
-    const a = document.createElement("a"); a.className = "card"; a.href = (level.genre === "arena" ? "arena.html?level=levels/" : "game.html?level=levels/") + l.file;
-    const cv = document.createElement("canvas"); renderLevel(level, cv); a.appendChild(cv);
-    const genre = document.createElement("span"); genre.className = "genre"; genre.textContent = level.genre === "arena" ? (level.view === "top" ? "TOP-DOWN SHOOTER" : level.view === "tps" ? "3RD PERSON SHOOTER" : "FPS") : genres[name.replace(".fixed", "")] || "PLATFORMER"; a.appendChild(genre);
+  for (const d of GAMES) {
+    const a = document.createElement("a"); a.className = "card"; a.href = "demo.html?g=" + d.g;
+    const cv = document.createElement("canvas"); cv.width = 128; cv.height = 160; const c = cv.getContext("2d");
+    c.fillStyle = d.colors[0]; c.fillRect(0, 0, 128, 160);
+    for (let i = 0; i < 14; i++) { c.fillStyle = d.colors[1 + (i % 2)]; c.fillRect((i * 29) % 112 + 6, (i * 47) % 140 + 8, 10, 10); }
+    a.appendChild(cv);
+    const genre = document.createElement("span"); genre.className = "genre"; genre.textContent = d.genre; a.appendChild(genre);
     const meta = document.createElement("div"); meta.className = "meta";
-    meta.innerHTML = `<small>SINGLE PLAYER &middot; ${level.genre === "arena" ? `${level.waves} WAVES` : `${l.objects} THINGS`}</small><b>${name.toUpperCase().replace(".FIXED", " (AI FIX)")}</b><p>${(level.theme || "").toUpperCase()}</p>`;
+    meta.innerHTML = `<small>WRITTEN AS CODE &middot; PLAY NOW</small><b>${d.title}</b><p>${d.text}</p>`;
     a.appendChild(meta); row.appendChild(a);
   }
-  if (!levels.length) row.innerHTML = `<p style="color:#888;padding:20px">Scan a drawing to see your levels here.</p>`;
 }
 discover();
 

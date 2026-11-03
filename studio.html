@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fbfaff">
 <!-- the loading screen: styled inline so the first paint shows it, before any other file has arrived -->
@@ -51,9 +50,7 @@
 <script src="shared/cutout.js"></script>
 <script src="shared/assetcheck.js"></script>
 <script src="shared/zip.js"></script>
-<script src="shared/model3d.js"></script>
 <script type="module" src="shared/coderun.mjs"></script>
-<script type="module" src="shared/codekinds.mjs"></script>
 <script type="module" src="shared/padroute.mjs"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
@@ -246,6 +243,11 @@
   .box .code.on { background:var(--purple); border-color:var(--purple); color:#fff; box-shadow:0 2px 6px rgba(124,58,237,.35); }
   .box .code:disabled { opacity:.85; }
   #codeBar { position:absolute; top:10px; right:12px; z-index:2; display:flex; gap:6px; }
+  #previewEmpty, #retired { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#cfc6ee; text-align:center; padding:24px; pointer-events:none; }
+  #previewEmpty b, #retired b { font-family:Fredoka, system-ui, sans-serif; font-size:22px; color:#fff; }
+  #previewEmpty[hidden], #retired[hidden] { display:none; }
+  #retired { background:#1b1535; pointer-events:auto; z-index:1; }
+  #sketchBtn.off { opacity:.4; }
   #codeBar[hidden] { display:none; }
   #codeBar button { border:0; background:rgba(27,21,53,.72); color:#fff; border-radius:999px; padding:6px 12px; font-size:12px; font-weight:700; backdrop-filter:blur(4px); }
   #codeBar button.on { background:var(--purple); }
@@ -375,7 +377,7 @@
     <button class="newbtn" id="newGameBtn" data-i18n="studio.newGame">&#10010; New game</button>
     <div class="side-h" data-i18n="studio.myGames">My games</div>
     <div id="projectsList"></div>
-    <div class="side-foot" data-i18n="studio.sideFoot">Games are saved as you chat. <a href="index.html">Home</a> &middot; <a href="explore.html">Explore</a> &middot; <a href="game.html?screen=1">Big screen</a></div>
+    <div class="side-foot" data-i18n="studio.sideFoot">Games are saved as you chat. <a href="index.html">Home</a> &middot; <a href="explore.html">Explore</a></div>
   </aside>
 
   <main>
@@ -414,12 +416,14 @@
           <div id="capNote" hidden></div>
           <div id="sendCost"></div>
           <div class="chips" id="chips">
-            <button class="chip" data-chip-cost="edit_2d" data-i18n="chip.harder">Make it harder</button><button class="chip" data-chip-cost="edit_2d" data-i18n="chip.coins">Add more coins</button><button class="chip" data-chip-cost="edit_2d" data-i18n="chip.theme">Change theme</button><button class="chip" data-chip-cost="playtest" data-i18n="chip.playtest">Playtest it</button>
+            <button class="chip" data-chip-cost="code_edit" data-i18n="chip.harder">Make it harder</button><button class="chip" data-chip-cost="code_edit" data-i18n="chip.coins">Add more coins</button><button class="chip" data-chip-cost="code_edit" data-i18n="chip.theme">Change theme</button>
           </div>
         </div>
       </section>
       <section class="preview">
-        <iframe id="preview" src="game.html?embed=1" title="Game preview" allow="autoplay; pointer-lock"></iframe>
+        <iframe id="preview" title="Game preview" allow="autoplay; pointer-lock"></iframe>
+        <div id="previewEmpty"><b data-i18n="preview.emptyTitle">Your game appears here</b><span data-i18n="preview.emptySub">Describe it, sketch it (2D) or send a picture: Muse Wonder writes it as code.</span></div>
+        <div id="retired" hidden><b>This game was made with the classic engine, which is retired.</b><span>PlayLab now writes every game as code. Rebuild it with AI code from its theme, or start a new one.</span><button class="tb primary" id="rebuildBtn">Rebuild with AI code</button></div>
         <div id="codeBar" hidden><button data-act="restart" data-i18n="code.restart">Restart</button><button data-act="toggle-pause" id="codePause" data-i18n="code.pause">Pause</button><button data-act="mute" id="codeMute" data-i18n="code.sound">Sound</button></div>
         <div id="previewStatus" data-i18n="preview.none">no game yet</div>
         <!-- first screen: the welcome sits on the stage, the chat box floats at the bottom center -->
@@ -474,7 +478,7 @@
 </div>
 <div class="modal" id="sketchModal">
   <div class="sheet">
-    <header><b>&#9998; Sketch a level</b>
+    <header><b>&#9998; <span data-i18n="sketch.title">Sketch a 2D game</span></b>
       <button class="tool on" id="penTool">Pen</button><button class="tool" id="eraserTool">Eraser</button>
       <span class="pen-sizes" id="penSizes"><button data-size="4" title="Thin"><i style="width:6px;height:6px"></i></button><button class="on" data-size="8" title="Medium"><i style="width:10px;height:10px"></i></button><button data-size="16" title="Thick"><i style="width:16px;height:16px"></i></button></span>
       <button class="tool" id="sketchUndo">Undo</button><button class="tool" id="sketchClear">Clear</button><button class="tool" id="sketchPhoto" title="Draw over the last picture of this game">Last picture</button>
@@ -482,7 +486,7 @@
     </header>
     <div class="body">
       <canvas id="sketchCanvas" width="1200" height="900"></canvas>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="hint">Draw like on paper: a ground line, boxes to stand on, circles for coins, a monster, a flag at the end.</span><span class="spacer"></span><button class="tb primary" id="sketchUse">Use drawing <span class="cost" data-cost="scan"></span></button></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="hint" data-i18n="sketch.hint">Draw your 2D game like on paper: the ground, platforms, a track or a maze, the hero, enemies, coins, the goal. Muse Spark reads it into a free plan, then Muse Wonder writes the game.</span><span class="spacer"></span><button class="tb primary" id="sketchUse"><span data-i18n="sketch.use">Use drawing</span> <span class="cost" data-i18n="sketch.free">free plan</span></button></div>
     </div>
   </div>
 </div>
@@ -518,20 +522,20 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const S = { project: null, messages: [], versions: [], level: null, attachments: [], busy: false, previewReady: false, dbOk: true, mode: "2d", codeMode: true, pendingPlan: null, code: null, codeRun: null };
-/** 2D or 3D: the chat box switch. Saved on the game (projects.mode "2d" | "3d-side"), sent to the preview (game.html draws it with
- *  shared/view3d.js), and 3D turns cost the 3D prices. Words like "3D" in a message switch it too. */
+/** 2D or 3D: the chat box switch. Saved on the game (projects.mode "2d" | "3d-side"); the plan asks for three.js in 3D and Phaser
+ *  or canvas in 2D, and 3D games cost the 3D price. Words like "3D" in a message switch it too. The sketch pad works in 2D only. */
 function setDim(d, { save = true } = {}) {
-  const arena = isArena(S.level), code = isCode(S.level);   // a game written as code carries its engine in its code: the switch is locked
-  S.mode = arena || (code ? S.level.engine === "three" : d === "3d") ? "3d" : "2d";
-  document.querySelectorAll("#dimSeg button").forEach((b) => { const on = b.dataset.dim === S.mode; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); b.disabled = (arena && b.dataset.dim === "2d") || code; });
-  $("dimSeg").title = arena ? "Arena shooters are always 3D" : code ? "This game is written as code: its engine is in the code" : "";
-  if (S.previewReady && !arena && !code) preview().postMessage({ type: "playlab:mode", mode: S.mode }, "*");
-  const projMode = arena ? "3d-world" : S.mode === "3d" ? "3d-side" : "2d";
+  const code = isCode(S.level);   // a game written as code carries its engine in its code: the switch is locked
+  S.mode = (code ? S.level.engine === "three" : d === "3d") ? "3d" : "2d";
+  document.querySelectorAll("#dimSeg button").forEach((b) => { const on = b.dataset.dim === S.mode; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); b.disabled = code; });
+  $("dimSeg").title = code ? "This game is written as code: its engine is in the code" : "";
+  $("sketchBtn").classList.toggle("off", S.mode === "3d"); $("sketchBtn").setAttribute("aria-disabled", S.mode === "3d");
+  $("sketchBtn").title = S.mode === "3d" ? "Sketching works for 2D games: switch to 2D" : "Sketch a 2D game";
+  const projMode = S.mode === "3d" ? "3d-side" : "2d";
   if (save && S.project && S.project.mode !== projMode) {
     S.project.mode = projMode;
     api("api/projects", { method: "PATCH", body: { id: S.project.id, mode: projMode } }).catch((err) => toast("Could not save the game type: " + err.message));
   }
-  if (S.level && !arena && !code) $("previewStatus").textContent = $("previewStatus").textContent.replace(/ · 3D$/, "") + (S.mode === "3d" ? " · 3D" : "");
   if (typeof updateCosts === "function") updateCosts();
 }
 const dimOf = (mode) => (String(mode || "").startsWith("3d") ? "3d" : "2d");
@@ -557,31 +561,21 @@ async function api(path, { method = "GET", body } = {}) {
 function toast(text, ms = 2500) { const t = $("toast"); t.textContent = text; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), ms); }
 
 // ---------------------------------------------------------------------------
-// Preview (game.html?embed=1 in an iframe)
+// Preview: the game written as code runs in the sandboxed iframe (shared/coderun.mjs)
 // ---------------------------------------------------------------------------
 const preview = () => $("preview").contentWindow;
-window.addEventListener("message", (e) => {
-  const m = e.data; if (!m || typeof m !== "object") return;
-  if (isCode(S.level)) return;   // a game written as code: the sandbox runner hands its messages to onCodeMessage
-  if (m.type === "playlab:ready") { S.previewReady = true; if (S.level) pushLevel(S.level, { quiet: true }); if (Cam.host) syncPlayers(); }
-  if (m.type === "playlab:event") { if (m.name === "goal") toast("Level complete on the preview!"); Cam.host?.event(m.name, m.slot); }   // phones vibrate
-  if (m.type === "playlab:state" && m.state) Cam.host?.broadcast(m.state);                                                            // phones show level, coins, paused
-});
-function pushLevel(level, { name = "studio", thumb = null, keepPlayer = false, toastText = null, quiet = false } = {}) {
+function pushLevel(level) {
   S.level = level; layout(); setDim(S.mode); queueMicrotask(updateCosts); renderCodeMode();
-  const f = $("preview");
+  $("retired").hidden = true; $("previewEmpty").hidden = !!level;
   if (isCode(level)) {   // a game written as code runs in the sandbox (shared/coderun.mjs): no origin, strict policy, the SDK inside
     if (!S.code || S.codeRun?.html !== level.html) mountCode(level.html);   // the build loop already mounted and tested this very file
     $("previewStatus").textContent = `${levelSummary(level)}${S.versions[0] ? ` · v${S.versions[0].n}` : ""}`;
     return;
   }
-  const n = level?.objects?.length || 0;
-  // the right engine for the game: a platformer runs in game.html, an arena shooter in arena.html (it asks for the level when ready)
-  const want = isArena(level) ? "arena.html?embed=1" : "game.html?embed=1";
-  if (S.code) { S.code.destroy(); S.code = null; S.codeRun = null; f.removeAttribute("sandbox"); f.removeAttribute("srcdoc"); S.previewReady = false; f.setAttribute("src", want); }   // back from the sandbox to the engines
-  else if (f.getAttribute("src") !== want) { S.previewReady = false; f.setAttribute("src", want); }
-  $("previewStatus").textContent = `${n} objects${S.versions[0] ? ` · v${S.versions[0].n}` : ""}${level?.theme ? ` · ${level.theme}` : ""}${isArena(level) ? ` · ${VIEW_NAME[level.view] || level.view} shooter · ${level.waves} waves` : S.mode === "3d" ? " · 3D" : ""}`;
-  if (S.previewReady) preview().postMessage({ type: "playlab:level", level, name, thumb: thumb || S.project?.photo || null, player: S.project?.art?.player || null, sprites: S.project?.art?.sprites || null, assets: S.project?.art?.assets || [], model: S.project?.art?.model || null, mode: S.mode, keepPlayer, toast: quiet ? null : toastText }, "*");
+  // an older game made with the classic engine (retired): no engine to run it, a rebuild with AI code is offered
+  if (S.code) { S.code.destroy(); S.code = null; S.codeRun = null; }
+  $("preview").removeAttribute("srcdoc"); $("retired").hidden = false; $("previewEmpty").hidden = true;
+  $("previewStatus").textContent = `classic game (retired)${level?.theme ? ` · ${level.theme}` : ""}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -621,13 +615,15 @@ async function openProject(id) {
     setDim(dimOf(project.mode), { save: false });
     renderMessages();
     renderHistory();
-    if (project.level) pushLevel(project.level, { quiet: true }); else { S.level = null; layout(); $("previewStatus").textContent = "no game yet"; }
+    if (project.level) pushLevel(project.level); else { S.level = null; layout(); $("previewStatus").textContent = "no game yet"; $("retired").hidden = true; $("previewEmpty").hidden = false; }
     document.querySelectorAll(".proj").forEach((b) => b.classList.toggle("active", b.dataset.id === id));
   } catch (err) { toast("Could not open that game: " + err.message); }
 }
 function newProjectUI() {
   S.project = null; S.messages = []; S.versions = []; S.level = null; S.pendingPlan = null;
-  if (S.code) { S.code.destroy(); S.code = null; S.codeRun = null; const f = $("preview"); f.removeAttribute("sandbox"); f.removeAttribute("srcdoc"); S.previewReady = false; f.setAttribute("src", "game.html?embed=1"); }
+  if (S.code) { S.code.destroy(); S.code = null; S.codeRun = null; S.previewReady = false; }
+  $("preview").removeAttribute("srcdoc"); $("retired").hidden = true; $("previewEmpty").hidden = false;
+  setDim(S.mode, { save: false });   // the switch was locked by the last code game: free again
   renderCodeMode();
   $("title").value = "Untitled game"; $("publishBtn").classList.remove("live");
   try { localStorage.removeItem("playlab.studio.project"); } catch {}
@@ -758,7 +754,7 @@ async function applyLevel(level, { note = "edited", thumb = null, keepPlayer = f
   S.project = updated;
   if (version) S.versions.unshift(version);
   renderHistory();
-  pushLevel(updated.level, { thumb: thumb || updated.photo, keepPlayer, toastText });
+  pushLevel(updated.level);
   loadProjects();
   return updated.level;
 }
@@ -816,7 +812,7 @@ $("sketchPhoto").addEventListener("click", async () => {
   try { await img.decode(); } catch { return toast("Could not load the picture"); }
   sketchSnapshot(); Sketch.ctx.drawImage(img, 0, 0, 1200, 900); Sketch.dirty = true;
 });
-$("sketchBtn").addEventListener("click", () => $("sketchModal").classList.add("show"));
+$("sketchBtn").addEventListener("click", () => { if (S.mode === "3d") return toast(I18N.t("sketch.only2d"), 3500); $("sketchModal").classList.add("show"); });
 $("sketchClose").addEventListener("click", () => $("sketchModal").classList.remove("show"));
 $("sketchUse").addEventListener("click", () => {
   const upload = Sketch.canvas.toDataURL("image/jpeg", 0.85);
@@ -843,8 +839,8 @@ function camStatus(text, cls = "") { const el = $("camStatus"); el.textContent =
 function openPhoneLink(mode = "camera") {
   Cam.wantMode = mode;
   $("camHint").textContent = mode === "pad"
-    ? "Scan the code with your phone to play with it: left, right, jump, plus restart, pause and sound. Up to 4 phones, each gets its own character. Tap Camera on the phone to scan drawings instead."
-    : "Scan the code with your phone (same Wi-Fi is best). Point the phone at a drawing: it captures by itself and the level appears here. Keep drawing and it re-scans. Tap PLAY on the phone to use it as a controller.";
+    ? "Scan the code with your phone to play with it: the phone shows the controls the game asks for (a d-pad, a stick, steering, buttons or a tap pad), plus restart, pause and sound. Up to 4 phones. Tap Camera on the phone to send drawings instead."
+    : "Scan the code with your phone (same Wi-Fi is best). Point the phone at a drawing: it captures it and Muse Spark reads it into a plan for an AI code game here. Tap PLAY on the phone to use it as a controller.";
   $("camModal").classList.add("show"); $("camPip").classList.remove("show"); startCamHost();
 }
 const openCamLink = () => openPhoneLink("camera");
@@ -914,50 +910,22 @@ async function onCamInk(msg) {
   clearTimeout(onCamInk.t); onCamInk.t = setTimeout(() => $("camView").classList.remove("ink"), 8000);
   window.__studioInkSeq = msg.seq;
 }
-/** A picture from the phone camera: scanned here with this account, the result goes back to the phone. */
-let phoneScanChain = Promise.resolve();
+/** A picture from the phone camera: read here with this account into AI code (the phone hears that it was sent). */
 function runPhoneScan(p, msg) {
   const reply = (o) => { try { if (p.conn.open) p.conn.send({ t: "scan-result", seq: msg.seq, ...o }); } catch {} };
-  if (!(S.level && !isCode(S.level))) {   // nothing new without AI code: the camera shot is read into a plan, or improves the code game
-    if (S.busy) { reply({ ok: true, code: true, busy: true }); return; }   // the phone keeps capturing: one at a time
-    reply({ ok: true, code: true });
-    const img = { upload: msg.image, thumb: msg.thumb || null, name: "phone camera" };
-    S.busy = true; $("sendBtn").disabled = true;
-    (async () => {
-      try {
-        await ensureProject("Drawing from the phone");
-        const att = [{ name: "phone camera", type: "image/jpeg", thumb: img.thumb }];
-        appendMessage({ role: "user", content: "", meta: { attachments: att } }); await saveMessage("user", "", { attachments: att });
-        await pictureToCode(img, "", []);
-      } catch (err) { toast("Could not read the picture: " + err.message); }
-      S.busy = false; $("sendBtn").disabled = false; layout();
-    })();
-    return;
-  }
-  phoneScanChain = phoneScanChain.then(async () => {
+  if (S.busy) { reply({ ok: true, code: true, busy: true }); return; }   // the phone keeps capturing: one at a time
+  reply({ ok: true, code: true });
+  const img = { upload: msg.image, thumb: msg.thumb || null, name: "phone camera" };
+  S.busy = true; $("sendBtn").disabled = true; layout();
+  (async () => {
     try {
-      const prev = S.level ? strip(S.level) : undefined;
-      const data = await api("api/scan", { method: "POST", body: { image: msg.image, previous: prev, provider: prev ? "baseten" : "meta" } });
-      reply({ ok: true, level: data.level });
-      await onCamLevel({ seq: msg.seq, level: data.level, thumb: msg.thumb });
-    } catch (err) { reply({ ok: false, error: err.message }); camStatus("scan failed: " + err.message, "err"); }
-  });
-}
-async function onCamLevel(msg) {
-  if (!msg.level || !Array.isArray(msg.level.objects)) return;
-  window.__studioPhoneLevelSeq = msg.seq;
-  $("camView").classList.remove("ink"); $("camTag").textContent = "level built";
-  const lvl = msg.level, d = lvl.diff?.short || null, redrawn = !!S.level && !!d;
-  const att = [{ name: "phone camera", type: "image/jpeg", thumb: msg.thumb || null }];
-  try {
-    await ensureProject("Drawing from the phone");
-    appendMessage({ role: "user", content: "", meta: { attachments: att } });
-    await saveMessage("user", "", { attachments: att });
-    await applyLevel(lvl, { note: redrawn ? "redrawn on paper" : "from phone camera", thumb: msg.thumb || null, keepPlayer: !!S.level, toastText: redrawn ? `Redrawn: ${d}` : `Built from your drawing: ${lvl.objects.length} objects` });
-    await addCard({ icon: "&#128247;", title: redrawn ? "Redrawn on paper" : "Level from the phone camera", text: `${lvl.objects.length} objects · ${lvl.theme}${d ? ` · ${d}` : ""}` });
-    await streamAssistant(redrawn ? `I saw your changes: ${d}. Keep drawing!` : `I found ${lvl.objects.length} things in your drawing (${lvl.theme}). It is playable on the right. Keep drawing and I will update it.`);
-    await saveMessage("assistant", `Built ${lvl.objects.length} objects from the phone camera.`);
-  } catch (err) { toast("Could not save the level: " + err.message); }
+      await ensureProject("Drawing from the phone");
+      const att = [{ name: "phone camera", type: "image/jpeg", thumb: img.thumb }];
+      appendMessage({ role: "user", content: "", meta: { attachments: att } }); await saveMessage("user", "", { attachments: att });
+      await pictureToCode(img, "", []);   // Muse Spark reads the shot into a plan, or improves the code game with it
+    } catch (err) { toast("Could not read the picture: " + err.message); }
+    S.busy = false; $("sendBtn").disabled = false; layout();
+  })();
 }
 const readAsDataUrl = (file) => new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(null); fr.readAsDataURL(file); });
 async function addAttachment(file) {
@@ -1039,19 +1007,14 @@ async function send() {
     await saveMessage("user", text, { attachments: attMeta });
     const img = atts.find((a) => a.upload);
     const model3d = atts.find((a) => a.model || /\.(glb|gltf|fbx)$/i.test(a.name));
-    const classicGame = !!S.level && !isCode(S.level);                              // an old game made with the classic engines: it keeps them
     if (!img && resetsPlayer(text) && S.project?.art?.player) await setPlayerArt(null, "Back to the default player.");
-    else if (model3d && !img && !classicGame) await codeModel(model3d, text, history);   // a GLB / GLTF / FBX: the 3D model inside a game written as code
+    else if (model3d && !img) await codeModel(model3d, text, history);                  // a GLB / GLTF / FBX: the 3D model inside the game
     else if (img && await handlePicture(img, text)) {                                    // the picture became the player, a sprite or an asset
       if (isCode(S.level)) await useAssetsInGame(text);                                 // put it in the game right away (a patch)
-      else if (text && !classicGame) await routeWords(text, history);                   // "this is my hero, make a racing game": the plan, with the picture in PlayLab.assets
+      else if (text) await routeWords(text, history);                                   // "this is my hero, make a racing game": the plan, with the picture in PlayLab.assets
     }
-    else if (img && !classicGame) await pictureToCode(img, text, history);              // AI code reads the picture (a sketch, a photo, the camera): a plan from it, or the game improved with it
-    else {
-      if (img) await runScan(img);                                   // a picture goes through the scanner, like the phone flow
-      if (model3d && !img) await handleModel(model3d, text);          // a 3D model: the game goes 3D and the model is the player
-      else if (text || !img) await routeWords(text, history);         // the words: a plan, a code game, or the game agent (after the scan, if there was one)
-    }
+    else if (img) await pictureToCode(img, text, history);                               // AI code reads the picture (a sketch, a photo, the camera): a plan from it, or the game improved with it
+    else await routeWords(text, history);                                                // the words: a plan, or a change to the game
   } catch (err) {
     hideTyping();
     await streamAssistant("Something went wrong: " + err.message);
@@ -1159,7 +1122,7 @@ async function askRole(img, text, plan, c) {
       if (S.busy) return;
       row.remove(); S.busy = true; $("sendBtn").disabled = true;
       const [kind, role] = as.split(":"); img.role = kind; img.objRole = role; img.guessName = c?.name; img.hint = kind === "ui" && plan.as === "ui" ? plan.hint : "";
-      try { if (!(await applyPicturePlan(img, pictureRole(text, img), text))) await runScan(img); } catch (err) { hideTyping(); toast(err.message, 4000); }
+      try { if (!(await applyPicturePlan(img, pictureRole(text, img), text))) await pictureToCode(img, text, []); } catch (err) { hideTyping(); toast(err.message, 4000); }
       S.busy = false; $("sendBtn").disabled = false;
     });
     row.appendChild(b);
@@ -1177,8 +1140,7 @@ async function saveAsset(img, plan) {
   const what = planWords(plan), ui = /^ui_/.test(plan.role);
   const frames = asset.grid ? ` · ${asset.grid.cols} x ${asset.grid.rows} ${plan.role === "spritesheet" ? "frames → " + (asset.grid.rows >= 3 ? "idle, run, jump" : asset.grid.rows === 2 ? "idle, run" : "run") : "cells"}` : asset.w ? ` · ${asset.w} x ${asset.h}` : "";
   await addCard({ icon: ui ? "&#128433;&#65039;" : "&#127912;", title: ui ? "Saved to the UI kit" : "Saved as a game asset", text: what + frames });
-  const used = { background: "It is behind your game now, scrolling a little slower than the level.", texture: "The platforms wear it now.", tileset: "The platforms wear its first tile now.", spritesheet: "The player is animated with it now: the rows are idle, run and jump." }[plan.role]
-    || (ui ? "It is in your game's UI kit now: the restart button, the message panel, the coin counter and the phones' pad wear what you give them." : "It is in your game's assets.");
+  const used = "Muse Wonder uses it in the game (PlayLab.assets), with a drawn fallback.";
   await streamAssistant(`Got it: a ${what}. ${used}`);
   await saveMessage("assistant", `Saved a ${what}.`);
 }
@@ -1196,57 +1158,11 @@ async function detectedCard(plans) {
   const label = (key) => key === "level" ? "level drawing" : key === "player" ? "player character" : key.startsWith("object:") ? ROLE_LABEL[key.slice(7)] : key.startsWith("model:") ? `3D model (${key.slice(6)})` : ROLE_WORDS[key] || key;
   const list = [...groups].map(([key, g]) => `${g.n} ${g.words.length === 1 && g.n === 1 ? g.words[0] + " " : ""}${plural(label(key), g.n)}${g.words.length && !(g.words.length === 1 && g.n === 1) ? ` (${g.words.join(", ")})` : ""}`).join(", ");
   await addCard({ icon: "&#129516;", title: I18N.t("detected"), text: `${list || "nothing"}. ${I18N.t("gameIs", { d: S.mode === "3d" ? "3D" : "2D" })}` });
-  if (S.mode === "3d" && !isArena(S.level) && !plans.some((p) => p.as === "model")) offerSwitch2D();   // pictures in a 3D game: kept in 3D, one tap back to 2D
 }
 
 // ---------------------------------------------------------------------------
-// 3D models: a .glb / .gltf / .fbx makes the game 3D (three.js) and becomes the player (or an enemy, when the words say so).
-// Undo, stay 2D bakes the model into a sprite sheet (shared/model3d.js) so the 2D player wears it instead.
+// (3D models: codeModel, with the code builder below.)
 // ---------------------------------------------------------------------------
-async function handleModel(a, text) {
-  if (!a.modelSrc) { await streamAssistant(`${a.name} is too big: 3D models up to 1.8 MB, please.`); return; }
-  showTyping();
-  const role = /\b(enemy|enemies|monster|zombie|villain|bad guy)\b/i.test(text || "") ? "enemy" : "player";
-  const model = { src: a.modelSrc, name: a.name, role, size: a.size || 0 };
-  const was = S.mode;
-  try { await saveArt({ ...(S.project?.art || {}), model }); }
-  catch (err) { hideTyping(); await streamAssistant("I could not save the model: " + err.message); return; }
-  if (S.mode !== "3d") setDim("3d");
-  toPreview({ type: "playlab:model", model });
-  hideTyping();
-  await addCard({ icon: "&#129513;", title: "3D model", text: `${a.name} · ${Math.round((a.size || 0) / 1024)} KB · the ${role}` });
-  if (S.batch) S.batch.plans.push({ as: "model", role, name: a.name }); else await detectedCard([{ as: "model", role, name: a.name }]);
-  if (was !== "3d") {
-    await streamAssistant(`You uploaded a 3D model, so I switched the game to 3D: ${a.name} is the ${role} now, and 3D prices apply from here.${S.level ? "" : " Describe a level, or a shooter, and it is built in 3D."}`);
-    if (!S.batch) offerUndo3D(a, model);
-  } else await streamAssistant(`Got it: ${a.name} is the ${role} of your 3D game now.`);
-  await saveMessage("assistant", `3D model ${a.name} is the ${role}.`);
-}
-/** A card with one chip: back to 2D, the model baked into a sprite sheet the 2D player wears. */
-function offerUndo3D(a, model) {
-  const el = appendMessage({ role: "tool", content: "", meta: { card: { icon: "&#8617;&#65039;", title: "Rather stay in 2D?", text: "I can bake the model into a sprite sheet for the 2D game." } } });
-  const row = document.createElement("div"); row.className = "choices";
-  const b = document.createElement("button"); b.type = "button"; b.textContent = "Undo, stay 2D";
-  b.addEventListener("click", async () => {
-    if (S.busy) return;
-    row.remove(); S.busy = true; $("sendBtn").disabled = true; showTyping();
-    try {
-      setDim("2d");
-      const sheet = await Model3D.bake(model, { frames: 4, height: 256 });
-      const asset = { id: Math.random().toString(36).slice(2, 10), role: "spritesheet", name: `${a.name} (baked)`, hint: "", src: sheet.src, w: sheet.w, h: sheet.h, grid: sheet.grid };
-      const assets = [...(S.project?.art?.assets || []).filter((x) => x.role !== "spritesheet"), asset];
-      await saveArt({ ...(S.project?.art || {}), assets });
-      toPreview({ type: "playlab:assets", assets });
-      hideTyping();
-      await addCard({ icon: "&#127912;", title: "Baked into a sprite sheet", text: `${asset.name} · 4 frames` });
-      await streamAssistant("Back to 2D. I baked the model into a 4-frame sprite sheet and the player wears it; 2D prices apply again.");
-      await saveMessage("assistant", "Back to 2D with the model baked into a sprite sheet.");
-    } catch (err) { hideTyping(); await streamAssistant("Back to 2D, but I could not bake the model: " + err.message); }
-    S.busy = false; $("sendBtn").disabled = false;
-  });
-  row.appendChild(b); el.appendChild(row);
-}
-/** Choices the agent offers (a kind of game it cannot make: the closest two): each chip sends its words as the next message. */
 /** Chips under a card: a string is sent as the next message; { label, run } runs its own function (the label shows as the message). */
 function suggestChips(items) {
   const el = appendMessage({ role: "tool", content: "", meta: { card: { icon: "&#128161;", title: "Pick one, or describe something else", text: "" } } });
@@ -1266,15 +1182,6 @@ async function runChip(fn, label) {
   try { await fn(); } catch (err) { hideTyping(); await streamAssistant("Something went wrong: " + err.message); }
   S.busy = false; $("sendBtn").disabled = false; layout(); $("composer").focus();
 }
-/** A picture landed in a 3D game: it stays 3D (cut-outs, textures, UI), with one chip back to 2D. */
-function offerSwitch2D() {
-  const el = appendMessage({ role: "tool", content: "", meta: { card: { icon: "&#128161;", title: "Still 3D", text: "Pictures work in 3D too (cut-outs, textures, UI)." } } });
-  const row = document.createElement("div"); row.className = "choices";
-  const b = document.createElement("button"); b.type = "button"; b.textContent = "Switch to 2D instead";
-  b.addEventListener("click", () => { row.remove(); setDim("2d"); toast("2D: the classic flat view", 2500); });
-  row.appendChild(b); el.appendChild(row);
-}
-
 // ---------------------------------------------------------------------------
 // Many files at once: a drop, a paste, the clip button or a ZIP. Two or more pictures open the review grid: each file with
 // the role the local checks guessed (a chip to change), the engine the files imply, and Apply all.
@@ -1339,12 +1246,12 @@ async function applyReview() {
   try {
     await ensureProject(r.words || `Game from ${r.items.length} files`);
     await saveMessage("user", r.words, { attachments: attMeta });
-    for (const it of models) await handleModel(it.att, r.words);   // models first: they switch the engine
+    for (const it of models) await codeModel(it.att, "", []);   // models first: they make the game 3D
     for (const it of items) {
       const a = it.att;
       if (it.role === "auto") { a.role = "auto"; a.objRole = undefined; a.hint = ""; }
       else { a.role = it.role === "level" ? "level" : it.role === "player" ? "player" : OBJECT_SLOT[it.role] ? "object" : /^ui_/.test(it.role) ? "ui" : "asset"; a.objRole = OBJECT_SLOT[it.role] || (a.role === "ui" || a.role === "asset" ? it.role : undefined); a.hint = it.hint || ""; }
-      try { if (!(await handlePicture(a, it.role === "auto" ? r.words : ""))) await runScan(a); }
+      try { if (!(await handlePicture(a, it.role === "auto" ? r.words : ""))) await pictureToCode(a, r.words, []); }
       catch (err) { hideTyping(); toast(`${a.name}: ${err.message}`, 5000); }
     }
     await detectedCard(S.batch.plans);
@@ -1377,10 +1284,10 @@ async function makePictureSprite(img, plan, text) {
   thinkOpen("Your picture").add(cut.how === "sam" ? "Cut out along the mask" : cut.keyed ? "Background cut out" : "Kept as it is", cut.how === "sam" ? "SAM 3.1" : "free fill", "done");
   const drawn = how === "muse" ? "Muse Image drew it as a game sprite" : cut.how === "sam" ? "SAM 3.1 cut it out of your picture" : cut.keyed ? "I cut it out of your picture" : "I used your picture as it is";
   if (kind === "character") {
-    await setPlayerArt(cut.src, S.level ? `${drawn}: it is the player now. Try it on the right!` : `${drawn}! Now describe a level or draw one, and they will play it.`);
+    await setPlayerArt(cut.src, isCode(S.level) ? `${drawn}: it is your player now.` : `${drawn}! Now describe your game (or draw it in 2D) and Muse Wonder builds it around this player.`);
   } else {
     const what = ROLE_LABEL[plan.role];
-    await setObjectSprite(plan.role, cut.src, S.level ? `${drawn}: every ${what} in the game uses it now.` : `${drawn}. Every ${what} in your next level will use it.`);
+    await setObjectSprite(plan.role, cut.src, isCode(S.level) ? `${drawn}: it is your ${what} now.` : `${drawn}. Your next game uses it for the ${what}.`);
   }
 }
 /** SAM 3.1 (api/art cutout, 1 credit) finds the character or object in the picture and the page cuts it out; null when it cannot (no credits, an error). */
@@ -1421,105 +1328,6 @@ async function setObjectSprite(role, src, reply) {
   await saveMessage("assistant", `Set the ${role} sprite from a picture.`);
 }
 
-/** A picture becomes a level through /api/scan (the same scanner as the phone flow). */
-async function runScan(img) {
-  showTyping();
-  const what = img.sketch ? "sketch" : "picture";
-  const th = thinkOpen(`Building from your ${what}`), reading = th.add(S.level ? "Reading the drawing and comparing it with the last scan" : "Reading the drawing", "Muse Spark 1.3");
-  try {
-    const data = await api("api/scan", { method: "POST", body: { image: img.upload, previous: S.level ? strip(S.level) : undefined } });
-    hideTyping();
-    const lvl = data.level, pt = data.meta?.playtest, problems = pt?.before?.problems || [], model = modelName(data.meta?.model || data.meta?.provider);
-    th.set(reading, { state: "done", model });
-    await th.reveal(`Objects found: ${lvl.objects.length} (${lvl.theme})${lvl.diff?.short ? " · " + lvl.diff.short : ""}`, model);
-    await th.reveal("Checking every jump", "playtest agent");
-    await th.reveal(problems.length ? `Problems found: ${problems.length}` : "No problems: every platform, coin and goal is reachable", "playtest agent");
-    if (problems.length) await th.reveal(`Fixes applied: ${(pt?.fixes || lvl.fixes || []).length || problems.length}`, "instant fix");
-    await th.finish("Ready");
-    await applyLevel(lvl, { note: `from ${what}`, thumb: img.art || img.thumb, toastText: `Built from your ${what}: ${lvl.objects.length} objects` });
-    if (S.batch) S.batch.plans.push({ as: "level" });
-    const d = lvl.diff?.short;
-    await addCard({ icon: img.sketch ? "&#9998;" : "&#128444;", title: `Level from your ${what}`, text: `${lvl.objects.length} objects · ${lvl.theme}${d ? ` · ${d}` : ""}${problems.length ? ` · quick-fixed ${problems.length} impossible part${problems.length > 1 ? "s" : ""}` : " · every jump reachable"}` });
-    await streamAssistant(`Done. I found ${lvl.objects.length} things (${lvl.theme}). It is playable on the right${problems.length ? ", and I fixed what was impossible" : ""}.`);
-    await saveMessage("assistant", `Built ${lvl.objects.length} objects from the picture.`);
-  } catch (err) { hideTyping(); th.fail("Could not read the picture: " + err.message); await streamAssistant("I could not read that picture: " + err.message); }
-}
-
-/** The game agent (Muse Spark): words in, a reply and maybe a new level or an action out. */
-async function askAgent(text, history) {
-  showTyping();
-  const th = startThinking(S.level ? "Changing your game" : "Designing your game"), t0 = performance.now();
-  const thinking = th.add(S.level ? "Reading your game and your message" : (S.mode === "3d" ? "Designing a 3D game from your words" : "Designing a game from your words"), "Muse Spark 1.3");
-  let res;
-  try {
-    res = await api("api/agent", { method: "POST", body: { project_id: S.project?.id, mode: S.mode, message: text, level: S.level ? strip(S.level) : null, history } });
-  } catch (err) { hideTyping(); th.fail("The agent could not answer: " + err.message); await streamAssistant("The agent could not answer: " + err.message); return; }
-  hideTyping();
-  const model = modelName(res.credits?.model || res.meta?.model);
-  if (!res.level && !res.credits && performance.now() - t0 < 1500) th.discard();   // a quick answer without the model: nothing to show
-  else th.set(thinking, { state: "done", model });
-  if (res.level && Array.isArray(res.level.objects)) {
-    const isEdit = res.kind === "edit";
-    const note = res.note || (isEdit ? "edited" : "new level");
-    await th.reveal(`${isEdit ? "Changed" : "Built"}: ${res.level.objects.length} objects (${res.level.theme})${res.diff ? " · " + res.diff : ""}`, model);
-    await th.reveal(isArena(res.level) ? "Checking every gate and pickup can reach the player" : "Checking every jump", "playtest agent");
-    const fixedN = res.playtest?.fixed || 0;
-    await th.reveal(fixedN ? `Problems found: ${fixedN}` : (res.playtest?.ok === false ? "Some spots are still tricky" : "No problems: everything is reachable"), "playtest agent");
-    if (fixedN) await th.reveal(`Fixes applied: ${(res.playtest?.fixes || []).length || fixedN}`, "instant fix");
-    await th.finish("Ready");
-    await applyLevel(res.level, { note, keepPlayer: isEdit, toastText: note });
-    const fixed = res.playtest?.fixed || 0;
-    const kindText = isArena(res.level) ? ` · ${VIEW_NAME[res.level.view] || res.level.view} shooter · ${res.level.waves} waves` : "";
-    await addCard({ icon: isArena(res.level) ? "&#127919;" : isEdit ? "&#9998;" : "&#10024;", title: note, text: `${res.level.objects.length} objects · ${res.level.theme}${kindText}${res.diff ? ` · ${res.diff}` : ""}${fixed ? ` · patched ${fixed} ${isArena(res.level) ? "walled-off" : "impossible"} spot${fixed > 1 ? "s" : ""}` : ""}` });
-  }
-  if (th.open) await th.finish((res.actions || []).some((a) => a.type === "playtest") ? "Running the playtest agent next" : "Answered");
-  await streamAssistant(res.reply || "...");
-  await saveMessage("assistant", res.reply || "", res.level ? { level: true, note: res.note || null } : null);
-  for (const action of res.actions || []) await runAction(action);
-}
-
-/** Actions the page runs itself with the existing endpoints. */
-async function runAction(action) {
-  if (action.type === "mode") { setDim(action.mode); return; }
-  if (action.type === "chips" && Array.isArray(action.items)) { suggestChips(action.items); return; }
-  if (action.type === "code") { await planCode(String(action.prompt || ""), {}); return; }   // a kind the engines do not have: the code builder, plan first
-  if (action.type === "view" && isArena(S.level)) {
-    S.level = { ...S.level, view: action.view };
-    toPreview({ type: "playlab:view", view: action.view });
-    $("previewStatus").textContent = $("previewStatus").textContent.replace(/ · (first person|third person|top-down) shooter/, ` · ${VIEW_NAME[action.view]} shooter`);
-    if (S.project) api("api/projects", { method: "PATCH", body: { id: S.project.id, level: S.level, note: `view: ${VIEW_NAME[action.view]}` } }).then(({ project, version }) => { S.project = project; if (version) { S.versions.unshift(version); renderHistory(); } }).catch(() => {});
-    return;
-  }
-  if (action.type === "playtest") {
-    if (!S.level) return;
-    showTyping();
-    const th = startThinking("Playtest"), checking = th.add("Checking every jump, coin and goal", "playtest agent");
-    try {
-      const { level, report, credits } = await api("api/fix", { method: "POST", body: { level: strip(S.level) } });
-      hideTyping();
-      th.set(checking, { state: "done" });
-      if (report.before.ok) await th.reveal("No problems: every platform, coin and goal is reachable", "playtest agent");
-      else {
-        await th.reveal(`Problems found: ${report.before.problems.length}`, "playtest agent");
-        if (report.fixedBy === "ai" || report.fixedBy === "ai+auto") await th.reveal(`Repaired with minimal edits: ${(report.fixes || []).length} change${(report.fixes || []).length === 1 ? "" : "s"}`, modelName(credits?.model));
-        else await th.reveal(report.aiError ? "The model could not repair it: the instant fix took over" : `Fixes applied: ${(report.fixes || []).length}`, "instant fix");
-        await th.reveal("Checking again", "playtest agent");
-        await th.reveal(report.after?.ok ? "Everything is reachable now" : "A few spots are still tricky", "playtest agent", report.after?.ok ? "done" : "skip");
-      }
-      await th.finish("Ready");
-      if (report.before.ok) { await addCard({ icon: "&#9989;", title: "Playtest", text: "every platform, coin and goal is reachable" }); await streamAssistant("All good: every platform, coin and goal is reachable."); }
-      else {
-        await applyLevel(level, { note: "playtest fix", keepPlayer: true, toastText: "Playtest agent fixed the level" });
-        await addCard({ icon: "&#128295;", title: `Playtest: fixed ${report.before.problems.length} impossible part${report.before.problems.length > 1 ? "s" : ""}`, text: (report.fixes || []).join(" · ") });
-        await streamAssistant(`I found ${report.before.problems.length} impossible part${report.before.problems.length > 1 ? "s" : ""} and fixed ${report.fixedBy === "ai" ? "them with the AI" : "them"}. ${report.after.ok ? "Everything is reachable now." : "A few spots are still tricky."}`);
-      }
-      await saveMessage("assistant", "Playtest done.");
-    } catch (err) { hideTyping(); th.fail("Playtest failed: " + err.message); await streamAssistant("Playtest failed: " + err.message); }
-  }
-}
-const strip = (l) => ({ ...(l.genre === "arena" ? { genre: "arena", view: l.view, waves: l.waves } : {}), theme: l.theme, aspect: l.aspect, objects: l.objects.map(({ type, label, x, y, w, h }) => ({ type, label, x, y, w, h })) });
-const isArena = (l) => !!l && l.genre === "arena";
-const VIEW_NAME = { fps: "first person", tps: "third person", top: "top-down" };
 
 // ---------------------------------------------------------------------------
 // Any game from a prompt: a kind the engines do not have (racing, puzzle, sports, snake...) or the AI code switch. Muse Spark
@@ -1551,7 +1359,6 @@ async function routeWords(text, history) {
     return planCode(S.pendingPlan.prompt, { change: text, previous: S.pendingPlan.plan, history });
   }
   if (isCode(S.level)) return buildCode({ plan: S.level.plan, prompt: S.level.prompt || text }, { change: text });
-  if (S.level) return askAgent(text, history);   // a game made with the classic engines (an old game, a 2D drawing): the game agent changes it
   return planCode(text, { history });             // a new game: always written as code (a free plan first)
 }
 /** A picture saved on a game written as code (player, sprite, asset): Muse Wonder puts it where it belongs right away (a patch,
@@ -1593,15 +1400,16 @@ async function codeModel(a, text, history) {
   const reply = `Got your 3D model: ${a.name} will be the ${role} of your game, in 3D. Describe the game and Muse Wonder writes it around the model.`;
   await streamAssistant(reply); await saveMessage("assistant", reply);
 }
-/** AI code is always on: every new game is written as code. The label only dims on an old game made with the classic engines. */
+/** AI code is always on: every game is written as code (the label is not a switch). */
 function renderCodeMode() {
-  const classic = !!S.level && !isCode(S.level);
-  $("codeBtn").classList.toggle("on", !classic);
-  $("codeBtn").title = classic ? "An older game made with the classic engine: your words change it there. New games are always AI code." : "Every game is written as code by Muse Wonder: words, sketches, photos and the camera";
   $("codeBar").hidden = !isCode(S.level);
-  const playtest = [...document.querySelectorAll("#chips .chip")].find((c) => c.dataset.chipCost === "playtest");
-  if (playtest) playtest.hidden = !classic;   // the playtest agent checks classic levels; code games have the smoke test
 }
+/** An older classic game: rebuild it with AI code from its theme (a free plan first). */
+$("rebuildBtn").addEventListener("click", () => {
+  const l = S.level; if (!l || isCode(l) || S.busy) return;
+  const kind = l.genre === "arena" ? "an arena shooter (waves of enemies)" : "a 2D platformer (run, jump, coins, a flag at the end)";
+  runChip(() => planCode(`${kind} with the theme "${l.theme || "my game"}"`, {}), `Rebuild "${S.project?.title || l.theme || "this game"}" with AI code`);
+});
 /** The bar over a generated game: the same menu the phones have, through the SDK. */
 $("codeBar").addEventListener("click", (e) => { const b = e.target.closest("button[data-act]"); if (b && S.code) S.code.send({ type: "playlab:menu", action: b.dataset.act }); });
 function renderCodeBar(state) {
@@ -1947,14 +1755,13 @@ $("noCreditsClose").addEventListener("click", () => $("noCredits").classList.rem
 /** Prices from api/costs (display only; the server decides the real charge). */
 S.costs = {};
 const price = (action) => S.costs[action]?.credits;
-const CHIP_COST = { "Make it harder": "edit_2d", "Add more coins": "edit_2d", "Change theme": "edit_2d", "Playtest it": "playtest", "Generate art": "soon", "Make it 3D": "soon", "Share": "free" };
 function costTag(action) {
   if (action === "soon") return `<span class="cost soon">soon</span>`;
   if (action === "free") return `<span class="cost free">free</span>`;
   const n = price(action); return n === undefined ? "" : n === 0 ? `<span class="cost free">free</span>` : `<span class="cost">${n}</span>`;
 }
 function updateCosts() {
-  document.querySelectorAll("#chips .chip").forEach((c) => { const label = c.dataset.label || (c.dataset.label = c.textContent); c.innerHTML = esc(label) + costTag(isCode(S.level) && c.dataset.chipCost !== "playtest" ? "code_edit" : c.dataset.chipCost || CHIP_COST[label]); });
+  document.querySelectorAll("#chips .chip").forEach((c) => { const label = c.dataset.label || (c.dataset.label = c.textContent); c.innerHTML = esc(label) + costTag("code_edit"); });
   document.querySelectorAll("[data-cost]").forEach((el) => { const n = price(el.dataset.cost); el.textContent = n === undefined ? "" : `${n} ${I18N.t(n === 1 ? "credit.one" : "credit.many")}`; });
   const text = $("composer").value.trim(), img = S.attachments.find((a) => a.upload);
   if (img) {
@@ -1969,7 +1776,7 @@ function updateCosts() {
   // games written as code: a pending plan (go builds it), a code game (words rewrite it), the AI code switch or a kind the engines do not have (a free plan first)
   if (S.pendingPlan) { const n = codePrice(S.pendingPlan.plan); $("sendCost").textContent = I18N.t("send.go", { n: n ?? "?", credits: creditWord(n) }); return; }
   if (isCode(S.level)) { const n = price("code_edit"); $("sendCost").textContent = !text ? "" : n === undefined ? `Send · ${I18N.t("send.changeCode")}` : I18N.t("send.line", { n, credits: creditWord(n), what: I18N.t("send.changeCode"), balance: S.me?.balance ?? 0 }); return; }
-  if (!S.level) { const n = price(S.mode === "3d" || /\b3d\b/i.test(text) ? "code_create_3d" : "code_create_2d"); $("sendCost").textContent = !text ? "" : I18N.t("send.planFree", { n: n ?? "?", credits: creditWord(n) }); return; }
+  { const n = price(S.mode === "3d" || /\b3d\b/i.test(text) ? "code_create_3d" : "code_create_2d"); $("sendCost").textContent = !text ? "" : I18N.t("send.planFree", { n: n ?? "?", credits: creditWord(n) }); return; }
   const d3 = S.mode === "3d" || /\b3d\b/i.test(text) || /\b(shooter|fps|tps|first.?person|third.?person|top.?down|zombies?|horde|waves?\s+of|survive|survival|arena)\b/i.test(text);
   const action = hasImg ? "scan" : S.level ? (d3 ? "edit_3d" : "edit_2d") : (d3 ? "create_3d" : "create_2d");
   const n = price(action);

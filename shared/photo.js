@@ -1,5 +1,5 @@
 // shared/photo.js — browser helpers to turn a photo File into a resized JPEG data URL.
-// Classic script (no module) so both index.html and game.html can use window.PhotoUtil.
+// Classic script (no module) so the pages can use window.PhotoUtil.
 window.PhotoUtil = {
   /** Decode a File into an <img>. Browsers apply EXIF rotation to <img>, so canvases drawn from it are upright. */
   loadImage(file) {
@@ -23,5 +23,5 @@ window.PhotoUtil = {
     return c.toDataURL("image/jpeg", quality);
   },
   UPLOAD_SIDE: 1600,
-  THUMB_SIDE: 720,          // also the source of the drawn art (shared/inkart.js), so not too small
+  THUMB_SIDE: 720,          // the copy Muse Image and SAM 3.1 work from, so not too small
 };

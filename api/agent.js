@@ -1,8 +1,5 @@
-// api/agent.js — the Studio game agent endpoint (Vercel serverless function). Five tasks on one function (the Hobby plan
-// allows 12 functions and api/ has 12):
-//   POST { message, level?, history?: [{role, content}], attachments?: [{name, type}] }          the chat agent (platformers, arenas)
-//   -> 200 { reply, actions, level?, kind?: "create"|"edit", note?, diff?, playtest?, meta?, credits? }
-//   POST { task: "plan", message, plan?, history?, image? }                                        a plan for a game written as code (free; a picture is read into it)
+// api/agent.js — the Studio's AI code endpoint (Vercel serverless function). Every game is written as code; four tasks:
+//   POST { task: "plan", message, plan?, history?, image?, mode? }                                  a plan for the game (free; a picture is read into it)
 //   -> 200 { plan, meta: { model, ms } }
 //   POST { task: "code", plan, prompt, project_id?, change?, previous_html? }   (also POST /api/build-code, a rewrite)
 //   -> 200 text/event-stream: data: {e:"start"} ... {e:"progress", chars, lines, rewrite?} ... {e:"done", html, notes, scan, engine, patch, credits, fix} | {e:"error", error}
@@ -11,17 +8,11 @@
 //   -> the same stream; done carries the next token and the attempt number
 //   POST { task: "look", token, plan, prompt, snapshot }                                           the vision check (free, token-bound)
 //   -> 200 { match, looksLike, problems, suggestion, model, ms }
-// Credits: a chat turn without a level costs create_2d, a turn on an existing level costs edit_2d (402 when the balance is
-// short); replies that need no AI are free; a failed AI call is refunded. A code build costs code_create_2d / code_create_3d
-// (code_edit with previous_html), charged before the stream starts and refunded when the model fails. Fixes and looks are
-// free but need the token a paid build handed out (20 minutes, at most MAX_FIXES fixes).
-// Muse Spark (Meta Model API) answers with function tools; the server validates the level, runs the quick reachability fix
-// and returns it. Muse Wonder writes and repairs code games (lib/code.mjs). Keys stay in environment variables.
+// Credits: a build costs code_create_2d / code_create_3d (code_edit with previous_html), charged before the stream starts and
+// refunded when the model fails. Plans are free; fixes and looks are free but need the token a paid build handed out (20 minutes,
+// at most MAX_FIXES fixes). Muse Spark plans and looks, Muse Wonder writes and repairs (lib/code.mjs). Keys stay in env vars.
 
-import { runAgent, quickReply, cleanHistory } from "../lib/agent.mjs";
-import { paid, charge, refund } from "../lib/credits.mjs";
-import { normalizeLevel } from "../lib/scan-level.mjs";
-import { normalizeArena, genreWanted } from "../shared/arena.mjs";
+import { charge, refund } from "../lib/credits.mjs";
 import { requireUser, rateLimit } from "../lib/auth.mjs";
 import { planGame, generateGame, changeGame, repairGame, lookAtGame, normalizePlan, actionFor, cleanReport, makeFixToken, readFixToken, MAX_FIXES, CODE_MODEL, MAX_HTML, MIN_HTML } from "../lib/code.mjs";
 
@@ -36,30 +27,15 @@ export default async function handler(req, res) {
   if (task === "code") return code(res, user, body);
   if (task === "fix") return fix(res, user, body);
   if (task === "look") return look(res, user, body);
+  return res.status(400).json({ error: "Unknown task: every game is written as code now (plan, code, fix or look)." });
+}
 
-  const message = String(body.message || "").slice(0, 2000);
-  let level = null;
-  if (body.level && Array.isArray(body.level.objects) && body.level.objects.length && body.level.objects.length <= 300) {
-    level = body.level.genre === "arena" ? normalizeArena(body.level) : normalizeLevel(body.level, { aspect: body.level.aspect });
-  }
-  const history = Array.isArray(body.history) ? body.history.slice(-20) : [];
-  const attachments = Array.isArray(body.attachments) ? body.attachments.slice(0, 10) : [];
-
-  const free = quickReply(message, !!level, attachments, level);
-  if (free) return res.status(200).json(free);
-  const model = typeof body.model === "string" ? body.model.slice(0, 60) : null;
-  try {
-    // 3D prices: the Studio's 3D toggle, an arena shooter (always 3D), or words asking for one
-    const is3d = String(body.mode || "").startsWith("3d") || level?.genre === "arena" || genreWanted(message) === "arena";
-    const out = await paid(user, res, level ? (is3d ? "edit_3d" : "edit_2d") : (is3d ? "create_3d" : "create_2d"), { model, gameId: uuidOrNull(body.project_id) },
-      (c) => runAgent({ message, level, history, attachments }, { timeoutMs: 50_000, provider: c.provider }));
-    if (!out) return;   // 402 / 403 already sent
-    return res.status(200).json({ ...out.result, credits: out.credits });
-  } catch (err) {
-    console.error("agent failed:", err.message);
-    const status = err.status === 401 || err.status === 403 ? 500 : 502;   // never leak auth details
-    return res.status(status).json({ error: friendly(err), credits: { refunded: !!err.refunded, balance: err.balance } });
-  }
+/** The last turns of the chat, cleaned for the planner. */
+function cleanHistory(history, max = 12) {
+  return (Array.isArray(history) ? history : [])
+    .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
+    .slice(-max)
+    .map((m) => ({ role: m.role, content: m.content.trim().slice(0, 600) }));
 }
 
 /** A plan for a game the code builder will write: Muse Spark, a few seconds, not charged. */

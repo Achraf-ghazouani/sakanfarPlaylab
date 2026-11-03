@@ -1,14 +1,14 @@
 // shared/i18n.js — the interface in English, French and Arabic (window.I18N). The language comes from localStorage
 // (playlab.lang), else the browser; Arabic turns the page right-to-left. Static text carries data-i18n="key" (innerHTML),
 // data-i18n-attr="placeholder|title|data-prompt" for attributes; pages call I18N.t(key, vars) for the rest.
-// The chat itself answers in whatever language the person writes in (lib/agent.mjs); this file is the chrome around it.
+// The plans and replies follow the language the person writes in (lib/code.mjs); this file is the chrome around them.
 (function (root) {
   const LANGS = ["en", "fr", "ar"];
   const NAMES = { en: "English", fr: "Français", ar: "العربية" };
   const DICT = {
     en: {
       "studio.newGame": "&#10010; New game", "studio.myGames": "My games",
-      "studio.sideFoot": 'Games are saved as you chat. <a href="index.html">Home</a> &middot; <a href="explore.html">Explore</a> &middot; <a href="game.html?screen=1">Big screen</a>',
+      "studio.sideFoot": 'Games are saved as you chat. <a href="index.html">Home</a> &middot; <a href="explore.html">Explore</a>',
       "studio.undo": "Undo", "studio.history": "History", "studio.noVersions": "No versions yet", "studio.phone": "Play with phone", "studio.publish": "Publish",
       "studio.profile": "Profile and credits", "studio.admin": "Admin panel", "studio.logout": "Log out", "studio.language": "Language",
       "studio.chat": "Chat", "studio.chatSub": "ask for changes, or redraw",
@@ -34,17 +34,18 @@
       "code.planReply": "Here is the plan for {title}. Say go to build it ({n} {credits}), or tell me what to change: the plan is free.", "chip.go": "Go, build it", "chip.simpler": "Make it simpler",
       "send.go": "Send · go = build it for {n} {credits}; anything else changes the plan (free)", "send.planFree": "Send · a free plan first, then {n} {credits} to build it (the AI writes the code)", "send.changeCode": "change the game: the AI rewrites its code",
       "pad.restart": "&#8635; Restart", "pad.pause": "❚❚ Pause", "pad.resume": "▶ Resume", "pad.sound": "🔊 Sound", "pad.muted": "🔇 Muted", "pad.noLevel": "no level yet",
+      "preview.emptyTitle": "Your game appears here", "preview.emptySub": "Describe it, sketch it (2D) or send a picture: Muse Wonder writes it as code.", "sketch.title": "Sketch a 2D game", "sketch.hint": "Draw your 2D game like on paper: the ground, platforms, a track or a maze, the hero, enemies, coins, the goal. Muse Spark reads it into a free plan, then Muse Wonder writes the game.", "sketch.use": "Use drawing", "sketch.free": "free plan", "sketch.only2d": "Sketching works for 2D games: switch to 2D to draw one.",
       "pad.tapHere": "Tap here: the game sees where", "code.restart": "Restart", "code.pause": "Pause", "code.resume": "Resume", "code.sound": "Sound", "code.muted": "Muted",
       "pad.room": "Room", "pad.keepOpen": "Keep the game open on the computer.", "pad.jump": "JUMP", "pad.move": "MOVE", "pad.aim": "AIM", "pad.fire": "FIRE", "pad.rotate": "Rotate your phone",
       "nav.how": "How it works", "nav.explore": "Explore", "nav.play": "Play", "nav.waitlist": "Waitlist", "nav.login": "Log in",
-      "hero.tag": "Draw a level on paper, or just describe it. Play it in seconds.", "hero.start": "START CREATING", "hero.demo": "PLAY A DEMO",
+      "hero.tag": "Describe any game, or sketch it. AI writes it as code. Play it in minutes.", "hero.start": "START CREATING", "hero.demo": "PLAY A DEMO",
       "hero.beta": 'Private beta. No invite yet? <a href="#waitlist">Join the waitlist</a>',
-      "manifesto.title": "IF YOU CAN DRAW IT,<br>YOU CAN PLAY IT.",
-      "manifesto.lead": "Introducing Sakanfar PlayLab, an experimental game lab where a pen, a sheet of paper and a chat are the level editor. Sketch it, say it, play it. No coding, no symbols to learn.",
+      "manifesto.title": "IF YOU CAN SAY IT,<br>YOU CAN PLAY IT.",
+      "manifesto.lead": "Introducing Sakanfar PlayLab, an experimental game lab where a chat, a pen and a phone are the game engine. Racing, puzzles, platformers, shooters, sports: say it or sketch it, and Meta's Muse Wonder writes the whole game as code. No coding, no templates.",
     },
     fr: {
       "studio.newGame": "&#10010; Nouveau jeu", "studio.myGames": "Mes jeux",
-      "studio.sideFoot": 'Les jeux sont enregistrés au fil du chat. <a href="index.html">Accueil</a> &middot; <a href="explore.html">Explorer</a> &middot; <a href="game.html?screen=1">Grand écran</a>',
+      "studio.sideFoot": 'Les jeux sont enregistrés au fil du chat. <a href="index.html">Accueil</a> &middot; <a href="explore.html">Explorer</a>',
       "studio.undo": "Annuler", "studio.history": "Historique", "studio.noVersions": "Pas encore de version", "studio.phone": "Jouer au téléphone", "studio.publish": "Publier",
       "studio.profile": "Profil et crédits", "studio.admin": "Panneau admin", "studio.logout": "Se déconnecter", "studio.language": "Langue",
       "studio.chat": "Chat", "studio.chatSub": "demandez des changements, ou redessinez",
@@ -70,17 +71,18 @@
       "code.planReply": "Voici le plan de {title}. Dites go pour le construire ({n} {credits}), ou dites-moi quoi changer : le plan est gratuit.", "chip.go": "Go, construis-le", "chip.simpler": "Plus simple",
       "send.go": "Envoyer · go = construire pour {n} {credits} ; tout autre texte change le plan (gratuit)", "send.planFree": "Envoyer · un plan gratuit d'abord, puis {n} {credits} pour le construire (l'IA écrit le code)", "send.changeCode": "modifier le jeu : l'IA réécrit son code",
       "pad.restart": "&#8635; Recommencer", "pad.pause": "❚❚ Pause", "pad.resume": "▶ Reprendre", "pad.sound": "🔊 Son", "pad.muted": "🔇 Coupé", "pad.noLevel": "pas encore de niveau",
+      "preview.emptyTitle": "Votre jeu apparaît ici", "preview.emptySub": "Décrivez-le, dessinez-le (2D) ou envoyez une image : Muse Wonder l'écrit en code.", "sketch.title": "Dessiner un jeu 2D", "sketch.hint": "Dessinez votre jeu 2D comme sur papier : le sol, des plateformes, un circuit ou un labyrinthe, le héros, les ennemis, les pièces, l'arrivée. Muse Spark en fait un plan gratuit, puis Muse Wonder écrit le jeu.", "sketch.use": "Utiliser le dessin", "sketch.free": "plan gratuit", "sketch.only2d": "Le dessin fonctionne pour les jeux 2D : passez en 2D pour dessiner.",
       "pad.tapHere": "Touchez ici : le jeu voit où", "code.restart": "Recommencer", "code.pause": "Pause", "code.resume": "Reprendre", "code.sound": "Son", "code.muted": "Muet",
       "pad.room": "Salle", "pad.keepOpen": "Gardez le jeu ouvert sur l'ordinateur.", "pad.jump": "SAUT", "pad.move": "BOUGER", "pad.aim": "VISER", "pad.fire": "TIRER", "pad.rotate": "Tournez votre téléphone",
       "nav.how": "Comment ça marche", "nav.explore": "Explorer", "nav.play": "Jouer", "nav.waitlist": "Liste d'attente", "nav.login": "Connexion",
-      "hero.tag": "Dessinez un niveau sur papier, ou décrivez-le. Jouez-y en quelques secondes.", "hero.start": "COMMENCER À CRÉER", "hero.demo": "JOUER UNE DÉMO",
+      "hero.tag": "Décrivez n'importe quel jeu, ou dessinez-le. L'IA l'écrit en code. Jouez-y en quelques minutes.", "hero.start": "COMMENCER À CRÉER", "hero.demo": "JOUER UNE DÉMO",
       "hero.beta": 'Bêta privée. Pas encore d\'invitation ? <a href="#waitlist">Rejoignez la liste d\'attente</a>',
-      "manifesto.title": "SI VOUS POUVEZ LE DESSINER,<br>VOUS POUVEZ Y JOUER.",
-      "manifesto.lead": "Voici Sakanfar PlayLab, un laboratoire de jeu expérimental où un stylo, une feuille de papier et un chat sont l'éditeur de niveaux. Dessinez-le, dites-le, jouez-y. Pas de code, pas de symboles à apprendre.",
+      "manifesto.title": "SI VOUS POUVEZ LE DIRE,<br>VOUS POUVEZ Y JOUER.",
+      "manifesto.lead": "Voici Sakanfar PlayLab, un laboratoire de jeu expérimental où un chat, un stylo et un téléphone sont le moteur de jeu. Course, puzzle, plateforme, tir, sport : dites-le ou dessinez-le, et Muse Wonder de Meta écrit tout le jeu en code. Pas de code à écrire, pas de modèles.",
     },
     ar: {
       "studio.newGame": "&#10010; لعبة جديدة", "studio.myGames": "ألعابي",
-      "studio.sideFoot": 'تُحفظ الألعاب أثناء الدردشة. <a href="index.html">الرئيسية</a> &middot; <a href="explore.html">استكشف</a> &middot; <a href="game.html?screen=1">الشاشة الكبيرة</a>',
+      "studio.sideFoot": 'تُحفظ الألعاب أثناء الدردشة. <a href="index.html">الرئيسية</a> &middot; <a href="explore.html">استكشف</a>',
       "studio.undo": "تراجع", "studio.history": "السجل", "studio.noVersions": "لا توجد نسخ بعد", "studio.phone": "العب بالهاتف", "studio.publish": "انشر",
       "studio.profile": "الملف الشخصي والرصيد", "studio.admin": "لوحة الإدارة", "studio.logout": "تسجيل الخروج", "studio.language": "اللغة",
       "studio.chat": "الدردشة", "studio.chatSub": "اطلب تغييرات، أو أعد الرسم",
@@ -106,13 +108,14 @@
       "code.planReply": "هذه خطة {title}. قل go لبنائها ({n} {credits})، أو أخبرني بما تريد تغييره: الخطة مجانية.", "chip.go": "هيا، ابنِها", "chip.simpler": "اجعلها أبسط",
       "send.go": "إرسال · go = البناء مقابل {n} {credits}؛ أي نص آخر يغيّر الخطة (مجانًا)", "send.planFree": "إرسال · خطة مجانية أولًا، ثم {n} {credits} لبنائها (يكتب الذكاء الاصطناعي الشيفرة)", "send.changeCode": "تعديل اللعبة: يعيد الذكاء الاصطناعي كتابة شيفرتها",
       "pad.restart": "&#8635; إعادة", "pad.pause": "❚❚ إيقاف مؤقت", "pad.resume": "▶ استئناف", "pad.sound": "🔊 الصوت", "pad.muted": "🔇 صامت", "pad.noLevel": "لا يوجد مستوى بعد",
+      "preview.emptyTitle": "ستظهر لعبتك هنا", "preview.emptySub": "صِفها أو ارسمها (ثنائية الأبعاد) أو أرسل صورة: يكتبها Muse Wonder كشيفرة.", "sketch.title": "ارسم لعبة ثنائية الأبعاد", "sketch.hint": "ارسم لعبتك ثنائية الأبعاد كما على الورق: الأرض، المنصات، مسار أو متاهة، البطل، الأعداء، العملات، الهدف. يحولها Muse Spark إلى خطة مجانية، ثم يكتب Muse Wonder اللعبة.", "sketch.use": "استخدم الرسم", "sketch.free": "خطة مجانية", "sketch.only2d": "الرسم يعمل مع الألعاب ثنائية الأبعاد: انتقل إلى 2D للرسم.",
       "pad.tapHere": "المس هنا: اللعبة ترى المكان", "code.restart": "إعادة", "code.pause": "إيقاف مؤقت", "code.resume": "استئناف", "code.sound": "الصوت", "code.muted": "صامت",
       "pad.room": "الغرفة", "pad.keepOpen": "أبقِ اللعبة مفتوحة على الحاسوب.", "pad.jump": "اقفز", "pad.move": "تحرك", "pad.aim": "صوّب", "pad.fire": "أطلق", "pad.rotate": "أدر هاتفك",
       "nav.how": "كيف يعمل", "nav.explore": "استكشف", "nav.play": "العب", "nav.waitlist": "قائمة الانتظار", "nav.login": "تسجيل الدخول",
-      "hero.tag": "ارسم مستوى على الورق، أو صِفه فقط. العبه خلال ثوانٍ.", "hero.start": "ابدأ الإبداع", "hero.demo": "جرّب عرضًا",
+      "hero.tag": "صِف أي لعبة، أو ارسمها. يكتبها الذكاء الاصطناعي كشيفرة. العبها خلال دقائق.", "hero.start": "ابدأ الإبداع", "hero.demo": "جرّب عرضًا",
       "hero.beta": 'نسخة تجريبية خاصة. لا دعوة بعد؟ <a href="#waitlist">انضم إلى قائمة الانتظار</a>',
-      "manifesto.title": "إن استطعت رسمها،<br>استطعت لعبها.",
-      "manifesto.lead": "نقدّم Sakanfar PlayLab، مختبر ألعاب تجريبي حيث القلم والورقة والدردشة هي محرر المستويات. ارسمها، قلها، العبها. لا برمجة، ولا رموز لتتعلمها.",
+      "manifesto.title": "إن استطعت قولها،<br>استطعت لعبها.",
+      "manifesto.lead": "نقدّم Sakanfar PlayLab، مختبر ألعاب تجريبي حيث الدردشة والقلم والهاتف هي محرك اللعبة. سباق، ألغاز، منصات، تصويب، رياضة: قلها أو ارسمها، ويكتب Muse Wonder من Meta اللعبة كاملة كشيفرة. لا برمجة، ولا قوالب.",
     },
   };
   let lang = detect();

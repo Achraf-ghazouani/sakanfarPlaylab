@@ -1,5 +1,5 @@
 // shared/joystick.js — touch joysticks and hold buttons for phones (window.Joystick). Classic script, used by the
-// phone pad (pad.html, as a controller for the computer) and by the arena itself on a touch device (arena.html).
+// phone pad (pad.html, as a controller for the computer).
 // A stick reports { x, y, active } with x right and y forward in -1..1; a button reports down / up. Each tracks its
 // own pointer, so two thumbs (move + aim, or move + fire) work at once.
 window.Joystick = (() => {

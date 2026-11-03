@@ -6,7 +6,7 @@
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { EXAMPLES } from "../lib/code-examples.mjs";
+import { EXAMPLES } from "../shared/code-examples.mjs";
 try { process.loadEnvFile(".env"); } catch {}
 const BASE = process.argv[2] || "http://localhost:3000";
 const SB = (process.env.SUPABASE_URL || "").replace(/\/+$/, ""), ANON = process.env.SUPABASE_ANON_KEY, KEY = process.env.PLAYLAB_SERVER_KEY;

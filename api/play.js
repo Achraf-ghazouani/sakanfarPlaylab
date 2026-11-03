@@ -70,7 +70,7 @@ export default async function handler(req, res) {
           if (!user) return;
           const card = await rpc("public_game_card", { p_share_id: id });
           if (!card) return res.status(404).json({ error: "This game is not published." });
-          const action = card.kind === "2d" ? "edit_2d" : "edit_3d";   // a remix costs one edit of that kind
+          const action = card.kind === "code" ? "code_edit" : card.kind === "2d" ? "edit_2d" : "edit_3d";   // a remix costs one change of that kind of game
           const out = await paid(user, res, action, {}, () => rpc("remix_game", { p_share_id: id }, user.token));
           if (!out) return;
           const project = await getProject(user, out.result);

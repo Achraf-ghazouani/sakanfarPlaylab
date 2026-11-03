@@ -1,12 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/scan.js": {
-      "maxDuration": 60
-    },
-    "api/fix.js": {
-      "maxDuration": 120
-    },
     "api/agent.js": {
       "maxDuration": 300
     },
@@ -15,8 +9,14 @@
     }
   },
   "rewrites": [
-    { "source": "/play/:id", "destination": "/api/play?id=:id" },
-    { "source": "/api/build-code", "destination": "/api/agent?task=code" }
+    {
+      "source": "/play/:id",
+      "destination": "/api/play?id=:id"
+    },
+    {
+      "source": "/api/build-code",
+      "destination": "/api/agent?task=code"
+    }
   ],
   "redirects": [
     {

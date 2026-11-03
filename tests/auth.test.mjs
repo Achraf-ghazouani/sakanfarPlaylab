@@ -36,7 +36,7 @@ for (const p of ["api/projects", "api/me", "api/messages?project_id=x", "api/pro
   const r = await api(p);
   check(`${p} without a login -> 401`, r.status === 401 && r.data.login === true, r.status);
 }
-for (const p of ["api/agent", "api/scan", "api/fix"]) {
+for (const p of ["api/agent", "api/build-code", "api/art"]) {
   const r = await api(p, { method: "POST", body: {} });
   check(`${p} without a login -> 401 (AI costs money)`, r.status === 401, r.status);
 }

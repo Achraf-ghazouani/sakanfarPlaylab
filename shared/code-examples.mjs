@@ -1,4 +1,4 @@
-// lib/code-examples.mjs — three complete games written the PlayLab way (plain canvas, Phaser 3, three.js). They are the
+// shared/code-examples.mjs — three complete games written the PlayLab way (plain canvas, Phaser 3, three.js). They are the
 // examples in Muse Wonder's system prompt (lib/code.mjs) and the games tests/sdk.test.mjs runs through the sandbox, so
 // what the model is shown is proven to work. No backticks or ${ inside: they are template strings.
 

@@ -64,16 +64,15 @@ try {
   const poor = await rpc("charge", { p_action: "create_2d" }, u.token);
   check("insufficient credits is refused", poor.data.ok === false && poor.data.error === "insufficient_credits" && poor.data.cost === 10 && poor.data.balance === 3, poor.data);
   const t0 = Date.now();
-  const r402 = await api("api/agent", { method: "POST", token: u.token, body: { message: "a desert level" } });
-  check("api/agent answers 402 with the cost, without calling the AI", r402.status === 402 && r402.data.credits?.cost === 10 && r402.data.credits?.balance === 3 && Date.now() - t0 < 4000, { status: r402.status, body: r402.data, ms: Date.now() - t0 });
+  const r402 = await api("api/build-code", { method: "POST", token: u.token, body: { plan: { title: "Snake", genre: "snake", engine: "canvas", goal: "eat apples", controls: "d-pad", controller: "dpad+jump", win: "20 apples", lose: "a wall", entities: ["snake", "apple"], opponents: "none", levels: "1", players: 1, notes: "" }, prompt: "a snake game" } });
+  check("api/build-code answers 402 with the cost (code_create_2d), without calling the AI", r402.status === 402 && r402.data.credits?.cost === 20 && r402.data.credits?.balance === 3 && Date.now() - t0 < 4000, { status: r402.status, body: r402.data, ms: Date.now() - t0 });
   check("still 3 credits", (await balance(u)) === 3);
 
   // free things stay free
-  const quick = await api("api/agent", { method: "POST", token: u.token, body: { message: "Make it 3D" } });
-  check("a reply without AI costs nothing", quick.status === 200 && !quick.data.credits && (await balance(u)) === 3);
-  const fine = { theme: "t", objects: [{ type: "platform", x: 0, y: 900, w: 1000, h: 60 }, { type: "start", x: 40, y: 840, w: 40, h: 60 }, { type: "goal", x: 900, y: 840, w: 40, h: 60 }] };
-  const fx = await api("api/fix", { method: "POST", token: u.token, body: { level: fine } });
-  check("playtest of a level that is already fine is free", fx.status === 200 && fx.data.report.before.ok === true && (await balance(u)) === 3);
+  const fx = await api("api/agent", { method: "POST", token: u.token, body: { task: "fix", plan: { title: "Snake", genre: "snake", engine: "canvas", goal: "eat apples", controls: "d-pad", controller: "dpad+jump", win: "20 apples", lose: "a wall", entities: ["snake", "apple"], opponents: "none", levels: "1", players: 1, notes: "" }, html: "<html>" + "x".repeat(500) + "</html>", report: {} } });
+  check("a free fix without the token of a paid build is refused, nothing charged", fx.status === 403 && /build token/.test(fx.data.error) && (await balance(u)) === 3, fx.data);
+  const odd = await api("api/agent", { method: "POST", token: u.token, body: { message: "a desert level" } });
+  check("the retired game agent answers 400 (every game is AI code now), nothing charged", odd.status === 400 && (await balance(u)) === 3, odd.data);
 
   // daily limit
   // Used today so far: 5 (the open-weights charge; the refunded create does not count). Limit 24: the first charge
@@ -116,8 +115,8 @@ try {
     check("the next one is refused: global_cap, with the numbers", c2.data.ok === false && c2.data.error === "global_cap" && c2.data.cap === usedAll + 10 && c2.data.spent_today_all >= usedAll + 10 && !!c2.data.resets_at, c2.data);
     check("nothing was charged", (await balance(u)) === 90);
     check("the Studio sees the budget as reached", (await api("api/me", { token: u.token })).data.cap?.reached === true);
-    const r = await api("api/agent", { method: "POST", token: u.token, body: { message: "a desert level" } });
-    check("api/agent answers 402 with the friendly message, without calling the AI", r.status === 402 && r.data.credits?.error === "global_cap" && /shared budget/.test(r.data.error) && /midnight UTC/.test(r.data.error), r.data);
+    const r = await api("api/build-code", { method: "POST", token: u.token, body: { plan: { title: "Snake", genre: "snake", engine: "canvas", goal: "eat apples", controls: "d-pad", controller: "dpad+jump", win: "20 apples", lose: "a wall", entities: ["snake", "apple"], opponents: "none", levels: "1", players: 1, notes: "" }, prompt: "a snake game" } });
+    check("api/build-code answers 402 with the friendly message, without calling the AI", r.status === 402 && r.data.credits?.error === "global_cap" && /shared budget/.test(r.data.error) && /midnight UTC/.test(r.data.error), r.data);
     await srv("srv_set_profile", { p_user: adm.id, p_balance: 50 });
     const ca = await rpc("charge", { p_action: "create_2d" }, adm.token);
     check("an admin is never blocked by the cap", ca.data.ok === true, ca.data);
@@ -130,13 +129,16 @@ try {
   }
   check("charges work again without the cap", (await rpc("charge", { p_action: "create_2d" }, u.token)).data.ok === true || capBefore > 0);
 
-  // one real AI call: the agent charges create_2d and reports the new balance
+  // one real AI call: a plan is free (Muse Spark), the build charges code_create_2d and streams the game (Muse Wonder)
   if (process.env.MODEL_API_KEY) {
     const w = await account(30);
-    const real = await api("api/agent", { method: "POST", token: w.token, body: { message: "A tiny desert level with 2 coins" } });
-    check("real agent call: level built, 10 credits spent, balance in the answer", real.status === 200 && real.data.level && real.data.credits?.spent === 10 && real.data.credits?.balance === 20, { status: real.status, credits: real.data.credits, err: real.data.error });
+    const plan = await api("api/agent", { method: "POST", token: w.token, body: { task: "plan", message: "a tiny snake game", mode: "2d" } });
+    check("real plan: free, a plan comes back", plan.status === 200 && !!plan.data.plan?.title && (await balance(w)) === 30, { status: plan.status, err: plan.data.error });
+    const r = await fetch(`${BASE}/api/build-code`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + w.token }, body: JSON.stringify({ plan: plan.data.plan || { title: "Snake", genre: "snake", engine: "canvas", goal: "eat apples", controls: "d-pad", controller: "dpad+jump", win: "20 apples", lose: "a wall", entities: ["snake", "apple"], opponents: "none", levels: "1", players: 1, notes: "" }, prompt: "a tiny snake game" }) });
+    const text = await r.text(), done = text.split("\n").filter((l) => l.startsWith("data:")).map((l) => JSON.parse(l.slice(5))).find((e) => e.e === "done" || e.e === "error");
+    check("real build: the stream ends in a game, 20 credits spent, balance in the answer", r.status === 200 && done?.e === "done" && done.html.length > 500 && done.credits?.spent === 20 && done.credits?.balance === 10, { status: r.status, end: done && { e: done.e, error: done.error, credits: done.credits } });
     const after = await balance(w);
-    check("server balance matches", after === 20, after);
+    check("server balance matches", after === 10, after);
   }
 } catch (err) { console.log("ERROR", err.stack || err.message); fails++; }
 finally {

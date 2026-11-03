@@ -10,8 +10,6 @@
 //   DELETE /api/projects?id=UUID         -> { ok: true }
 // The caller must be logged in (Authorization: Bearer <Supabase access token>); rows are theirs through row-level security.
 
-import { normalizeLevel } from "../lib/scan-level.mjs";
-import { normalizeArena } from "../shared/arena.mjs";
 import { ASSET_ROLES } from "../lib/image.mjs";
 import { validateCodeLevel } from "../lib/code.mjs";
 import * as db from "../lib/db.mjs";
@@ -122,10 +120,7 @@ function pickFields(body) {
     if (v.error) return { error: v.error };
     out.level = v.level;
   } else if (body.level !== undefined && body.level !== null) {
-    if (!body.level || !Array.isArray(body.level.objects) || body.level.objects.length > 300) return { error: "level must have an objects array." };
-    const lvl = body.level.genre === "arena" ? normalizeArena(body.level) : normalizeLevel(body.level, { aspect: body.level.aspect });
-    for (const k of ["checked", "fixes", "diff"]) if (body.level[k] !== undefined) lvl[k] = body.level[k];
-    out.level = lvl;
+    return { error: "Only games written as code can be saved: the classic engines are retired." };
   }
   if (body.photo !== undefined) {
     if (body.photo !== null && (typeof body.photo !== "string" || !body.photo.startsWith("data:image/") || body.photo.length > MAX_PHOTO)) return { error: "photo must be a small image data URL." };

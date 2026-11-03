@@ -1,6 +1,7 @@
 // Publish, share, remix against the real Supabase project and the dev server (api/projects publish, api/play, api/admin games).
 // Start the dev server first (node serve.mjs), then:  node tests/publish.test.mjs [baseUrl]
 // Makes a maker, a remixer and an admin (throwaway accounts, deleted at the end; their games go with them).
+import { EXAMPLES } from "../shared/code-examples.mjs";
 try { process.loadEnvFile(".env"); } catch {}
 const BASE = process.argv[2] || "http://localhost:3000";
 const SB = (process.env.SUPABASE_URL || "").replace(/\/+$/, ""), ANON = process.env.SUPABASE_ANON_KEY, KEY = process.env.PLAYLAB_SERVER_KEY;
@@ -31,7 +32,9 @@ async function makeUser(role, credits, name) {
   made.push(r.data);
   return { id: r.data, username, token: await login(`${username}@demo.playlab.invalid`, password) };
 }
-const LEVEL = { theme: "pub test meadow", objects: [{ type: "platform", label: "ground", x: 0, y: 900, w: 1000, h: 60 }, { type: "start", x: 40, y: 840, w: 40, h: 60 }, { type: "goal", x: 900, y: 840, w: 40, h: 60 }, { type: "coin", x: 300, y: 700, w: 30, h: 30 }] };
+
+// a game written as code (the only kind PlayLab makes now): the snake example with its plan and notes
+const LEVEL = { genre: "code", engine: "canvas", title: "Pub test", theme: "pub test meadow", note: "v1", prompt: "a snake game", plan: { title: "Pub test", genre: "snake", engine: "canvas", goal: "eat", controls: "d-pad", controller: "dpad+jump", win: "-", lose: "-", entities: [], opponents: "none", levels: "-", players: 1, notes: "" }, html: EXAMPLES.snake, notes: { note: "v1", built: "x", missing: "" }, objects: [] };
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
 try {
@@ -45,7 +48,7 @@ try {
   check("publishing needs public or unlisted", (await api("api/projects", { method: "PATCH", token: A.token, body: { id: pid, publish: { visibility: "secret" } } })).status === 400);
   const pub = await api("api/projects", { method: "PATCH", token: A.token, body: { id: pid, publish: { visibility: "public", title: "Pub test game", description: "jump to the flag", cover: PNG, og_image: PNG } } });
   const sid = pub.data.project?.share_id;
-  check("publish: a short share id, public, kind 2d, published_at", pub.status === 200 && /^[a-z0-9]{8}$/.test(sid || "") && pub.data.project.visibility === "public" && pub.data.project.kind === "2d" && !!pub.data.project.published_at, { status: pub.status, project: pub.data.project && { share_id: sid, visibility: pub.data.project.visibility, kind: pub.data.project.kind } });
+  check("publish: a short share id, public, kind code, published_at", pub.status === 200 && /^[a-z0-9]{8}$/.test(sid || "") && pub.data.project.visibility === "public" && pub.data.project.kind === "code" && !!pub.data.project.published_at, { status: pub.status, project: pub.data.project && { share_id: sid, visibility: pub.data.project.visibility, kind: pub.data.project.kind } });
   check("the maker's list shows it as public", (await api("api/projects", { token: A.token })).data.projects?.find((p) => p.id === pid)?.visibility === "public");
 
   // the play page, for everyone
@@ -55,7 +58,7 @@ try {
   const cover = await fetch(`${BASE}/api/play?id=${sid}&cover=1`);
   check("the link preview picture is served as an image", cover.status === 200 && /^image\/png/.test(cover.headers.get("content-type") || ""), cover.headers.get("content-type"));
   const game = await api(`api/play?id=${sid}&format=json`);
-  check("the public game JSON has the level and author, never the owner", game.status === 200 && game.data.game.level?.objects?.length === 4 && game.data.game.author === "Maker Mia" && game.data.game.owner === undefined && game.data.game.plays === 0, game.data.game && Object.keys(game.data.game));
+  check("the public game JSON has the level and author, never the owner", game.status === 200 && game.data.game.level?.genre === "code" && game.data.game.level.html.length > 1000 && game.data.game.author === "Maker Mia" && game.data.game.owner === undefined && game.data.game.plays === 0, game.data.game && Object.keys(game.data.game));
 
   // plays, likes, reports
   check("a play is counted", (await api("api/play", { method: "POST", body: { action: "played", id: sid } })).data.plays === 1);
@@ -71,8 +74,8 @@ try {
 
   // explore
   const ex = await api("api/play?action=explore&sort=newest");
-  check("explore lists the public game with its author and cover", ex.status === 200 && ex.data.games.some((g) => g.id === sid && g.author === "Maker Mia" && g.cover === PNG && g.kind === "2d"));
-  check("explore filters by kind", !(await api("api/play?action=explore&kind=arena")).data.games.some((g) => g.id === sid) && (await api("api/play?action=explore&kind=2d")).data.games.some((g) => g.id === sid));
+  check("explore lists the public game with its author and cover", ex.status === 200 && ex.data.games.some((g) => g.id === sid && g.author === "Maker Mia" && g.cover === PNG && g.kind === "code"));
+  check("explore filters by kind", !(await api("api/play?action=explore&kind=arena")).data.games.some((g) => g.id === sid) && (await api("api/play?action=explore&kind=code")).data.games.some((g) => g.id === sid));
   check("explore searches titles", (await api("api/play?action=explore&q=Pub%20test")).data.games.some((g) => g.id === sid));
   const unl = await api("api/projects", { method: "PATCH", token: A.token, body: { id: pid, publish: { visibility: "unlisted" } } });
   check("unlisted: the link works but Explore does not list it", unl.data.project?.visibility === "unlisted" && (await api(`api/play?id=${sid}&format=json`)).status === 200 && !(await api("api/play?action=explore&sort=newest")).data.games.some((g) => g.id === sid));
@@ -83,9 +86,9 @@ try {
   // remix
   check("remix needs a login", (await api("api/play", { method: "POST", body: { action: "remix", id: sid } })).status === 401);
   const rx = await api("api/play", { method: "POST", token: B.token, body: { action: "remix", id: sid } });
-  check("remix: a copy in the remixer's games, charged as a 2D edit (2 credits)", rx.status === 200 && rx.data.project?.title === "Remix of Pub test game" && rx.data.project.owner === B.id && rx.data.credits?.spent === 2 && rx.data.credits.balance === 48, rx.data.credits || rx.data);
+  check("remix: a copy in the remixer's games, charged as a code change (6 credits)", rx.status === 200 && rx.data.project?.title === "Remix of Pub test game" && rx.data.project.owner === B.id && rx.data.credits?.spent === 6 && rx.data.credits.balance === 44 && rx.data.credits.action === "code_edit", rx.data.credits || rx.data);
   const rxp = await api(`api/projects?id=${rx.data.project?.id}`, { token: B.token });
-  check("the remix has the level, version 1 and a remix card", rxp.data.project?.level?.objects?.length === 4 && rxp.data.versions?.[0]?.n === 1 && rxp.data.messages?.some((m) => /Remixed from/.test(m.content)));
+  check("the remix has the level, version 1 and a remix card", rxp.data.project?.level?.genre === "code" && rxp.data.versions?.[0]?.n === 1 && rxp.data.messages?.some((m) => /Remixed from/.test(m.content)));
   check("the original is untouched", (await api(`api/play?id=${sid}&format=json`)).data.game.title === "Pub test game");
 
   // admin

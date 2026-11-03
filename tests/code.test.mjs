@@ -3,7 +3,7 @@
 // detector, the validator the projects API uses, the system prompt. Then live calls when MODEL_API_KEY is set: a plan from
 // Muse Spark (a few seconds) and, with PLAYLAB_LIVE_CODE=1, a whole game from Muse Wonder (about a minute).
 //   node tests/code.test.mjs
-import { codeKind, normalizePlan, parseGameHtml, engineOf, validateCodeLevel, systemPrompt, planGame, generateGame, actionFor, describePlan, ENGINES, LAYOUTS, makeFixToken, readFixToken, MAX_FIXES, cleanReport, describeFailure, repairGame, lookAtGame, LOOK_BRIEF, parsePatches, applyPatches, lineDiff, changeGame } from "../lib/code.mjs";
+import { codeKind, normalizePlan, parseGameHtml, engineOf, validateCodeLevel, systemPrompt, planGame, generateGame, actionFor, describePlan, ENGINES, LAYOUTS, makeFixToken, readFixToken, MAX_FIXES, cleanReport, describeFailure, repairGame, lookAtGame, LOOK_BRIEF, parsePatches, applyPatches, lineDiff, changeGame, describeAssets } from "../lib/code.mjs";
 import { EXAMPLES } from "../lib/code-examples.mjs";
 import { scan, wrap, csp } from "../shared/codescan.mjs";
 try { process.loadEnvFile(".env"); } catch {}
@@ -102,6 +102,18 @@ check("changeGame: a patch that would add something forbidden is not used (the w
 calls.length = 0;
 const rp = await repairGame({ plan: { title: "Snake" }, prompt: "a snake game", html: SRC, report: { errors: [{ kind: "exception", message: "x is not defined", line: 3 }] } }, { stream: fakeChange([PATCH_ANSWER]), provider: prov });
 check("repairGame: a fix is a patch too (the error list and patch rules in the request)", calls.length === 1 && /failed in the sandbox/.test(calls[0].user) && /x is not defined/.test(calls[0].user) && /ANSWER WITH PATCHES/.test(calls[0].user) && rp.patch.mode === "patch", rp.patch);
+
+// ---- AI code always on: the 2D / 3D choice in the plan, a picture to improve on, models named in the prompts ----
+let planSeen = null;
+const fakePlan = async ({ messages }) => { planSeen = messages[messages.length - 1].content; return { content: JSON.stringify({ title: "T", genre: "g", engine: "three", goal: "", controls: "", controller: "tap", win: "", lose: "", entities: [], opponents: "none", levels: "", players: 1, notes: "", picture: "a drawn oval track" }), model: "m", provider: "meta", ms: 1 }; };
+await planGame({ message: "a racing game", dimension: "3d" }, { complete: fakePlan });
+check("planGame: the 3D switch asks for the three engine", /chose 3D: the engine must be "three"/.test(planSeen), planSeen);
+await planGame({ message: "a racing game", dimension: "2d" }, { complete: fakePlan });
+check("planGame: the 2D switch asks for phaser or canvas", /chose 2D/.test(planSeen));
+const withPic = await planGame({ message: "a race on this", image: "data:image/jpeg;base64,/9j/4AAQ", dimension: "3d" }, { complete: fakePlan });
+check("planGame: a picture goes as an image part with the ask to improve on a rough drawing; the plan keeps the picture field", Array.isArray(planSeen) && planSeen[1].image_url.url.startsWith("data:image/jpeg") && /improve on/.test(planSeen[0].text) && withPic.plan.picture === "a drawn oval track");
+check("describeAssets: models with their format, pictures as pictures", describeAssets({ player: { kind: "model", name: "hero.fbx" }, enemy: { kind: "model", name: "x" }, background: { kind: "image", name: "bg" } }) === "player (3D model, FBX), enemy (3D model, GLB), background (picture)");
+check("the SDK docs say how to load an FBX and a GLB", /FBXLoader/.test(systemPrompt()) && /GLTFLoader/.test(systemPrompt()));
 
 // ---- live (skipped without a key) ----
 if (process.env.MODEL_API_KEY) {

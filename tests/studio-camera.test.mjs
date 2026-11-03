@@ -51,9 +51,12 @@ try {
   // the computer: logged in; its scans are mocked (the phone hands its pictures to the computer, which calls api/scan)
   await pc.send("Page.addScriptToEvaluateOnNewDocument", { source: `
     try { sessionStorage.removeItem("playlab.studio.room"); } catch {}
-    window.__pcScans = 0;
+    window.__pcScans = 0; window.__pcPlans = [];
     const LEVEL = ${JSON.stringify(LEVEL)}; const realFetch = window.fetch.bind(window);
-    window.fetch = (url, init) => { if (/api\\/scan$/.test(String(url))) { window.__pcScans++; return Promise.resolve(new Response(JSON.stringify({ level: { ...LEVEL, checked: true, fixes: [] }, meta: { provider: "mock", ms: 1, playtest: { before: { ok: true, problems: [] } } } }), { status: 200, headers: { "Content-Type": "application/json" } })); } return realFetch(url, init); };` });
+    const PLAN = { title: "Paper Maze", genre: "maze", engine: "canvas", goal: "reach the exit", controls: "d-pad", controller: "dpad+jump", win: "exit", lose: "-", entities: ["walls"], opponents: "none", levels: "1", players: 1, notes: "", picture: "a hand-drawn maze" };
+    window.fetch = (url, init) => {
+      if (/api\\/agent$/.test(String(url))) { const b = JSON.parse(init.body); if (b.task === "plan") { window.__pcPlans.push(b); return Promise.resolve(new Response(JSON.stringify({ plan: PLAN, meta: { model: "mock", ms: 1 } }), { status: 200, headers: { "Content-Type": "application/json" } })); } }
+      if (/api\\/scan$/.test(String(url))) { window.__pcScans++; return Promise.resolve(new Response(JSON.stringify({ level: { ...LEVEL, checked: true, fixes: [] }, meta: { provider: "mock", ms: 1, playtest: { before: { ok: true, problems: [] } } } }), { status: 200, headers: { "Content-Type": "application/json" } })); } return realFetch(url, init); };` });
   await pc.send("Page.navigate", { url: `${BASE}/index.html` }); await pc.waitFor(`document.readyState === "complete"`);
   await pc.evalJS(`localStorage.clear(); sessionStorage.clear(); true`);   // the browser profile is reused between runs: drop old sessions
   await pc.send("Page.navigate", { url: `${BASE}/login.html?next=studio.html` });
@@ -79,7 +82,14 @@ try {
   check("phone captured the sheet", !!captures, captures);
   const scans = await phone.waitFor(`window.__camScans >= 1 && window.__camScans`, 15_000);
   check("phone scanned it", !!scans, scans);
-  check("the scan ran on the computer, not on the phone", !!(await pc.waitFor(`window.__pcScans >= 1`, 20_000)) && (await phone.evalJS(`window.__phoneApiCalls`)) === 0);
+  // a new game: nothing is made without AI code, so the camera shot is read into a plan on the computer (no classic scan)
+  check("on a new game the camera shot goes to an AI code plan on the computer (the picture, no scan), not from the phone", !!(await pc.waitFor(`window.__pcPlans.length >= 1 && /^data:image\\/jpeg/.test(window.__pcPlans[0].image || "") || (window.__pcPlans.length >= 1 && (window.__pcPlans[0].image || "").length > 1000)`, 20_000)) && (await pc.evalJS(`window.__pcScans`)) === 0 && (await phone.evalJS(`window.__phoneApiCalls`)) === 0);
+  check("the plan card names the picture; the phone says AI code is reading it", !!(await pc.waitFor(`!!S.pendingPlan && /From your picture: a hand-drawn maze/.test(document.body.innerText)`, 20_000)) && !!(await phone.waitFor(`/AI code is reading your drawing|still busy/.test(document.getElementById("camStatus").textContent)`, 10_000)));
+  // an older game made with the classic engine still scans: the classic path for the controller checks below
+  await pc.evalJS(`S.pendingPlan = null; renderCodeMode(); applyLevel(${JSON.stringify({ ...LEVEL, note: "older classic game" })}, { note: "older classic game" }); true`);
+  await pc.waitFor(`S.level && !S.level.genre && S.versions.length >= 1`, 20_000);
+  await phone.evalJS(`window.__camScans = 0; window.__camCaptures = 0; Cam.pending = null; document.getElementById("captureBtn").click(); true`);   // the sheet did not change: capture by hand
+  check("on an older classic game the camera still scans on the computer, not on the phone", !!(await pc.waitFor(`window.__pcScans >= 1`, 40_000)) && (await phone.evalJS(`window.__phoneApiCalls`)) === 0);
   check("the phone got the result back", !!(await phone.waitFor(`window.__camLevel && window.__camLevel.objects.length === 6`, 20_000)));
 
   // the studio: ink arrives first, then the level becomes a version + card + reply
@@ -87,9 +97,9 @@ try {
   check("ink layer reached the studio", !!ink, ink);
   const seq = await pc.waitFor(`window.__studioPhoneLevelSeq`, 30_000);
   check("level reached the studio", !!seq, seq);
-  await pc.waitFor(`!S.busy && S.versions.length >= 1`, 20_000);
-  check("level became version 1 from the phone camera", await pc.evalJS(`S.level && S.level.objects.length === 6 && S.versions[0] && S.versions[0].n === 1 && S.versions[0].note === "from phone camera"`), await pc.evalJS(`S.versions.map((v) => v.n + ":" + v.note)`));
-  const chatText = await pc.waitFor(`/Level from the phone camera/.test(document.body.innerText) && /I found 6 things/.test(document.body.innerText)`, 20_000);
+  await pc.waitFor(`!S.busy && S.versions.length >= 2`, 20_000);
+  check("the classic game got a new version from the phone camera", await pc.evalJS(`S.level && S.level.objects.length === 6 && S.versions[0] && S.versions[0].n === 2`), await pc.evalJS(`S.versions.map((v) => v.n + ":" + v.note)`));
+  const chatText = await pc.waitFor(`/Redrawn on paper|Level from the phone camera/.test(document.body.innerText)`, 20_000);
   check("card and reply in the chat", !!chatText);
   check("project photo is the phone thumbnail", String(await pc.evalJS(`S.project && S.project.photo || ""`)).startsWith("data:image/jpeg"));
   const video = await pc.evalJS(`!!document.getElementById("camVideo").srcObject`);

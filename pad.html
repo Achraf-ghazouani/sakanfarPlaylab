@@ -386,7 +386,7 @@ function onHostMessage(msg) {
   if (msg.t !== "scan-result") return;
   const p = pendingScans.get(msg.seq); if (!p) return;
   pendingScans.delete(msg.seq);
-  if (msg.ok && msg.level) p.resolve(msg); else p.reject(new Error(msg.error || "scan failed"));
+  if (msg.ok && (msg.level || msg.code)) p.resolve(msg); else p.reject(new Error(msg.error || "scan failed"));   // code: the computer writes it as AI code
 }
 function requestScan(job) {
   return new Promise((resolve, reject) => {
@@ -401,6 +401,7 @@ async function runScan(job) {
   window.__camScans = (window.__camScans || 0) + 1;
   try {
     const data = await requestScan(job);
+    if (data.code) { camStatus(data.busy ? "The computer is still busy with the last picture" : "Sent: AI code is reading your drawing on the computer", "live", 6000); buzz([20, 30, 20]); Cam.scanning = false; return; }
     Cam.level = data.level;
     window.__camLevel = data.level;
     const d = data.level.diff;

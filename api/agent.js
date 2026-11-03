@@ -70,7 +70,8 @@ async function plan(res, user, body) {
   if (image && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image) || image.length > 2_000_000)) return res.status(400).json({ error: "The picture must be a JPEG, PNG or WebP under 1.5 MB." });
   if (!message && !image) return res.status(400).json({ error: "Say what game to plan." });
   try {
-    const out = await planGame({ message, image, previousPlan: body.plan && typeof body.plan === "object" ? body.plan : null, history: cleanHistory(body.history, 8) }, { timeoutMs: 50_000 });
+    const dimension = body.mode === "3d" ? "3d" : body.mode === "2d" ? "2d" : null;   // the Studio's 2D | 3D switch
+    const out = await planGame({ message, image, dimension, previousPlan: body.plan && typeof body.plan === "object" ? body.plan : null, history: cleanHistory(body.history, 8) }, { timeoutMs: 50_000 });
     return res.status(200).json({ plan: out.plan, meta: { model: out.model, ms: out.ms } });
   } catch (err) {
     console.error("plan failed:", err.message);

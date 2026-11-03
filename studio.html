@@ -14,6 +14,7 @@
 <script src="shared/photo.js"></script>
 <script src="shared/cutout.js"></script>
 <script src="shared/assetcheck.js"></script>
+<script src="shared/zip.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js" defer></script>
@@ -252,6 +253,16 @@
   #sendCost { font-size:11px; color:var(--muted); margin-top:6px; min-height:15px; }
   #capNote { font-size:12px; line-height:1.4; color:#92400e; background:#fef3c7; border:1px solid #fde68a; border-radius:10px; padding:8px 10px; margin-top:8px; }
   #noCredits .sheet { width:min(420px, 96vw); text-align:center; padding:24px; }
+  /* the review grid: many files at once */
+  #reviewGrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(168px, 1fr)); gap:10px; padding:12px; overflow:auto; }
+  .rcard { border:1px solid var(--lav-2); border-radius:12px; padding:8px; background:#fff; display:flex; flex-direction:column; gap:6px; font-size:12px; min-width:0; }
+  .rcard .pic { height:86px; background:repeating-conic-gradient(#ececf4 0 25%, #fff 0 50%) 0 0/16px 16px; border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:30px; }
+  .rcard .pic img { max-width:100%; max-height:86px; object-fit:contain; }
+  .rcard .name { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rcard select { width:100%; font:12px Inter, sans-serif; border:1px solid var(--lav-2); border-radius:8px; padding:4px 6px; background:#fff; }
+  .rcard .why { color:var(--muted); font-size:11px; min-height:14px; }
+  .rcard.model { border-color:#bae6fd; background:#f0f9ff; }
+  .rfoot { display:flex; align-items:center; gap:10px; padding:10px 12px; border-top:1px solid var(--lav-2); flex-wrap:wrap; }
   #noCredits .big { font:700 44px Fredoka, sans-serif; color:var(--purple-deep); }
   .demo-badge { background:#fef3c7; color:#92400e; border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700; }
   body.phone #phoneBtn { display:none; }   /* the phone is the device: nothing to link */
@@ -413,6 +424,13 @@
         <div class="cam-view" id="camView"><video id="camVideo" autoplay playsinline muted></video><canvas id="camInk" width="600" height="450"></canvas><span class="tag" id="camTag">waiting for the phone</span></div>
       </div>
     </div>
+  </div>
+</div>
+<div class="modal" id="reviewModal">
+  <div class="sheet">
+    <header><b>&#128194; Review your files</b><span class="hint" id="reviewSummary" style="margin-left:10px"></span><button class="tool" id="reviewClose">Cancel</button></header>
+    <div id="reviewGrid"></div>
+    <div class="rfoot"><span class="hint" id="reviewEngine"></span><span class="spacer"></span><button class="tb" id="reviewCancel">Cancel</button><button class="tb primary" id="reviewApply">Apply all</button></div>
   </div>
 </div>
 <div class="modal" id="noCredits"><div class="sheet">
@@ -646,7 +664,7 @@ $("phoneBtn").addEventListener("click", () => openPhoneLink("pad"));
 // Composer: attachments, chips, send
 // ---------------------------------------------------------------------------
 $("attachBtn").addEventListener("click", () => { S.nextRole = null; $("attachInput").click(); });   // a plain pick builds a level
-$("attachInput").addEventListener("change", async (e) => { for (const f of e.target.files) await addAttachment(f); e.target.value = ""; });
+$("attachInput").addEventListener("change", async (e) => { const list = [...e.target.files]; e.target.value = ""; await addFiles(list); });
 // ---------------------------------------------------------------------------
 // Sketch pad: draw a level like on paper, it goes through the scanner
 // ---------------------------------------------------------------------------
@@ -805,6 +823,7 @@ async function onCamLevel(msg) {
 const readAsDataUrl = (file) => new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(null); fr.readAsDataURL(file); });
 async function addAttachment(file) {
   const a = { name: file.name, type: file.type || (file.name.endsWith(".glb") || file.name.endsWith(".gltf") ? "model/gltf-binary" : "application/octet-stream"), size: file.size };
+  if (/\.(glb|gltf|fbx)$/i.test(file.name)) { a.model = true; a.file = file; }   // a 3D model: the review grid shows it, the 3D step uses it
   if (a.type.startsWith("image/")) {
     try { const img = await PhotoUtil.loadImage(file); a.upload = PhotoUtil.toJpeg(img, PhotoUtil.UPLOAD_SIDE, 0.85); a.thumb = PhotoUtil.toJpeg(img, 320, 0.7); a.art = PhotoUtil.toJpeg(img, PhotoUtil.THUMB_SIDE, 0.75); } catch { toast("Could not read that image"); return; }
     if (/image\/(png|webp)/i.test(a.type) && file.size <= 1_400_000) a.raw = await readAsDataUrl(file);   // the original keeps its transparency (sprites, UI pieces)
@@ -837,7 +856,7 @@ document.addEventListener("paste", async (e) => {
   const files = imagesOf([...(e.clipboardData?.items || [])].filter((i) => i.kind === "file").map((i) => i.getAsFile()));
   if (!files.length) return;
   e.preventDefault();
-  for (const f of files) await addAttachment(f);
+  await addFiles(files);
   $("composer").focus();
 });
 let dragDepth = 0;
@@ -849,13 +868,16 @@ document.addEventListener("drop", async (e) => {
   if (!hasFiles(e)) return;
   e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging");
   if (e.target.closest?.(".modal")) return;                 // not over the sketch pad or the phone link
-  const files = imagesOf(e.dataTransfer.files);
-  for (const f of files) await addAttachment(f);
-  if (files.length && !$("composer").value.trim()) send();  // a drawing alone: build it right away, like the sketch pad
+  const added = await addFiles([...e.dataTransfer.files]);   // pictures, 3D models and ZIPs; two or more open the review grid
+  if (added === 1 && !$("composer").value.trim()) send();      // a drawing alone: build it right away, like the sketch pad
 });
 
 async function send() {
   if (S.busy) return;
+  if (S.attachments.filter((a) => a.upload || a.model).length >= 2) {   // several pictures: review them first
+    const words = $("composer").value.trim(); $("composer").value = ""; $("composer").style.height = "auto";
+    openReview(S.attachments.splice(0), words); renderAttachments(); return;
+  }
   const text = $("composer").value.trim();
   const atts = S.attachments.splice(0);
   if (!text && !atts.length) return;
@@ -938,7 +960,7 @@ function planFromRole(role, extra = {}) {
 /** "pause button", "player character", "background"... for a plan. */
 const planWords = (plan) => plan.as === "player" ? "player character" : plan.as === "object" ? `${ROLE_LABEL[plan.role]}${plan.name ? ` (${plan.name})` : ""}` : plan.as === "level" ? "level drawing" : `${plan.hint ? plan.hint + " " : ""}${ROLE_WORDS[plan.role] || plan.role}${plan.name && !plan.hint && plan.name !== ROLE_WORDS[plan.role] ? ` (${plan.name})` : ""}`;
 /** The toggle wins, then the words, then auto. */
-const pictureRole = (text, a) => { const w = wordsRole(text); if (a.role && a.role !== "auto") return { as: a.role, role: a.objRole || (w && w.as === a.role ? w.role : a.role === "ui" ? "ui_button" : a.role === "asset" ? "background" : undefined), hint: a.hint || w?.hint, name: a.name }; return w || { as: "auto" }; };
+const pictureRole = (text, a) => { const w = wordsRole(text); if (a.role && a.role !== "auto") return { as: a.role, role: a.objRole || (w && w.as === a.role ? w.role : a.role === "ui" ? "ui_button" : a.role === "asset" ? "background" : undefined), hint: a.hint || w?.hint, name: a.guessName }; return w || { as: "auto" }; };
 const asPlayer = (text, a) => pictureRole(text, a).as === "player";
 const resetsPlayer = (text) => /\b(default|normal|original|old|remove|reset)\b/i.test(text) && /\b(player|character|hero)\b/i.test(text) && !LEVEL_WORDS.test(text);
 
@@ -957,7 +979,7 @@ async function handlePicture(img, text) {
         hideTyping();
         const role = c.role || (c.kind === "character" ? "player" : c.kind === "object" ? SLOT_ROLE[c.role] || "decoration" : "level");
         plan = planFromRole(role, { name: c.name, hint: c.hint });
-        if (c.confidence < 0.5 && plan.as !== "level") { await askRole(img, text, plan, c); return true; }
+        if (c.confidence < 0.5 && plan.as !== "level" && !S.batch) { await askRole(img, text, plan, c); return true; }   // in a batch the best guess stands
         if (plan.as !== "level") await addCard({ icon: "&#128269;", title: "Looked at your picture", text: plan.as === "player" ? `a character (${c.name})` : plan.as === "object" ? `${c.name}: it will be the ${ROLE_LABEL[plan.role]}` : `${c.name}: ${planWords(plan)}` });
       } catch (err) { hideTyping(); if (err.status === 402) return true; plan = { as: "level" }; }   // could not tell: treat it as a level drawing
     }
@@ -970,7 +992,7 @@ async function applyPicturePlan(img, plan, text) {
   if (plan.as === "object" && !plan.role) plan.role = "decoration";
   if (plan.as === "player" || plan.as === "object") await makePictureSprite(img, plan, text);
   else await saveAsset(img, plan);
-  await detectedCard([plan]);
+  if (S.batch) S.batch.plans.push(plan); else await detectedCard([plan]);
   return true;
 }
 /** Nobody is sure: a card with chips; the pick carries on with that role. */
@@ -983,7 +1005,7 @@ async function askRole(img, text, plan, c) {
     b.addEventListener("click", async () => {
       if (S.busy) return;
       row.remove(); S.busy = true; $("sendBtn").disabled = true;
-      const [kind, role] = as.split(":"); img.role = kind; img.objRole = role; img.name = c?.name; img.hint = kind === "ui" && plan.as === "ui" ? plan.hint : "";
+      const [kind, role] = as.split(":"); img.role = kind; img.objRole = role; img.guessName = c?.name; img.hint = kind === "ui" && plan.as === "ui" ? plan.hint : "";
       try { if (!(await applyPicturePlan(img, pictureRole(text, img), text))) await runScan(img); } catch (err) { hideTyping(); toast(err.message, 4000); }
       S.busy = false; $("sendBtn").disabled = false;
     });
@@ -1003,12 +1025,98 @@ async function saveAsset(img, plan) {
   await streamAssistant(ui ? `Got it: a ${what}. It is in your game's UI kit; the next update puts the kit into the game's menus and HUD.` : `Got it: a ${what}. It is in your game's assets; the next update puts backgrounds, tilesets and sprite sheets into the game.`);
   await saveMessage("assistant", `Saved a ${what}.`);
 }
-/** "Detected: 1 player character, 1 pause UI button. Game is 2D." */
+/** "Detected: 1 player character, 3 UI buttons (pause, restart, menu), 1 background. Game is 2D." */
 async function detectedCard(plans) {
-  const counts = new Map();
-  for (const p of plans) { const k = planWords(p); counts.set(k, (counts.get(k) || 0) + 1); }
-  const list = [...counts].map(([k, n]) => `${n} ${k}`).join(", ");
-  await addCard({ icon: "&#129516;", title: "Detected", text: `${list}. Game is ${S.mode === "3d" ? "3D" : "2D"}.` });
+  const groups = new Map();
+  for (const p of plans) {
+    const key = p.as === "level" ? "level" : p.as === "player" ? "player" : p.as === "object" ? "object:" + p.role : p.role;
+    const g = groups.get(key) || { n: 0, words: [] }; g.n++;
+    const w = p.as === "object" ? (p.name && p.name !== ROLE_LABEL[p.role] ? p.name : "") : p.as === "level" || p.as === "player" ? "" : (p.hint || (p.name && p.name !== ROLE_WORDS[p.role] ? p.name : ""));
+    if (w && !g.words.includes(w)) g.words.push(w);
+    groups.set(key, g);
+  }
+  const plural = (base, n) => n === 1 ? base : /s$/.test(base) ? base : base.replace(/y$/, "ie") + "s";
+  const label = (key) => key === "level" ? "level drawing" : key === "player" ? "player character" : key.startsWith("object:") ? ROLE_LABEL[key.slice(7)] : ROLE_WORDS[key] || key;
+  const list = [...groups].map(([key, g]) => `${g.n} ${g.words.length === 1 && g.n === 1 ? g.words[0] + " " : ""}${plural(label(key), g.n)}${g.words.length && !(g.words.length === 1 && g.n === 1) ? ` (${g.words.join(", ")})` : ""}`).join(", ");
+  await addCard({ icon: "&#129516;", title: "Detected", text: `${list || "nothing"}. Game is ${S.mode === "3d" ? "3D" : "2D"}.` });
+}
+
+// ---------------------------------------------------------------------------
+// Many files at once: a drop, a paste, the clip button or a ZIP. Two or more pictures open the review grid: each file with
+// the role the local checks guessed (a chip to change), the engine the files imply, and Apply all.
+// ---------------------------------------------------------------------------
+const REVIEW_ROLES = [["auto", "Auto (Muse Spark looks, 1 credit)"], ["level", "Level drawing"], ["player", "Player character"], ["enemy", "Enemy"], ["collectible", "Collectible (coin)"], ["hazard", "Hazard (spikes)"], ["goal", "Goal (flag)"], ["decoration", "Decoration"],
+  ["background", "Background"], ["tileset", "Tileset"], ["texture", "Texture"], ["spritesheet", "Sprite sheet"], ["ui_button", "UI button"], ["ui_panel", "UI panel"], ["ui_hud", "HUD piece"], ["ui_icon", "UI icon"], ["ui_logo", "Logo"], ["ui_cursor", "Cursor"], ["ui_font", "Font sheet"], ["ui_mockup", "UI mockup"]];
+const REVIEW_HINTS = { ui_button: ["pause", "start", "restart", "menu", "gameover", "other"], ui_icon: ["heart", "coin", "star", "timer", "other"], ui_hud: ["health", "coins", "timer", "score", "other"] };
+let review = null;
+/** Files from the clip, a drop or a paste. Returns how many pictures were attached without the grid (0 when the grid opened). */
+async function addFiles(list) {
+  const files = [];
+  for (const f of list || []) {
+    if (!f) continue;
+    if (/\.zip$/i.test(f.name) || /zip/.test(f.type || "")) {
+      try { const inside = await ZipRead.files(await f.arrayBuffer()); if (!inside.length) toast("No pictures or 3D models inside " + f.name, 4000); files.push(...inside); }
+      catch (err) { toast("Could not open " + f.name + ": " + err.message, 4000); }
+    } else if ((f.type || "").startsWith("image/") || /\.(png|jpe?g|webp|glb|gltf|fbx)$/i.test(f.name)) files.push(f);
+  }
+  for (const f of files.slice(0, 60)) await addAttachment(f);
+  if (S.attachments.filter((a) => a.upload || a.model).length >= 2) {
+    const words = $("composer").value.trim(); $("composer").value = ""; $("composer").style.height = "auto";
+    openReview(S.attachments.splice(0), words); renderAttachments();
+    return 0;
+  }
+  return files.length;
+}
+function openReview(atts, words) {
+  const w = wordsRole(words || "");
+  review = { words: words || "", items: atts.filter((a) => a.upload || a.model).map((a) => ({ att: a, role: a.model ? "model" : w ? (w.as === "object" ? SLOT_ROLE[w.role] : w.as === "ui" || w.as === "asset" ? w.role : w.as) : a.check?.sure ? a.check.guess.role : "auto", hint: w?.hint || "" })) };
+  renderReview();
+  $("reviewModal").classList.add("show");
+}
+function renderReview() {
+  if (!review) return;
+  const items = review.items, has3d = items.some((i) => i.att.model);
+  $("reviewSummary").textContent = `${items.filter((i) => !i.att.model).length} picture${items.filter((i) => !i.att.model).length === 1 ? "" : "s"}${has3d ? ` · ${items.filter((i) => i.att.model).length} 3D model${items.filter((i) => i.att.model).length === 1 ? "" : "s"}` : ""}${review.words ? ` · "${review.words}"` : ""}`;
+  $("reviewEngine").innerHTML = has3d ? "Game: <b>3D</b> (a 3D model is in the files; models land in the game in the next update)" : `Game: <b>${S.mode === "3d" ? "3D" : "2D"}</b>`;
+  $("reviewGrid").innerHTML = items.map((it, i) => {
+    const a = it.att, g = a.check?.guess;
+    if (a.model) return `<div class="rcard model"><div class="pic">&#129513;</div><div class="name" title="${esc(a.name)}">${esc(a.name)}</div><div class="why">3D model · ${Math.round(a.size / 1024)} KB · the player, in 3D (next update)</div></div>`;
+    return `<div class="rcard"><div class="pic"><img src="${a.thumb}" alt=""></div><div class="name" title="${esc(a.name)}">${esc(a.name)}</div>
+      <select data-role data-i="${i}">${REVIEW_ROLES.map(([v, l]) => `<option value="${v}"${it.role === v ? " selected" : ""}>${l}${v === "auto" && g && !a.check.sure ? ` · maybe ${ROLE_WORDS[g.role]}` : ""}</option>`).join("")}</select>
+      ${REVIEW_HINTS[it.role] ? `<select data-hint data-i="${i}">${REVIEW_HINTS[it.role].map((h) => `<option value="${h}"${it.hint === h ? " selected" : ""}>${h}</option>`).join("")}</select>` : ""}
+      <div class="why">${g ? esc(a.check.sure ? g.why + " (no credits)" : "not sure: " + g.why) : ""}</div></div>`;
+  }).join("");
+  $("reviewGrid").querySelectorAll("select[data-role]").forEach((s) => s.addEventListener("change", () => { const it = items[Number(s.dataset.i)]; it.role = s.value; it.hint = REVIEW_HINTS[s.value] ? (REVIEW_HINTS[s.value].includes(it.hint) ? it.hint : REVIEW_HINTS[s.value][0]) : ""; renderReview(); }));
+  $("reviewGrid").querySelectorAll("select[data-hint]").forEach((s) => s.addEventListener("change", () => { items[Number(s.dataset.i)].hint = s.value; }));
+}
+const closeReview = () => { $("reviewModal").classList.remove("show"); if (review) { S.attachments.push(...review.items.map((i) => i.att)); renderAttachments(); } review = null; };
+$("reviewClose").addEventListener("click", closeReview); $("reviewCancel").addEventListener("click", closeReview);
+$("reviewApply").addEventListener("click", applyReview);
+/** Adds every reviewed file to the game: level drawings first, then the player, objects, and the assets and UI pieces. */
+async function applyReview() {
+  if (!review || S.busy) return;
+  const r = review; review = null; $("reviewModal").classList.remove("show");
+  S.busy = true; $("sendBtn").disabled = true; layout();
+  const order = (it) => it.role === "level" ? 0 : it.role === "auto" ? 1 : it.role === "player" ? 2 : OBJECT_SLOT[it.role] ? 3 : 4;
+  const items = [...r.items].filter((i) => !i.att.model).sort((a, b) => order(a) - order(b)), models = r.items.filter((i) => i.att.model);
+  const attMeta = r.items.map(({ att }) => ({ name: att.name, type: att.type, thumb: att.thumb || null }));
+  appendMessage({ role: "user", content: r.words, meta: { attachments: attMeta } });
+  S.batch = { plans: [] };
+  try {
+    await ensureProject(r.words || `Game from ${r.items.length} files`);
+    await saveMessage("user", r.words, { attachments: attMeta });
+    for (const it of items) {
+      const a = it.att;
+      if (it.role === "auto") { a.role = "auto"; a.objRole = undefined; a.hint = ""; }
+      else { a.role = it.role === "level" ? "level" : it.role === "player" ? "player" : OBJECT_SLOT[it.role] ? "object" : /^ui_/.test(it.role) ? "ui" : "asset"; a.objRole = OBJECT_SLOT[it.role] || (a.role === "ui" || a.role === "asset" ? it.role : undefined); a.hint = it.hint || ""; }
+      try { if (!(await handlePicture(a, it.role === "auto" ? r.words : ""))) await runScan(a); }
+      catch (err) { hideTyping(); toast(`${a.name}: ${err.message}`, 5000); }
+    }
+    await detectedCard(S.batch.plans);
+    if (models.length) await streamAssistant(`${models.length === 1 ? "The 3D model" : "The 3D models"} (${models.map((m) => m.att.name).join(", ")}) will be used by the 3D update that is coming next.`);
+  } catch (err) { hideTyping(); await streamAssistant("Something went wrong: " + err.message); }
+  S.batch = null;
+  S.busy = false; $("sendBtn").disabled = false; layout(); $("composer").focus();
 }
 
 async function makePictureSprite(img, plan, text) {
@@ -1081,6 +1189,7 @@ async function runScan(img) {
     const lvl = data.level, problems = data.meta?.playtest?.before?.problems || [];
     const what = img.sketch ? "sketch" : "picture";
     await applyLevel(lvl, { note: `from ${what}`, thumb: img.art || img.thumb, toastText: `Built from your ${what}: ${lvl.objects.length} objects` });
+    if (S.batch) S.batch.plans.push({ as: "level" });
     const d = lvl.diff?.short;
     await addCard({ icon: img.sketch ? "&#9998;" : "&#128444;", title: `Level from your ${what}`, text: `${lvl.objects.length} objects · ${lvl.theme}${d ? ` · ${d}` : ""}${problems.length ? ` · quick-fixed ${problems.length} impossible part${problems.length > 1 ? "s" : ""}` : " · every jump reachable"}` });
     await streamAssistant(`Done. I found ${lvl.objects.length} things (${lvl.theme}). It is playable on the right${problems.length ? ", and I fixed what was impossible" : ""}.`);

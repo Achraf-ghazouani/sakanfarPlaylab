@@ -308,6 +308,22 @@ try {
   check("every enemy in the preview wears the sprite", !!enemiesWear);
   await evalJS(`window.__classifyAs = null; true`);
 
+  // 5e2. many files at once: the review grid, roles set by hand, Apply all -> assets on the game and one Detected card
+  await evalJS(`(async () => { const files = []; for (const n of ["button.png", "background.png", "icon_heart.png"]) { const b = await (await fetch("tests/samples/" + n, { cache: "no-store" })).blob(); files.push(new File([b], n, { type: "image/png" })); } await addFiles(files); return true; })()`);
+  check("three pictures open the review grid with three cards and empty the attachments", await evalJS(`document.getElementById("reviewModal").classList.contains("show") && document.querySelectorAll("#reviewGrid .rcard").length === 3 && S.attachments.length === 0`));
+  check("the grid preselects the local guesses (button sure, the others ask)", await evalJS(`[...document.querySelectorAll("#reviewGrid select[data-role]")].map((s) => s.value).join()`) === "ui_button,auto,auto", await evalJS(`[...document.querySelectorAll("#reviewGrid select[data-role]")].map((s) => s.value)`));
+  check("the grid says the game stays 2D", /2D/.test(await evalJS(`document.getElementById("reviewEngine").textContent`)));
+  const pick = async (i, role) => evalJS(`(() => { const s = document.querySelector("#reviewGrid select[data-role][data-i='${i}']"); s.value = "${role}"; s.dispatchEvent(new Event("change")); return true; })()`);
+  const hint = async (i, h) => evalJS(`(() => { const s = document.querySelector("#reviewGrid select[data-hint][data-i='${i}']"); if (!s) return false; s.value = "${h}"; s.dispatchEvent(new Event("change")); return true; })()`);
+  await pick(1, "background"); await pick(2, "ui_icon"); await hint(0, "pause"); await hint(2, "heart");
+  check("hint pickers appear for buttons and icons only", await evalJS(`[...document.querySelectorAll("#reviewGrid select[data-hint]")].map((s) => s.dataset.i).join()`) === "0,2");
+  await evalJS(`window.__artCalls = []; true`);
+  await click("#reviewApply"); await idle();
+  const batchAssets = (await api(`api/projects?id=${pid}`)).project?.art?.assets || [];
+  check("Apply all saved the three assets with their roles and hints, no AI call", batchAssets.map((a) => a.role + (a.hint ? ":" + a.hint : "")).sort().join() === "background,ui_button:pause,ui_icon:heart" && (await evalJS(`window.__artCalls.length`)) === 0, batchAssets.map((a) => [a.role, a.hint]));
+  check("one Detected card sums the batch up", /Detected[^]*?1 pause UI button, 1 background, 1 heart UI icon\. Game is 2D\./.test(await evalJS(`document.getElementById("messages").innerText`)), (await evalJS(`document.getElementById("messages").innerText`)).split("Detected").pop()?.slice(0, 120));
+  check("the grid is closed and nothing is left attached", await evalJS(`!document.getElementById("reviewModal").classList.contains("show") && S.attachments.length === 0 && !S.batch`));
+
   // 5f. the 2D / 3D switch in the chat box: saved on the game, sent to the agent (3D prices) and drawn in 3D by the preview
   check("the chat box has a 2D / 3D switch on 2D", await evalJS(`document.querySelector("#dimSeg [data-dim='2d']").classList.contains("on")`));
   await evalJS(`document.querySelector("#dimSeg [data-dim='3d']").click(); true`);

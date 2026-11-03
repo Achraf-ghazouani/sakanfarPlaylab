@@ -66,4 +66,19 @@ function figure(s, x, y, body, skin) {   // a little character: head, body, legs
 // texture: a square opaque brick pattern
 { const s = surface(128, 128, [150, 75, 40, 255]); for (let r = 0; r < 8; r++) for (let c = 0; c < 4; c++) { const off = r % 2 ? 16 : 0; s.rect((c * 32 + off + 2) % 128, r * 16 + 2, 28, 12, [190 + (rnd() * 30 | 0), 100, 60]); } s.save("texture.png"); }
 
+// pack.zip: a few of the samples in one ZIP (stored and deflated entries, a folder, some junk) to drop into the Studio
+{
+  const entries = [["button.png", false], ["pics/background.png", true], ["pics/spritesheet.png", true], ["pics/tileset.png", true], ["ui/icon_heart.png", false], ["character.png", true], ["__MACOSX/._button.png", false], ["readme.txt", true]];
+  const parts = [], central = []; let offset = 0;
+  for (const [name, deflate] of entries) {
+    const base = name.split("/").pop(), data = base === "readme.txt" ? Buffer.from("made by tests/make-samples.mjs") : base.startsWith("._") ? Buffer.from("junk") : fs.readFileSync(path.join(OUT, base));
+    const packed = deflate ? zlib.deflateRawSync(data) : data, nameB = Buffer.from(name), crc = crc32(data);
+    const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(deflate ? 8 : 0, 8); local.writeUInt32LE(crc, 14); local.writeUInt32LE(packed.length, 18); local.writeUInt32LE(data.length, 22); local.writeUInt16LE(nameB.length, 26);
+    const cd = Buffer.alloc(46); cd.writeUInt32LE(0x02014b50, 0); cd.writeUInt16LE(20, 4); cd.writeUInt16LE(20, 6); cd.writeUInt16LE(deflate ? 8 : 0, 10); cd.writeUInt32LE(crc, 16); cd.writeUInt32LE(packed.length, 20); cd.writeUInt32LE(data.length, 24); cd.writeUInt16LE(nameB.length, 28); cd.writeUInt32LE(offset, 42);
+    parts.push(local, nameB, packed); central.push(cd, nameB); offset += local.length + nameB.length + packed.length;
+  }
+  const cdBuf = Buffer.concat(central), eocd = Buffer.alloc(22); eocd.writeUInt32LE(0x06054b50, 0); eocd.writeUInt16LE(entries.length, 8); eocd.writeUInt16LE(entries.length, 10); eocd.writeUInt32LE(cdBuf.length, 12); eocd.writeUInt32LE(offset, 16);
+  fs.writeFileSync(path.join(OUT, "pack.zip"), Buffer.concat([...parts, cdBuf, eocd]));
+}
+
 console.log("samples written to", OUT, fs.readdirSync(OUT).join(", "));

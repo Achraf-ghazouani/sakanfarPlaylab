@@ -3,7 +3,7 @@
 // detector, the validator the projects API uses, the system prompt. Then live calls when MODEL_API_KEY is set: a plan from
 // Muse Spark (a few seconds) and, with PLAYLAB_LIVE_CODE=1, a whole game from Muse Wonder (about a minute).
 //   node tests/code.test.mjs
-import { codeKind, normalizePlan, parseGameHtml, engineOf, validateCodeLevel, systemPrompt, planGame, generateGame, actionFor, describePlan, ENGINES, LAYOUTS, makeFixToken, readFixToken, MAX_FIXES, cleanReport, describeFailure, repairGame, lookAtGame, LOOK_BRIEF } from "../lib/code.mjs";
+import { codeKind, normalizePlan, parseGameHtml, engineOf, validateCodeLevel, systemPrompt, planGame, generateGame, actionFor, describePlan, ENGINES, LAYOUTS, makeFixToken, readFixToken, MAX_FIXES, cleanReport, describeFailure, repairGame, lookAtGame, LOOK_BRIEF, parsePatches, applyPatches, lineDiff, changeGame } from "../lib/code.mjs";
 import { EXAMPLES } from "../lib/code-examples.mjs";
 import { scan, wrap, csp } from "../shared/codescan.mjs";
 try { process.loadEnvFile(".env"); } catch {}
@@ -70,6 +70,38 @@ const look = await lookAtGame({ plan: { title: "Snake" }, prompt: "a snake game"
 check("lookAtGame: the screenshot goes to Muse Spark with the brief, the JSON verdict is parsed and clamped", look.match === 0.85 && /green snake/.test(look.looksLike) && look.problems.length === 0 && look.suggestion === "" && look.model === "muse-spark-1.3" && /JSON object only/.test(LOOK_BRIEF), look);
 let bad = null; try { await lookAtGame({ plan: {}, prompt: "", snapshot: "not an image" }, { chatFn: fakeChat }); } catch (e) { bad = e.message; }
 check("lookAtGame refuses a missing screenshot", /screenshot is required/.test(bad || ""));
+
+// ---- step 5: changes and fixes as patches ----
+const SRC = EXAMPLES.snake;
+const parsed = parsePatches("noise\n<<<<<<< SEARCH\nconst cv = document.getElementById(\"c\"), ctx = cv.getContext(\"2d\"), N = 20, CELL = 20;\n=======\nconst cv = document.getElementById(\"c\"), ctx = cv.getContext(\"2d\"), N = 20, CELL = 20, BLUE = \"#3b82f6\";\n>>>>>>> REPLACE\n<<<<<<< SEARCH\n  ctx.fillStyle = \"#ef4444\";\n=======\n  ctx.fillStyle = BLUE;\n>>>>>>> REPLACE\nNOTES {\"note\":\"blue apples\",\"built\":\"Apples are blue now.\",\"missing\":\"\"}");
+check("parsePatches: two blocks and the NOTES line", parsed.patches.length === 2 && parsed.notes.note === "blue apples" && parsed.notes.built === "Apples are blue now.", parsed);
+const applied = applyPatches(SRC, parsed.patches);
+check("applyPatches: both blocks fit, the file changed only there, the scan stays clean", applied.failed.length === 0 && applied.applied === 2 && /BLUE = "#3b82f6"/.test(applied.html) && /ctx\.fillStyle = BLUE;/.test(applied.html) && applied.html.length - SRC.length < 40 && scan(applied.html).ok, applied.failed);
+check("lineDiff counts the changed lines", JSON.stringify(lineDiff(SRC, applied.html)) === JSON.stringify({ added: 2, removed: 2 }), lineDiff(SRC, applied.html));
+const fuzzy = applyPatches(SRC, [{ search: "function placeApple() {\n do {", replace: "x" }, { search: "if (dead && PlayLab.input.pressed(1, \"A\")) reset();", replace: "  if (dead && PlayLab.input.pressed(1, \"B\")) reset();" }]);
+check("applyPatches: a SEARCH that is not in the file fails the whole set and changes nothing", fuzzy.failed.length === 1 && fuzzy.failed[0].i === 0 && /not in the file/.test(fuzzy.failed[0].error) && fuzzy.html === SRC);
+const indented = applyPatches(SRC, [{ search: "if (dead && PlayLab.input.pressed(1, \"A\")) reset();", replace: "  if (dead && PlayLab.input.pressed(1, \"B\")) reset();" }]);
+check("applyPatches: a SEARCH copied without its indentation is replaced with the indentation of the REPLACE (no doubled spaces)", indented.failed.length === 0 && /\n  if \(dead && PlayLab\.input\.pressed\(1, "B"\)\) reset\(\);/.test(indented.html) && !/\n    if \(dead/.test(indented.html));
+const loose = applyPatches(SRC, [{ search: "function reset() {   \n", replace: "x" }]);
+const byLines = applyPatches("a\n    let speed = 3;\n    let y = 1;\nb", [{ search: "let speed = 3;\n  let y = 1;", replace: "    let speed = 5;\n    let y = 2;" }]);
+check("applyPatches: lines match ignoring indentation and trailing spaces; an ambiguous SEARCH fails", byLines.failed.length === 0 && byLines.html === "a\n    let speed = 5;\n    let y = 2;\nb" && applyPatches("x\ny\nx", [{ search: "x", replace: "z" }]).failed[0]?.error === "the SEARCH appears more than once", [byLines, loose.failed]);
+// changeGame: patches first; the whole file when they do not fit
+const PATCH_ANSWER = "<<<<<<< SEARCH\n  ctx.fillStyle = \"#ef4444\";\n=======\n  ctx.fillStyle = \"#3b82f6\";\n>>>>>>> REPLACE\nNOTES {\"note\":\"blue apples\",\"built\":\"Blue apples.\",\"missing\":\"\"}";
+const calls = [];
+const fakeChange = (answers) => async ({ messages, maxTokens }) => { calls.push({ user: messages[1].content, maxTokens }); return { content: answers.shift(), finishReason: "stop", usage: {}, provider: "meta", model: "muse-wonder-1.0", ms: 1 }; };
+const prov = { name: "meta", url: "x", key: "k", model: "m" };
+const ch = await changeGame({ plan: { title: "Snake", engine: "canvas" }, prompt: "a snake game", html: SRC, change: "make the apples blue" }, { stream: fakeChange([PATCH_ANSWER]), provider: prov });
+check("changeGame: one call that asks for patches with the current file; the patch is applied, mode patch, the diff counted", calls.length === 1 && /ANSWER WITH PATCHES/.test(calls[0].user) && /THE CURRENT FILE:\n<!doctype html>/.test(calls[0].user) && calls[0].maxTokens === 12_000 && ch.patch.mode === "patch" && ch.patch.count === 1 && ch.patch.added === 1 && ch.patch.removed === 1 && /#3b82f6/.test(ch.html) && ch.notes.note === "blue apples" && ch.scan.ok, ch.patch);
+calls.length = 0;
+const progress = [];
+const rw = await changeGame({ plan: { title: "Snake", engine: "canvas" }, prompt: "a snake game", html: SRC, change: "make the apples blue" }, { stream: fakeChange(["<<<<<<< SEARCH\nnot in the file\n=======\nx\n>>>>>>> REPLACE", applied.html]), provider: prov, onProgress: (p) => progress.push(p) });
+check("changeGame: a patch that does not fit falls back to the whole file, says why, and tells the progress", calls.length === 2 && /COMPLETE updated file/.test(calls[1].user) && rw.patch.mode === "rewrite" && /did not fit \(the SEARCH is not in the file\)/.test(rw.patch.why) && progress.some((p) => p.rewrite) && rw.html === applied.html, rw.patch);
+calls.length = 0;
+const evilPatch = await changeGame({ plan: { title: "Snake" }, prompt: "", html: SRC, change: "x" }, { stream: fakeChange(["<<<<<<< SEARCH\n  ctx.fillStyle = \"#ef4444\";\n=======\n  fetch(\"https://x.y\"); ctx.fillStyle = \"#ef4444\";\n>>>>>>> REPLACE", SRC]), provider: prov });
+check("changeGame: a patch that would add something forbidden is not used (the whole file is asked for instead)", evilPatch.patch.mode === "rewrite" && /uses network calls/.test(evilPatch.patch.why) && evilPatch.scan.ok);
+calls.length = 0;
+const rp = await repairGame({ plan: { title: "Snake" }, prompt: "a snake game", html: SRC, report: { errors: [{ kind: "exception", message: "x is not defined", line: 3 }] } }, { stream: fakeChange([PATCH_ANSWER]), provider: prov });
+check("repairGame: a fix is a patch too (the error list and patch rules in the request)", calls.length === 1 && /failed in the sandbox/.test(calls[0].user) && /x is not defined/.test(calls[0].user) && /ANSWER WITH PATCHES/.test(calls[0].user) && rp.patch.mode === "patch", rp.patch);
 
 // ---- live (skipped without a key) ----
 if (process.env.MODEL_API_KEY) {

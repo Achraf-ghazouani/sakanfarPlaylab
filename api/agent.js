@@ -5,7 +5,8 @@
 //   POST { task: "plan", message, plan?, history? }                                                a plan for a game written as code (free)
 //   -> 200 { plan, meta: { model, ms } }
 //   POST { task: "code", plan, prompt, project_id?, change?, previous_html? }   (also POST /api/build-code, a rewrite)
-//   -> 200 text/event-stream: data: {e:"start"} ... {e:"progress", chars, lines} ... {e:"done", html, notes, scan, engine, credits, fix} | {e:"error", error}
+//   -> 200 text/event-stream: data: {e:"start"} ... {e:"progress", chars, lines, rewrite?} ... {e:"done", html, notes, scan, engine, patch, credits, fix} | {e:"error", error}
+//      a change (and a fix) comes back as search / replace patches applied here (patch.mode "patch"), or the whole file when they do not fit ("rewrite")
 //   POST { task: "fix", token, plan, prompt, html, report }                                        the self-healing loop (free, token-bound)
 //   -> the same stream; done carries the next token and the attempt number
 //   POST { task: "look", token, plan, prompt, snapshot }                                           the vision check (free, token-bound)
@@ -22,7 +23,7 @@ import { paid, charge, refund } from "../lib/credits.mjs";
 import { normalizeLevel } from "../lib/scan-level.mjs";
 import { normalizeArena, genreWanted } from "../shared/arena.mjs";
 import { requireUser, rateLimit } from "../lib/auth.mjs";
-import { planGame, generateGame, repairGame, lookAtGame, normalizePlan, actionFor, cleanReport, makeFixToken, readFixToken, MAX_FIXES, CODE_MODEL, MAX_HTML, MIN_HTML } from "../lib/code.mjs";
+import { planGame, generateGame, changeGame, repairGame, lookAtGame, normalizePlan, actionFor, cleanReport, makeFixToken, readFixToken, MAX_FIXES, CODE_MODEL, MAX_HTML, MIN_HTML } from "../lib/code.mjs";
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
@@ -86,7 +87,7 @@ async function streamEvents(res, start, work, onError) {
     ev({ e: "error", error: friendly(err), ...((onError && await onError(err)) || {}) });
   } finally { clearInterval(ping); res.end(); }
 }
-const pick = (out) => ({ html: out.html, notes: out.notes, scan: out.scan, engine: out.engine, ms: out.ms, usage: out.usage });
+const pick = (out) => ({ html: out.html, notes: out.notes, scan: out.scan, engine: out.engine, ms: out.ms, usage: out.usage, patch: out.patch || null });
 
 /** Muse Wonder writes the game: charged first (a normal JSON 402 when refused), then the progress streams as events. */
 async function code(res, user, body) {
@@ -101,8 +102,10 @@ async function code(res, user, body) {
   if (!c.ok) return res.status(c.status).json(c.body);
   return streamEvents(res, { action, cost: c.cost, balance: c.balance, model: c.model, modelName: c.modelName },
     async (ev) => {
-      const out = await generateGame({ plan: planIn, prompt, previousHtml, change, assets: body.assets && typeof body.assets === "object" ? body.assets : {} },
-        { provider: c.provider, model: c.model || CODE_MODEL, timeoutMs: 270_000, onProgress: (p) => ev({ e: "progress", ...p }) });
+      const assets = body.assets && typeof body.assets === "object" ? body.assets : {};
+      const opts = { provider: c.provider, model: c.model || CODE_MODEL, timeoutMs: 270_000, onProgress: (p) => ev({ e: "progress", ...p }) };
+      const out = previousHtml ? await changeGame({ plan: planIn, prompt, html: previousHtml, change, assets }, opts)   // patches first, the whole file if they do not fit
+        : await generateGame({ plan: planIn, prompt, assets }, opts);
       return { ...pick(out), credits: { spent: c.cost, balance: c.balance, action, model: c.model }, fix: makeFixToken({ ledger: c.ledgerId, n: 0, project }) };
     },
     async () => { const back = await refund(c.ledgerId, "refund: the code build failed"); return { credits: { refunded: !!back?.ok, balance: back?.balance ?? c.balance } }; });

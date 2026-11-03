@@ -120,11 +120,17 @@ const inject = `
   const json = (o) => Promise.resolve(new Response(JSON.stringify(o), { status: 200, headers: { "Content-Type": "application/json" } }));
   window.fetch = (url, init) => {
     const u = String(url);
-    if (/api\\/build-code$/.test(u)) { const b = JSON.parse(init.body); window.__lastBuildBody = b; const calls = (window.__buildCalls = window.__buildCalls || []); calls.push(b.change || "create"); const first = calls.length === 1; return stream(sse(b, first ? BROKEN : SNAKE, { credits: { spent: b.change ? 6 : 20, balance: 180, action: b.change ? "code_edit" : "code_create_2d", model: "mock" } })); }
+    if (/api\\/build-code$/.test(u)) {
+      const b = JSON.parse(init.body); window.__lastBuildBody = b; const calls = (window.__buildCalls = window.__buildCalls || []); calls.push(b.change || "create"); const first = calls.length === 1;
+      const credits = { credits: { spent: b.change ? 6 : 20, balance: 180, action: b.change ? "code_edit" : "code_create_2d", model: "mock" } };
+      if (b.change && /break it/.test(b.change)) { window.__breakFixes = true; return stream(sse(b, BROKEN, { ...credits, patch: { mode: "patch", count: 1, added: 1, removed: 0 } })); }
+      if (b.change) return stream(sse(b, SNAKE.replace('ctx.fillStyle = "#ef4444";', 'ctx.fillStyle = "#3b82f6";'), { ...credits, patch: { mode: "patch", count: 1, added: 1, removed: 1 } }));
+      return stream(sse(b, first ? BROKEN : SNAKE, credits));
+    }
     if (/api\\/agent$/.test(u)) {
       window.__agentCalls++; const b = JSON.parse(init.body); window.__lastAgentBody = b;
       if (b.task === "plan") { window.__lastPlanBody = b; return json({ plan: PLAN, meta: { model: "mock", ms: 1 } }); }
-      if (b.task === "fix") { (window.__fixBodies = window.__fixBodies || []).push(b); return stream(sse(b, SNAKE, { attempt: window.__fixBodies.length })); }
+      if (b.task === "fix") { (window.__fixBodies = window.__fixBodies || []).push(b); return stream(sse(b, window.__breakFixes ? BROKEN : SNAKE, { attempt: window.__fixBodies.length, patch: { mode: "patch", count: 1, added: 2, removed: 1 } })); }
       if (b.task === "look") { window.__lookBody = b; return json({ match: 0.9, looksLike: "a green snake on a dark grid with a score", problems: [], suggestion: "", model: "mock", ms: 1 }); }
       if (/playtest/i.test(b.message)) return json({ reply: "Running the playtest agent.", actions: [{ type: "playtest" }] });
       if (/racing/i.test(b.message)) return realFetch(url, init);   // the real agent answers for free: it hands racing to the code builder
@@ -496,7 +502,16 @@ try {
   await type("make the apples blue");
   check("the send line prices a change as a code rewrite", /rewrites its code/.test(await evalJS(`document.getElementById("sendCost").textContent`)));
   await sendMsg(); await idle();
+  check("the change was patched: the panel says Patched 1 place (+1 -1 lines), the card says what changed since v1", await evalJS(`[...document.querySelectorAll(".card.think")].slice(-1)[0].textContent.includes("Patched 1 place (+1 -1 lines)") && [...document.querySelectorAll(".card")].some((c) => /blue apples · v2/.test(c.textContent) && /\\+1 -1 lines since v1/.test(c.textContent)) && /#3b82f6/.test(S.level.html)`), await evalJS(`[...document.querySelectorAll(".card")].slice(-3).map((c) => c.textContent).join(" | ")`));
   check("a change rewrites the code with the current file (code_edit flow) as version v2, still sandboxed", await evalJS(`S.level?.genre === "code" && S.versions.length === 2 && S.versions[0].note === "blue apples" && window.__lastBuildBody.change === "make the apples blue" && typeof window.__lastBuildBody.previous_html === "string" && window.__lastBuildBody.previous_html.length > 1000 && document.getElementById("preview").getAttribute("sandbox") === "allow-scripts allow-pointer-lock"`), await evalJS(`JSON.stringify({ versions: S.versions.map((v) => v.note), calls: window.__buildCalls })`));
+  // undo: v1 comes back (a new version v3 that restores it) and runs in the sandbox again
+  await click("#undoBtn"); await idle();
+  check("Undo restores v1's code as v3 and the sandbox runs it", !!(await waitFor(`S.versions.length === 3 && /restored v1/.test(S.versions[0].note) && /#ef4444/.test(S.level.html) && !/#3b82f6/.test(S.level.html) && S.codeRun && S.codeRun.html === S.level.html && S.codeRun.ready`, { timeout: 15_000 })), await evalJS(`JSON.stringify({ versions: S.versions.map((v) => v.note), ready: S.codeRun && S.codeRun.ready })`));
+  // a change that breaks the game and cannot be fixed: nothing is saved, the working version keeps running
+  await type("break it please"); await sendMsg(); await waitFor(`!S.busy`, { timeout: 120_000 });
+  const broke = await evalJS(`JSON.stringify({ versions: S.versions.length, note: S.versions[0].note, html: /#ef4444/.test(S.level.html), running: S.codeRun && S.codeRun.html === S.level.html, errors: S.codeRun && S.codeRun.errors.length, fixes: window.__fixBodies.length, reply: [...document.querySelectorAll(".msg.assistant .bubble")].slice(-1)[0].textContent, chips: [...document.querySelectorAll(".card .choices button")].map((b) => b.textContent) })`).then(JSON.parse);
+  check("a change that still crashes after 3 fixes is not saved: still v3, the working code is mounted again, the reply says so, a chip to try again", broke.versions === 3 && broke.html && broke.running && broke.errors === 0 && broke.fixes === 4 && /does not run/.test(broke.reply) && /I did not save it: your game is still v4|I did not save it: your game is still v3/.test(broke.reply) && broke.chips.includes("Try that change again"), broke);
+  await evalJS(`window.__breakFixes = false; document.querySelectorAll(".card .choices").forEach((r) => r.remove()); true`);
   await click("#newGameBtn");
   check("a new game puts the preview back on game.html without the sandbox, the switch off, the code bar hidden", await evalJS(`!document.getElementById("preview").getAttribute("sandbox") && /game\\.html/.test(document.getElementById("preview").getAttribute("src") || "") && !document.getElementById("codeBtn").classList.contains("on") && !S.pendingPlan && !S.code && document.getElementById("codeBar").hidden`));
   check("the engines' preview says ready again after the sandbox", !!(await waitFor(`S.previewReady`, { timeout: 15_000 })));

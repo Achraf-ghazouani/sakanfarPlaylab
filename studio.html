@@ -1506,6 +1506,8 @@ const VIEW_NAME = { fps: "first person", tps: "third person", top: "top-down" };
 // "code") and runs it in the sandbox (shared/coderun.mjs) with the PlayLab SDK inside. Words on a code game rewrite its code.
 // ---------------------------------------------------------------------------
 const isCode = (l) => !!l && l.genre === "code";
+/** How a change or a fix reached the file: "Patched 2 places (+5 -1 lines)" or "Rewrote the whole file (...)". */
+const patchWords = (p) => !p ? "Rewrote the file" : p.mode === "patch" ? `Patched ${p.count} place${p.count === 1 ? "" : "s"} (+${p.added} -${p.removed} lines)` : `Rewrote the whole file${p.why ? ` (the patches did not fit: ${p.why})` : ""}, +${p.added} -${p.removed} lines`;
 const ENGINE_NAME = { canvas: "canvas", phaser: "Phaser 3", three: "three.js" };
 const MAX_FIXES = 3;   // free fix attempts after a paid build (the server enforces it through the build token)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1654,12 +1656,13 @@ async function buildCode(pending, { change = null } = {}) {
   S.pendingPlan = null; renderCodeMode();
   showTyping();
   const th = startThinking(change ? "Changing your game" : "Writing your game");
-  const label = change ? "Muse Wonder rewrites the code with your change" : `Muse Wonder writes the game (${ENGINE_NAME[plan.engine] || plan.engine})`;
+  const label = change ? "Muse Wonder patches the code with your change" : `Muse Wonder writes the game (${ENGINE_NAME[plan.engine] || plan.engine})`;
+  const before = change ? { html: S.level.html, n: S.versions[0]?.n || null } : null;   // a change that cannot be made to work leaves this version running
   const writing = th.add(label, "Muse Wonder 1.0"), t0 = performance.now();
   let out;
   try {
     out = await streamCode({ task: "code", project_id: S.project?.id, plan, prompt, change, previous_html: change ? S.level.html : null, assets: assetRoles() }, (ev) => {
-      if (ev.e === "progress") th.set(writing, { label: `${label} · ${(ev.chars / 1024).toFixed(1)} KB, ${ev.lines} lines` });
+      if (ev.e === "progress") th.set(writing, { label: ev.rewrite ? `The patches did not fit (${ev.why}): rewriting the whole file` : `${label} · ${(ev.chars / 1024).toFixed(1)} KB, ${ev.lines} lines` });
       if (ev.e === "start" && ev.modelName) th.set(writing, { model: ev.modelName });
     });
   } catch (err) {
@@ -1670,8 +1673,10 @@ async function buildCode(pending, { change = null } = {}) {
   }
   hideTyping();
   let html = out.html, notes = out.notes || {}, engine = out.engine, scan = out.scan, token = out.fix || null;
-  th.set(writing, { state: "done", label: `${change ? "Rewrote" : "Wrote"} ${(html.length / 1024).toFixed(1)} KB of ${ENGINE_NAME[engine] || engine} in ${((performance.now() - t0) / 1000).toFixed(0)} s` });
-  const progress = (step, base) => (ev) => { if (ev.e === "progress") th.set(step, { label: `${base} · ${(ev.chars / 1024).toFixed(1)} KB, ${ev.lines} lines` }); };
+  const secs = ((performance.now() - t0) / 1000).toFixed(0);
+  th.set(writing, { state: "done", label: change ? `${patchWords(out.patch)} in ${secs} s` : `Wrote ${(html.length / 1024).toFixed(1)} KB of ${ENGINE_NAME[engine] || engine} in ${secs} s` });
+  const diffs = change && out.patch ? [out.patch] : [];   // what changed in the file, for the version card
+  const progress = (step, base) => (ev) => { if (ev.e === "progress") th.set(step, { label: ev.rewrite ? `${base}: the patches did not fit, rewriting the whole file` : `${base} · ${(ev.chars / 1024).toFixed(1)} KB, ${ev.lines} lines` }); };
   // the self-healing loop: scan, sandbox, smoke test; a failure goes back to Muse Wonder for a free fix, up to MAX_FIXES times
   const build = { attempts: 0, fixes: [], report: null, look: null, improved: false, ok: false };
   S.lastBuild = build;
@@ -1693,7 +1698,8 @@ async function buildCode(pending, { change = null } = {}) {
     let fixed;
     try { fixed = await streamCode({ task: "fix", token, project_id: S.project?.id, plan, prompt, html, report: { errors: report.errors, blank: report.blank, ready: report.ready, responds: report.responds, restart: report.restart, scan: report.scan } }, progress(fixing, `Fix ${build.attempts} of ${MAX_FIXES}`)); }
     catch (err) { th.set(fixing, { state: "fail", label: `Fix ${build.attempts} failed: ${err.message}` }); break; }
-    th.set(fixing, { state: "done", label: `Fix ${build.attempts} of ${MAX_FIXES} for "${report.why}": rewrote ${(fixed.html.length / 1024).toFixed(1)} KB` });
+    th.set(fixing, { state: "done", label: `Fix ${build.attempts} of ${MAX_FIXES} for "${report.why}": ${fixed.patch ? patchWords(fixed.patch).toLowerCase() : `rewrote ${(fixed.html.length / 1024).toFixed(1)} KB`}` });
+    if (fixed.patch) diffs.push(fixed.patch);
     build.fixes.push(report.why);
     html = fixed.html; notes = fixed.notes || notes; engine = fixed.engine || engine; scan = fixed.scan; token = fixed.fix || null;
   }
@@ -1725,13 +1731,24 @@ async function buildCode(pending, { change = null } = {}) {
       }
     } catch (err) { th.set(looking, { state: "skip", label: `Could not look at it: ${err.message}` }); }
   }
-  // save it as a version (the loop already mounted this file), then say honestly what happened
+  // a change that could not be made to work: nothing is saved, the version that worked keeps running
   const problem = build.ok ? "" : build.report?.why || "it did not run";
+  if (!build.ok && before) {
+    await th.finish(`The change does not run after ${build.attempts} fix attempt${build.attempts === 1 ? "" : "s"}: kept v${before.n}`);
+    mountCode(before.html);
+    const reply = `I tried to ${change.replace(/[.!]+$/, "")} and ${build.attempts} fix${build.attempts === 1 ? "" : "es"}, but the changed game does not run (${problem}). I did not save it: your game is still v${before.n} and it works as before. Try saying it another way, or ask for a smaller change.`;
+    await streamAssistant(reply);
+    await saveMessage("assistant", reply, { code: true, ok: false, change, kept: before.n });
+    suggestChips([{ label: "Try that change again", run: () => buildCode({ plan, prompt }, { change }) }]);
+    return;
+  }
+  // save it as a version (the loop already mounted this file), then say honestly what happened
   const level = { genre: "code", engine, title: plan.title, theme: plan.genre, note: (notes.note || (change ? change.slice(0, 60) : plan.title)).slice(0, 60) + (build.ok ? "" : " (not running)"), prompt, plan, html, notes, objects: [] };
   await th.finish(build.ok ? (build.fixes.length ? `Ready after ${build.fixes.length} fix${build.fixes.length > 1 ? "es" : ""}` : "Ready") : `Not working after ${build.attempts} fix attempt${build.attempts === 1 ? "" : "s"}`);
   await applyLevel(level, { note: level.note, toastText: level.note });
   const kb = (html.length / 1024).toFixed(1);
-  await addCard({ icon: build.ok ? "&#127918;" : "&#9888;&#65039;", title: `${plan.title} · v${S.versions[0]?.n || 1}`, text: `${ENGINE_NAME[engine] || engine} · ${kb} KB · ${build.ok ? notes.built || plan.goal : "not running: " + problem}` });
+  const changed = diffs.length ? diffs.reduce((s, d) => ({ added: s.added + (d.added || 0), removed: s.removed + (d.removed || 0) }), { added: 0, removed: 0 }) : null;
+  await addCard({ icon: build.ok ? (change ? "&#9998;" : "&#127918;") : "&#9888;&#65039;", title: `${change ? (notes.note || change).slice(0, 60) : plan.title} · v${S.versions[0]?.n || 1}`, text: `${ENGINE_NAME[engine] || engine} · ${kb} KB${changed ? ` · +${changed.added} -${changed.removed} lines${before?.n ? ` since v${before.n}` : ""}` : ""} · ${build.ok ? notes.built || plan.goal : "not running: " + problem}` });
   let reply;
   if (build.ok) {
     reply = `${notes.built || "Done."}${notes.missing ? ` Not in this version: ${notes.missing}` : ""}`;

@@ -88,7 +88,7 @@ async function code(res, user, body) {
       { provider: c.provider, model: c.model || CODE_MODEL, timeoutMs: 270_000, onProgress: (p) => ev({ e: "progress", ...p }) });
     ev({ e: "done", html: out.html, notes: out.notes, scan: out.scan, engine: out.engine, ms: out.ms, usage: out.usage, credits: { spent: c.cost, balance: c.balance, action, model: c.model } });
   } catch (err) {
-    console.error("code build failed:", err.message);
+    console.error("code build failed:", err.message, err.cause?.message || "");
     const back = await refund(c.ledgerId, "refund: the code build failed");
     ev({ e: "error", error: friendly(err), credits: { refunded: !!back?.ok, balance: back?.balance ?? c.balance } });
   } finally { clearInterval(ping); res.end(); }
@@ -100,6 +100,7 @@ function friendly(err) {
   if (err?.name === "TimeoutError" || /timed? ?out|aborted/i.test(m)) return "The AI took too long. Try again.";
   if (err?.status === 429) return "The AI is busy right now. Try again in a moment.";
   if (/ran out of room|did not answer with a game|too big to save/.test(m)) return m;
+  if (/request failed|stream broke|fetch failed/.test(m)) return "The AI service could not be reached: " + m.slice(0, 200) + ". Try again.";
   return "The AI could not answer: " + m.slice(0, 160);
 }
 function uuidOrNull(v) { return /^[0-9a-f-]{36}$/i.test(String(v || "")) ? v : null; }

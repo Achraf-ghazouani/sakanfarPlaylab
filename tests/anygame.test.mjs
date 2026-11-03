@@ -38,7 +38,7 @@ const made = await srv("srv_create_user", { p_email: null, p_password: PASSWORD,
 if (made.status !== 200) { console.log("SKIP  this test needs a throwaway account: run db/003_server_users.sql (" + made.status + ")"); process.exit(0); }
 const USER_ID = made.data;
 
-const chrome = spawn(CHROME, ["--headless=new", "--disable-gpu", "--no-first-run", "--mute-audio", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", `--remote-debugging-port=${PORT}`, `--user-data-dir=${path.join(OUT, "chrome-profile")}`, "--window-size=1280,800", "about:blank"], { stdio: "ignore" });
+const chrome = spawn(CHROME, ["--headless=new", "--disable-gpu", "--no-first-run", "--mute-audio", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", `--remote-debugging-port=${PORT}`, `--user-data-dir=${path.join(OUT, "chrome-profile-" + Date.now())}`, "--window-size=1280,800", "about:blank"], { stdio: "ignore" });   // a fresh profile: no session from an earlier run
 let ws;
 for (let i = 0; i < 60 && !ws; i++) { try { const list = await (await fetch(`http://127.0.0.1:${PORT}/json`)).json(); const p = list.find((t) => t.type === "page"); if (p) ws = new WebSocket(p.webSocketDebuggerUrl); } catch {} if (!ws) await sleep(250); }
 await new Promise((r) => ws.addEventListener("open", r, { once: true }));
@@ -56,9 +56,12 @@ try {
   await send("Page.enable"); await send("Runtime.enable");
   await evalJS("1");
   await nav(`${BASE}/login.html?next=studio.html`);
-  await waitFor(`typeof PlayAuth === "object" && !!document.getElementById("passwordBtn")`, 15_000);
-  await evalJS(`localStorage.clear(); document.querySelector('[data-tab="password"]').click(); document.getElementById("user").value = ${JSON.stringify(USERNAME)}; document.getElementById("password").value = ${JSON.stringify(PASSWORD)}; document.getElementById("passwordBtn").click(); true`);
-  if (!(await waitFor(`/studio\\.html$/.test(location.pathname) && typeof S === "object" && !!S.me && !!S.costs`, 30_000))) throw new Error("could not log in to the Studio");
+  await waitFor(`document.readyState === "complete"`, 15_000);
+  await evalJS(`try { localStorage.clear(); sessionStorage.clear(); } catch {} true`);
+  await nav(`${BASE}/login.html?next=studio.html`);
+  if (!(await waitFor(`typeof PlayAuth === "object" && !!document.getElementById("passwordBtn")`, 15_000))) throw new Error("the login page did not load: " + (await evalJS("location.href")));
+  await evalJS(`document.querySelector('[data-tab="password"]').click(); document.getElementById("user").value = ${JSON.stringify(USERNAME)}; document.getElementById("password").value = ${JSON.stringify(PASSWORD)}; document.getElementById("passwordBtn").click(); true`);
+  if (!(await waitFor(`/studio\\.html$/.test(location.pathname) && typeof S === "object" && !!S.me && !!S.costs`, 40_000))) throw new Error("could not log in to the Studio: " + (await evalJS(`location.href + " " + (document.getElementById("msg") || document.querySelector(".err, .error") || {}).textContent`)));
   await evalJS(`window.__shots = []; addEventListener("message", (e) => { if (e.data && e.data.type === "playlab:snapshot") __shots.push(e.data.image); }); true`);
   console.log(`logged in as ${USERNAME} with ${CREDITS} credits; ${RUN.length} prompt(s)`);
 
@@ -79,10 +82,10 @@ try {
       const built = await waitFor(`!S.busy`, 360_000);
       r.buildS = +((Date.now() - t0) / 1000).toFixed(0);
       r.attempts = await evalJS(`[...document.querySelectorAll(".card.think .th b")].filter((b) => /Writing your game|Changing your game/.test(b.textContent)).length`);
-      const state = await evalJS(`JSON.stringify({ code: S.level?.genre === "code", engine: S.level?.engine, kb: +(((S.level?.html || "").length) / 1024).toFixed(1), ready: !!S.codeRun?.ready, errors: (S.codeRun?.errors || []).slice(0, 3).map((e) => e.message), blank: S.codeRun?.blank || null, reply: S.messages.filter((m) => m.role === "assistant").slice(-1)[0]?.content || "" })`).then(JSON.parse);
+      const state = await evalJS(`JSON.stringify({ code: S.level?.genre === "code", engine: S.level?.engine, kb: +(((S.level?.html || "").length) / 1024).toFixed(1), ready: !!S.codeRun?.ready, errors: (S.codeRun?.errors || []).slice(0, 3).map((e) => e.message), blank: S.codeRun?.blank || null, reply: [...document.querySelectorAll(".msg.assistant .bubble")].slice(-1)[0]?.textContent || "", steps: [...document.querySelectorAll(".card.think")].slice(-1)[0]?.textContent || "" })`).then(JSON.parse);
       if (!built) { r.note = "the build did not finish within 6 min"; console.log(`${key}: ${r.note}`); continue; }
       r.engine = state.engine || r.engine; r.kb = state.kb; r.ready = state.ready; r.errors = state.errors; r.blank = state.blank;
-      if (!state.code) { r.note = state.reply.slice(0, 200); console.log(`${key}: no game -> ${r.note}`); continue; }
+      if (!state.code) { r.note = state.reply.slice(0, 200); console.log(`${key}: no game after ${r.buildS} s -> ${r.note}\n  panel: ${state.steps.slice(0, 300)}`); continue; }
       const html = await evalJS(`S.level.html`);
       await fs.writeFile(path.join(OUT, key + ".html"), html);
       // does the screen respond to a phone input?

@@ -9,6 +9,7 @@
 import { runAgent, quickReply } from "../lib/agent.mjs";
 import { paid } from "../lib/credits.mjs";
 import { normalizeLevel } from "../lib/scan-level.mjs";
+import { normalizeArena, genreWanted } from "../shared/arena.mjs";
 import { requireUser } from "../lib/auth.mjs";
 
 export default async function handler(req, res) {
@@ -21,16 +22,17 @@ export default async function handler(req, res) {
   const message = String(body.message || "").slice(0, 2000);
   let level = null;
   if (body.level && Array.isArray(body.level.objects) && body.level.objects.length && body.level.objects.length <= 300) {
-    level = normalizeLevel(body.level, { aspect: body.level.aspect });
+    level = body.level.genre === "arena" ? normalizeArena(body.level) : normalizeLevel(body.level, { aspect: body.level.aspect });
   }
   const history = Array.isArray(body.history) ? body.history.slice(-20) : [];
   const attachments = Array.isArray(body.attachments) ? body.attachments.slice(0, 10) : [];
 
-  const free = quickReply(message, !!level, attachments);
+  const free = quickReply(message, !!level, attachments, level);
   if (free) return res.status(200).json(free);
   const model = typeof body.model === "string" ? body.model.slice(0, 60) : null;
   try {
-    const is3d = String(body.mode || "").startsWith("3d");   // the Studio's 2D / 3D toggle: 3D games cost the 3D prices
+    // 3D prices: the Studio's 3D toggle, an arena shooter (always 3D), or words asking for one
+    const is3d = String(body.mode || "").startsWith("3d") || level?.genre === "arena" || genreWanted(message) === "arena";
     const out = await paid(user, res, level ? (is3d ? "edit_3d" : "edit_2d") : (is3d ? "create_3d" : "create_2d"), { model, gameId: uuidOrNull(body.project_id) },
       (c) => runAgent({ message, level, history, attachments }, { timeoutMs: 50_000, provider: c.provider }));
     if (!out) return;   // 402 / 403 already sent

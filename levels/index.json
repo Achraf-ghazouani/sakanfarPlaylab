@@ -1,6 +1,11 @@
 {
   "levels": [
     {
+      "file": "zombies.json",
+      "theme": "zombie graveyard",
+      "objects": 22
+    },
+    {
       "file": "impossible.fixed.json",
       "theme": "impossible demo (hand-made)",
       "objects": 11

@@ -4,6 +4,7 @@
 // Start the dev server first (node serve.mjs), then:  node tests/studio.test.mjs [baseUrl]
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
+import { generateArena } from "../shared/arena.mjs";
 import os from "node:os";
 import path from "node:path";
 
@@ -58,6 +59,7 @@ ws.onmessage = (m) => {
   else if (msg.method === "Runtime.exceptionThrown") exceptions.push(msg.params.exceptionDetails.exception?.description || msg.params.exceptionDetails.text);
   else if (msg.method === "Runtime.executionContextCreated") contexts.push({ id: msg.params.context.id, frameId: msg.params.context.auxData?.frameId, isDefault: msg.params.context.auxData?.isDefault });
   else if (msg.method === "Runtime.executionContextsCleared") contexts.length = 0;
+  else if (msg.method === "Runtime.executionContextDestroyed") { const i = contexts.findIndex((c) => c.id === msg.params.executionContextId); if (i >= 0) contexts.splice(i, 1); }
 };
 const send = (method, params = {}) => new Promise((res, rej) => { const id = nextId++; pending.set(id, { res, rej }); ws.send(JSON.stringify({ id, method, params })); });
 async function evalJS(expression, contextId) {
@@ -71,7 +73,7 @@ async function waitFor(expression, { timeout = 10_000, contextId } = {}) {
   return null;
 }
 let mainFrameId = null;
-const iframeCtx = () => contexts.find((c) => c.isDefault && c.frameId !== mainFrameId)?.id;
+const iframeCtx = () => contexts.findLast((c) => c.isDefault && c.frameId !== mainFrameId)?.id;
 async function click(selector) { await evalJS(`document.querySelector(${JSON.stringify(selector)}).click(); true`); }
 async function type(text) { await evalJS(`(() => { const c = document.getElementById("composer"); c.value = ${JSON.stringify(text)}; c.dispatchEvent(new Event("input")); return true; })()`); }
 async function sendMsg() { await click("#sendBtn"); }
@@ -97,13 +99,14 @@ const LEVEL_A = { theme: "lava castle", aspect: 1.333, objects: [
   { type: "platform", label: "ground", x: 0, y: 900, w: 1000, h: 60 }, { type: "start", x: 40, y: 840, w: 40, h: 60 }, { type: "goal", x: 900, y: 840, w: 40, h: 60 },
   { type: "platform", label: "ledge", x: 300, y: 760, w: 200, h: 30 }, { type: "coin", x: 380, y: 700, w: 30, h: 30 }, { type: "enemy", x: 600, y: 850, w: 40, h: 50 } ] };
 const LEVEL_B = { ...LEVEL_A, theme: "lava castle", objects: [...LEVEL_A.objects, { type: "coin", x: 700, y: 820, w: 30, h: 30 }] };
+const ARENA = generateArena("zombie graveyard first person shooter, 5 waves");
 const LEVEL_C = { ...LEVEL_B, objects: [...LEVEL_B.objects, { type: "spike", x: 500, y: 870, w: 60, h: 30 }] };
 const inject = `
   window.__scanCalls = 0; window.__fixCalls = 0; window.__agentCalls = 0; window.__sawTyping = false;
   document.addEventListener("DOMContentLoaded", () => {
     new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.id === "typing") window.__sawTyping = true; }).observe(document.documentElement, { childList: true, subtree: true });
   });
-  const LA = ${JSON.stringify(LEVEL_A)}, LB = ${JSON.stringify(LEVEL_B)}, LC = ${JSON.stringify(LEVEL_C)};
+  const LA = ${JSON.stringify(LEVEL_A)}, LB = ${JSON.stringify(LEVEL_B)}, LC = ${JSON.stringify(LEVEL_C)}, AR = ${JSON.stringify(ARENA)};
   const realFetch = window.fetch.bind(window);
   const json = (o) => Promise.resolve(new Response(JSON.stringify(o), { status: 200, headers: { "Content-Type": "application/json" } }));
   window.fetch = (url, init) => {
@@ -111,6 +114,9 @@ const inject = `
     if (/api\\/agent$/.test(u)) {
       window.__agentCalls++; const b = JSON.parse(init.body); window.__lastAgentBody = b;
       if (/playtest/i.test(b.message)) return json({ reply: "Running the playtest agent.", actions: [{ type: "playtest" }] });
+      if (/top.?down/i.test(b.message) && b.level && b.level.genre === "arena") return json({ reply: "Top-down it is.", actions: [{ type: "view", view: "top" }] });
+      if (/shooter|zombie/i.test(b.message)) return json({ reply: "Zombies incoming!", level: AR, kind: "create", note: "zombie graveyard, 5 waves", playtest: { ok: true, fixed: 0, fixes: [] }, actions: [] });
+      if (/lava castle/i.test(b.message)) return json({ reply: "Built a lava castle with a ledge and a guard.", level: { ...LA, checked: true, fixes: [] }, kind: "create", note: "lava castle, one ledge", playtest: { ok: true, fixed: 0 }, actions: [] });
       if (b.level) return json({ reply: "Changed it.", level: { ...b.level, theme: "edited " + b.level.theme }, kind: "edit", note: "edited by chat", diff: "theme changed", playtest: { ok: true, fixed: 0 }, actions: [] });
       return json({ reply: "Built a lava castle with a ledge and a guard.", level: { ...LA, checked: true, fixes: [] }, kind: "create", note: "lava castle, one ledge", playtest: { ok: true, fixed: 0 }, actions: [] });
     }
@@ -342,6 +348,30 @@ try {
   await click(".proj");
   await waitFor(`S.project && S.project.id === ${JSON.stringify(pid)}`);
   check("clicking a game in the list opens it", await evalJS(`S.project.id`) === pid);
+
+  // 8. a shooter: the (mocked) agent answers with an arena, the preview switches to arena.html, 2D locks, views switch
+  await click("#newGameBtn");
+  await type("a first person shooter with zombie waves");
+  check("the send line shows the 3D price for a shooter", /3D game/.test(await evalJS(`document.getElementById("sendCost").textContent`)), await evalJS(`document.getElementById("sendCost").textContent`));
+  await sendMsg(); await idle();
+  check("the game is an arena", await evalJS(`S.level && S.level.genre === "arena" && S.level.view === "fps" && S.level.waves === 5`));
+  check("the preview switched to the arena engine", await evalJS(`document.getElementById("preview").getAttribute("src")`) === "arena.html?embed=1");
+  const arenaUp = await waitFor(`S.previewReady`, { timeout: 20_000 });
+  const inArena = arenaUp && await waitFor(`!!(window.__arena && window.__arena.G.level && window.__arena.G.level.genre === "arena" && window.__arena.G.spawners.length >= 3)`, { contextId: iframeCtx(), timeout: 20_000 });
+  check("arena.html built the shooter (gates and all)", !!inArena);
+  check("the 2D / 3D switch is locked to 3D", await evalJS(`S.mode === "3d" && document.querySelector("#dimSeg [data-dim='2d']").disabled && document.querySelector("#dimSeg [data-dim='3d']").classList.contains("on")`));
+  const apid = await evalJS(`S.project.id`);
+  check("the game type is saved as 3d-world", (await api(`api/projects?id=${apid}`)).project?.mode === "3d-world");
+  check("the chat card names the shooter", /first person shooter · 5 waves/.test(await evalJS(`document.body.innerText`)));
+  check("the status line names the shooter", /first person shooter · 5 waves/.test(await evalJS(`document.getElementById("previewStatus").textContent`)));
+  await new Promise((r) => setTimeout(r, 600));
+  { const shot = await send("Page.captureScreenshot", { format: "png" }); await fs.writeFile(path.join(OUT, "studio-arena.png"), Buffer.from(shot.data, "base64")); }
+  await type("switch to top down"); await sendMsg(); await idle();
+  const viewNow = await waitFor(`window.__arena.G.view === "top" ? "top" : null`, { contextId: iframeCtx(), timeout: 5_000 });
+  check("a view switch changes the arena's camera and is kept on the level", viewNow === "top" && await evalJS(`S.level.view === "top"`));
+  await type("A lava castle with moving platforms"); await sendMsg(); await idle();
+  check("a platformer after a shooter brings the platformer engine back", await evalJS(`document.getElementById("preview").getAttribute("src")`) === "game.html?embed=1" && await evalJS(`!S.level.genre`));
+  check("the 2D / 3D switch is free again", await evalJS(`!document.querySelector("#dimSeg [data-dim='2d']").disabled`));
 
   // 8. mobile layout: chat/preview tabs
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 800, deviceScaleFactor: 2, mobile: true });

@@ -12,12 +12,13 @@
     "check": "node check.mjs",
     "dev": "node serve.mjs",
     "serve": "node serve.mjs",
-    "test": "node tests/normalize.test.mjs && node tests/reach.test.mjs && node tests/diff.test.mjs && node tests/ai.test.mjs && node tests/paper.test.mjs && node tests/agent.test.mjs && node tests/image.test.mjs",
+    "test": "node tests/normalize.test.mjs && node tests/reach.test.mjs && node tests/diff.test.mjs && node tests/ai.test.mjs && node tests/paper.test.mjs && node tests/agent.test.mjs && node tests/image.test.mjs && node tests/arena.test.mjs",
     "playtest": "node tests/playtest.mjs http://localhost:3000",
     "test:auth": "node tests/auth.test.mjs http://localhost:3000",
     "test:db": "node tests/db.test.mjs",
     "test:studio": "node tests/studio.test.mjs http://localhost:3000",
     "test:admin": "node tests/admin.test.mjs http://localhost:3000",
-    "dev:https": "node serve.mjs --https"
+    "dev:https": "node serve.mjs --https",
+    "test:arena": "node tests/arena-play.test.mjs http://localhost:3000"
   }
 }

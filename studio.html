@@ -311,7 +311,7 @@
         </div>
       </section>
       <section class="preview">
-        <iframe id="preview" src="game.html?embed=1" title="Game preview" allow="autoplay"></iframe>
+        <iframe id="preview" src="game.html?embed=1" title="Game preview" allow="autoplay; pointer-lock"></iframe>
         <div id="previewStatus">no game yet</div>
         <!-- first screen: the welcome sits on the stage, the chat box floats at the bottom center -->
         <div class="welcome" id="emptyState">
@@ -327,6 +327,7 @@
             <button data-prompt="A lava castle with moving platforms">&#127969; A lava castle with moving platforms</button>
             <button data-prompt="A space level with floating platforms and lots of coins">&#128640; A space level with floating platforms</button>
             <button data-prompt="A jungle level for kids, easy">&#127796; A jungle level for kids, easy</button>
+            <button data-prompt="A first-person shooter with 5 waves of zombies">&#129503; First-person shooter, zombie waves</button>
           </div>
           <button class="continue" id="continueBtn" hidden>Continue <b></b> &rarr;</button>
         </div>
@@ -383,14 +384,17 @@ const S = { project: null, messages: [], versions: [], level: null, attachments:
 /** 2D or 3D: the chat box switch. Saved on the game (projects.mode "2d" | "3d-side"), sent to the preview (game.html draws it with
  *  shared/view3d.js), and 3D turns cost the 3D prices. Words like "3D" in a message switch it too. */
 function setDim(d, { save = true } = {}) {
-  S.mode = d === "3d" ? "3d" : "2d";
-  document.querySelectorAll("#dimSeg button").forEach((b) => { const on = b.dataset.dim === S.mode; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); });
-  if (S.previewReady) preview().postMessage({ type: "playlab:mode", mode: S.mode }, "*");
-  if (save && S.project && dimOf(S.project.mode) !== S.mode) {
-    S.project.mode = S.mode === "3d" ? "3d-side" : "2d";
-    api("api/projects", { method: "PATCH", body: { id: S.project.id, mode: S.project.mode } }).catch((err) => toast("Could not save the game type: " + err.message));
+  const arena = isArena(S.level);
+  S.mode = arena || d === "3d" ? "3d" : "2d";
+  document.querySelectorAll("#dimSeg button").forEach((b) => { const on = b.dataset.dim === S.mode; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); b.disabled = arena && b.dataset.dim === "2d"; });
+  $("dimSeg").title = arena ? "Arena shooters are always 3D" : "";
+  if (S.previewReady && !arena) preview().postMessage({ type: "playlab:mode", mode: S.mode }, "*");
+  const projMode = arena ? "3d-world" : S.mode === "3d" ? "3d-side" : "2d";
+  if (save && S.project && S.project.mode !== projMode) {
+    S.project.mode = projMode;
+    api("api/projects", { method: "PATCH", body: { id: S.project.id, mode: projMode } }).catch((err) => toast("Could not save the game type: " + err.message));
   }
-  if (S.level) $("previewStatus").textContent = $("previewStatus").textContent.replace(/ · 3D$/, "") + (S.mode === "3d" ? " · 3D" : "");
+  if (S.level && !arena) $("previewStatus").textContent = $("previewStatus").textContent.replace(/ · 3D$/, "") + (S.mode === "3d" ? " · 3D" : "");
   if (typeof updateCosts === "function") updateCosts();
 }
 const dimOf = (mode) => (String(mode || "").startsWith("3d") ? "3d" : "2d");
@@ -426,9 +430,12 @@ window.addEventListener("message", (e) => {
   if (m.type === "playlab:state" && m.state) Cam.host?.broadcast(m.state);                                                            // phones show level, coins, paused
 });
 function pushLevel(level, { name = "studio", thumb = null, keepPlayer = false, toastText = null, quiet = false } = {}) {
-  S.level = level; layout(); queueMicrotask(updateCosts);
+  S.level = level; layout(); setDim(S.mode); queueMicrotask(updateCosts);
   const n = level?.objects?.length || 0;
-  $("previewStatus").textContent = `${n} objects${S.versions[0] ? ` · v${S.versions[0].n}` : ""}${level?.theme ? ` · ${level.theme}` : ""}${S.mode === "3d" ? " · 3D" : ""}`;
+  // the right engine for the game: a platformer runs in game.html, an arena shooter in arena.html (it asks for the level when ready)
+  const want = isArena(level) ? "arena.html?embed=1" : "game.html?embed=1";
+  if ($("preview").getAttribute("src") !== want) { S.previewReady = false; $("preview").setAttribute("src", want); }
+  $("previewStatus").textContent = `${n} objects${S.versions[0] ? ` · v${S.versions[0].n}` : ""}${level?.theme ? ` · ${level.theme}` : ""}${isArena(level) ? ` · ${VIEW_NAME[level.view] || level.view} shooter · ${level.waves} waves` : S.mode === "3d" ? " · 3D" : ""}`;
   if (S.previewReady) preview().postMessage({ type: "playlab:level", level, name, thumb: thumb || S.project?.photo || null, player: S.project?.art?.player || null, sprites: S.project?.art?.sprites || null, mode: S.mode, keepPlayer, toast: quiet ? null : toastText }, "*");
 }
 
@@ -946,7 +953,8 @@ async function askAgent(text, history) {
     const note = res.note || (isEdit ? "edited" : "new level");
     await applyLevel(res.level, { note, keepPlayer: isEdit, toastText: note });
     const fixed = res.playtest?.fixed || 0;
-    await addCard({ icon: isEdit ? "&#9998;" : "&#10024;", title: note, text: `${res.level.objects.length} objects · ${res.level.theme}${res.diff ? ` · ${res.diff}` : ""}${fixed ? ` · patched ${fixed} impossible spot${fixed > 1 ? "s" : ""}` : ""}` });
+    const kindText = isArena(res.level) ? ` · ${VIEW_NAME[res.level.view] || res.level.view} shooter · ${res.level.waves} waves` : "";
+    await addCard({ icon: isArena(res.level) ? "&#127919;" : isEdit ? "&#9998;" : "&#10024;", title: note, text: `${res.level.objects.length} objects · ${res.level.theme}${kindText}${res.diff ? ` · ${res.diff}` : ""}${fixed ? ` · patched ${fixed} ${isArena(res.level) ? "walled-off" : "impossible"} spot${fixed > 1 ? "s" : ""}` : ""}` });
   }
   await streamAssistant(res.reply || "...");
   await saveMessage("assistant", res.reply || "", res.level ? { level: true, note: res.note || null } : null);
@@ -956,6 +964,13 @@ async function askAgent(text, history) {
 /** Actions the page runs itself with the existing endpoints. */
 async function runAction(action) {
   if (action.type === "mode") { setDim(action.mode); return; }
+  if (action.type === "view" && isArena(S.level)) {
+    S.level = { ...S.level, view: action.view };
+    toPreview({ type: "playlab:view", view: action.view });
+    $("previewStatus").textContent = $("previewStatus").textContent.replace(/ · (first person|third person|top-down) shooter/, ` · ${VIEW_NAME[action.view]} shooter`);
+    if (S.project) api("api/projects", { method: "PATCH", body: { id: S.project.id, level: S.level, note: `view: ${VIEW_NAME[action.view]}` } }).then(({ project, version }) => { S.project = project; if (version) { S.versions.unshift(version); renderHistory(); } }).catch(() => {});
+    return;
+  }
   if (action.type === "playtest") {
     if (!S.level) return;
     showTyping();
@@ -972,7 +987,9 @@ async function runAction(action) {
     } catch (err) { hideTyping(); await streamAssistant("Playtest failed: " + err.message); }
   }
 }
-const strip = (l) => ({ theme: l.theme, aspect: l.aspect, objects: l.objects.map(({ type, label, x, y, w, h }) => ({ type, label, x, y, w, h })) });
+const strip = (l) => ({ ...(l.genre === "arena" ? { genre: "arena", view: l.view, waves: l.waves } : {}), theme: l.theme, aspect: l.aspect, objects: l.objects.map(({ type, label, x, y, w, h }) => ({ type, label, x, y, w, h })) });
+const isArena = (l) => !!l && l.genre === "arena";
+const VIEW_NAME = { fps: "first person", tps: "third person", top: "top-down" };
 
 // ---------------------------------------------------------------------------
 // Mobile tabs + sidebar
@@ -1027,7 +1044,7 @@ function updateCosts() {
     return;
   }
   const hasImg = false;
-  const d3 = S.mode === "3d" || /\b3d\b/i.test(text);
+  const d3 = S.mode === "3d" || /\b3d\b/i.test(text) || /\b(shooter|fps|tps|first.?person|third.?person|top.?down|zombies?|horde|waves?\s+of|survive|survival|arena)\b/i.test(text);
   const action = hasImg ? "scan" : S.level ? (d3 ? "edit_3d" : "edit_2d") : (d3 ? "create_3d" : "create_2d");
   const n = price(action);
   $("sendCost").textContent = n === undefined || (!text && !hasImg) ? "" : `Send · ${n} credit${n === 1 ? "" : "s"} (${hasImg ? "read the picture" : S.level ? (d3 ? "change the 3D game" : "change the game") : (d3 ? "new 3D game" : "new game")}) · you have ${S.me?.balance ?? 0}`;

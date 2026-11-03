@@ -7,6 +7,7 @@
 // The caller must be logged in (Authorization: Bearer <Supabase access token>); rows are theirs through row-level security.
 
 import { normalizeLevel } from "../lib/scan-level.mjs";
+import { normalizeArena } from "../shared/arena.mjs";
 import * as db from "../lib/db.mjs";
 import { requireUser } from "../lib/auth.mjs";
 
@@ -67,7 +68,7 @@ function pickFields(body) {
   if (body.mode !== undefined) { if (!["2d", "3d-side", "3d-world"].includes(body.mode)) return { error: "Unknown mode." }; out.mode = body.mode; }
   if (body.level !== undefined && body.level !== null) {
     if (!body.level || !Array.isArray(body.level.objects) || body.level.objects.length > 300) return { error: "level must have an objects array." };
-    const lvl = normalizeLevel(body.level, { aspect: body.level.aspect });
+    const lvl = body.level.genre === "arena" ? normalizeArena(body.level) : normalizeLevel(body.level, { aspect: body.level.aspect });
     for (const k of ["checked", "fixes", "diff"]) if (body.level[k] !== undefined) lvl[k] = body.level[k];
     out.level = lvl;
   }

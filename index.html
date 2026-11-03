@@ -384,6 +384,20 @@ const COLORS = { start: "#4ade80", goal: "#facc15", platform: "#8b5a2b", moving_
 function renderLevel(level, canvas) {
   const w = 128, h = 160; canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext("2d");
+  if (level.genre === "arena") {   // a shooter: the map from above
+    ctx.fillStyle = "#1a2320"; ctx.fillRect(0, 0, w, h);
+    const sx = (w - 8) / 1000, sy = (h - 8) / 1000;
+    ctx.strokeStyle = "#4b5563"; ctx.lineWidth = 2; ctx.strokeRect(4, 4, w - 8, h - 8);
+    for (const o of level.objects || []) {
+      const x = 4 + Math.round(o.x * sx), y = 4 + Math.round(o.y * sy), ow = Math.max(2, Math.round(o.w * sx)), oh = Math.max(2, Math.round(o.h * sy));
+      if (o.type === "wall") { ctx.fillStyle = "#9ca3af"; ctx.fillRect(x, y, ow, oh); }
+      else if (o.type === "prop") { ctx.fillStyle = "#a16207"; ctx.fillRect(x, y, ow, oh); }
+      else if (o.type === "spawner") { ctx.fillStyle = "#a78bfa"; ctx.beginPath(); ctx.arc(x + ow / 2, y + oh / 2, 4, 0, 7); ctx.fill(); }
+      else if (o.type === "start") { ctx.fillStyle = "#4ade80"; ctx.fillRect(x, y, 5, 5); }
+      else { ctx.fillStyle = o.type === "health" ? "#ef4444" : "#fbbf24"; ctx.fillRect(x, y, 3, 3); }
+    }
+    return;
+  }
   const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#1e1b4b"); g.addColorStop(1, "#4c1d95"); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
   for (let i = 0; i < 40; i++) { ctx.fillStyle = i % 3 ? "#ffffff44" : "#fde68a66"; ctx.fillRect((i * 37) % w, (i * 53) % 90, 1, 1); }
   const sx = w / 1000, sy = h / 1000;
@@ -404,11 +418,11 @@ async function discover() {
   for (const l of levels) {
     let level; try { level = await (await fetch("levels/" + l.file, { cache: "no-store" })).json(); } catch { continue; }
     const name = l.file.replace(/\.json$/, "");
-    const a = document.createElement("a"); a.className = "card"; a.href = "game.html?level=levels/" + l.file;
+    const a = document.createElement("a"); a.className = "card"; a.href = (level.genre === "arena" ? "arena.html?level=levels/" : "game.html?level=levels/") + l.file;
     const cv = document.createElement("canvas"); renderLevel(level, cv); a.appendChild(cv);
-    const genre = document.createElement("span"); genre.className = "genre"; genre.textContent = genres[name.replace(".fixed", "")] || "PLATFORMER"; a.appendChild(genre);
+    const genre = document.createElement("span"); genre.className = "genre"; genre.textContent = level.genre === "arena" ? (level.view === "top" ? "TOP-DOWN SHOOTER" : level.view === "tps" ? "3RD PERSON SHOOTER" : "FPS") : genres[name.replace(".fixed", "")] || "PLATFORMER"; a.appendChild(genre);
     const meta = document.createElement("div"); meta.className = "meta";
-    meta.innerHTML = `<small>SINGLE PLAYER &middot; ${l.objects} THINGS</small><b>${name.toUpperCase().replace(".FIXED", " (AI FIX)")}</b><p>${(level.theme || "").toUpperCase()}</p>`;
+    meta.innerHTML = `<small>SINGLE PLAYER &middot; ${level.genre === "arena" ? `${level.waves} WAVES` : `${l.objects} THINGS`}</small><b>${name.toUpperCase().replace(".FIXED", " (AI FIX)")}</b><p>${(level.theme || "").toUpperCase()}</p>`;
     a.appendChild(meta); row.appendChild(a);
   }
   if (!levels.length) row.innerHTML = `<p style="color:#888;padding:20px">Scan a drawing to see your levels here.</p>`;

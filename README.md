@@ -72,6 +72,14 @@ with no AI call and no credits:
 
 The Studio and the phone save the picture at 720 px for this (chat thumbnails stay small).
 
+## Two kinds of game: platformer or arena shooter
+
+The chat reads what you ask for and builds that kind of game. "A first-person shooter with zombie waves" is a shooter, "a lava castle with moving platforms" is a platformer. Muse Spark picks with two tool pairs (`create_level` / `edit_level` and `create_arena` / `edit_arena`, `lib/agent.mjs`), and a guard makes sure a shooter request never comes back as a platformer: if the model picks the wrong kind, `generateArena()` builds the arena from the words instead.
+
+**Arena shooter** (`arena.html`, three.js): the player stands in a fenced arena and shoots waves of enemies that walk out of spawner gates. Three cameras, switched in the game (FPS / TPS / Top buttons, keys 1 2 3) or by chat ("switch to top-down", free): first person with mouse look, third person behind the player, top-down aiming at the mouse. WASD to move, click or space to shoot, ammo and medkits on the ground, waves grow (wave n has 3 + 2n enemies), win when the last wave is cleared. Themes from the words (graveyard, alien outpost, robot factory, desert, snow, city, castle). The player picture and an enemy sprite from the Studio appear as billboards. Keyboard and mouse only for now: phones do not control it yet.
+
+Format (`shared/arena.mjs`): a top-down 1000 x 1000 map, `genre: "arena"`, `view`, `waves`, objects `start`, `spawner`, `wall`, `prop`, `ammo`, `health`. Its playtest agent (`checkArena` / `autoFixArena`) flood-fills the map from the player and moves any walled-off gate or pickup to open ground; "Playtest it" runs it in the server. Arena games are always 3D (`projects.mode` `3d-world`) and cost the 3D prices. Demo: `levels/zombies.json`, a card on the landing page.
+
 ## 2D or 3D
 
 The chat box starts with a **2D | 3D** switch: pick it before you type (words like "a 3D lava castle" or "make it 3D" switch it too). The game type is saved on the game (`projects.mode`: `2d` or `3d-side`), and 3D turns cost the 3D prices (`create_3d` 25, `edit_3d` 5).
@@ -192,6 +200,7 @@ Other commands:
 | `npm run test:auth` | Waitlist, approval gate, logins, roles, blocked accounts and row-level security against the real Supabase project (needs `npm run dev`) |
 | `npm run test:db` | Round trip against the real Supabase tables as two throwaway accounts |
 | `node tests/credits.test.mjs` | Prices, multipliers, the atomic charge, refunds, daily limits, parallel charges, admin grants and one real AI call (needs `npm run dev`) |
+| `npm run test:arena` | Headless Chrome drives `arena.html`: waves, walking, shooting, the three views, death, restart, a level file (needs `npm run dev`) |
 | `npm run test:admin` | The admin API against the real Supabase project with a throwaway admin and user: access, credits, limits, suspend, passwords, accounts, waitlist, prices, models, activity (needs `npm run dev`) |
 | `npm run test:studio` | Headless Chrome drives `studio.html`: chat, saved projects, versions, undo, sketch pad, reload, mobile tabs (needs `npm run dev` and Supabase) |
 | `node tests/studio-camera.test.mjs` | Two headless Chromes: the Studio camera link and a phone with the synthetic sheet, level lands in the chat (needs the dev server and the PeerServer or the relay) |
@@ -250,6 +259,7 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | `shared/cutout.js` | A picture -> a transparent sprite (background removed, trimmed, 256 px WebP) |
 | `api/art.js`, `lib/image.mjs` | Pictures: Muse Spark classifies (level / character / object), Muse Image 1.0 draws the sprite |
 | `assets/` | The Sakanfar PlayLab logo (`logo.webp`), the mark for top bars (`mark-256.webp`), favicons; `logo-source.webp` is the original |
+| `arena.html`, `shared/arena.mjs` | The arena shooter engine (three.js) and its format, reachability check, fix and word-based generator |
 | `shared/view3d.js` | The 3D view: mirrors the running Phaser scene into three.js every frame |
 | `shared/inkart.js` | Drawn art: cuts every object out of the level's picture and keys out the paper |
 | `lib/fix-level.mjs` | Playtest agent orchestration: AI repair, validation, auto fallback |

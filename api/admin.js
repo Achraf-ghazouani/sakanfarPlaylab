@@ -5,6 +5,8 @@
 //   GET  /api/admin?action=ledger&user=&kind=&offset=            -> { ledger }
 //   GET  /api/admin?action=pricing                               -> { costs, models }
 //   GET  /api/admin?action=activity&offset=                      -> { activity }
+//   GET  /api/admin?action=games&filter=published|featured|reported|all -> { games }
+//   GET  /api/admin?action=reports&status=open|closed            -> { reports }
 //   POST /api/admin { action: "waitlist_set", ids, status, credits }
 //                   { action: "waitlist_invited", ids }
 //                   { action: "user_create", email?, username?, password, display_name?, credits?, role?, is_demo?, tag?, note?, expires_at?, daily_limit? }
@@ -14,6 +16,7 @@
 //                   { action: "credits", ids, amount, reason }
 //                   { action: "cost_set", key, credits, label? }
 //                   { action: "model_set", id, multiplier?, enabled?, is_default?, label?, description? }
+//                   { action: "game_set", id, visibility?, featured? }   { action: "game_delete", id }   { action: "report_close", id }
 
 import { requireUser, readBody } from "../lib/auth.mjs";
 import { rest, rpc } from "../lib/db.mjs";
@@ -48,6 +51,8 @@ export default async function handler(req, res) {
           return res.status(200).json({ costs, models: models.map((m) => ({ ...m, multiplier: Number(m.multiplier) })) });
         }
         case "activity": return res.status(200).json({ activity: await call("admin_list_activity", { p_limit: 100, p_offset: offset }) });
+        case "games": return res.status(200).json({ games: await call("admin_list_games", { p_filter: ["published", "featured", "reported", "all"].includes(q.filter) ? q.filter : "published", p_limit: 200, p_offset: offset }) });
+        case "reports": return res.status(200).json({ reports: await call("admin_list_reports", { p_status: q.status === "closed" ? "closed" : q.status === "all" ? null : "open", p_limit: 200 }) });
         default: return bad(res, "Unknown action.");
       }
     }
@@ -112,6 +117,21 @@ export default async function handler(req, res) {
         case "cost_set": {
           const credits = int(b.credits); if (credits === null || Number.isNaN(credits)) return bad(res, "Give a price in credits.");
           return res.status(200).json({ cost: await call("admin_set_cost", { p_action: str(b.key, 40), p_credits: credits, p_label: str(b.label, 80) }) });
+        }
+        case "game_set": {
+          if (!UUID.test(String(b.id || ""))) return bad(res, "Unknown game.");
+          if (b.visibility && !["private", "public", "unlisted"].includes(b.visibility)) return bad(res, "Bad visibility.");
+          return res.status(200).json({ game: await call("admin_set_game", { p_id: b.id, p_visibility: b.visibility || null, p_featured: bool(b.featured) }) });
+        }
+        case "game_delete": {
+          if (!UUID.test(String(b.id || ""))) return bad(res, "Unknown game.");
+          await call("admin_delete_game", { p_id: b.id });
+          return res.status(200).json({ ok: true });
+        }
+        case "report_close": {
+          const rid = int(b.id); if (!rid || Number.isNaN(rid)) return bad(res, "Unknown report.");
+          await call("admin_close_report", { p_id: rid });
+          return res.status(200).json({ ok: true });
         }
         case "model_set": {
           const mult = b.multiplier === undefined || b.multiplier === "" ? null : Number(b.multiplier);

@@ -92,7 +92,24 @@
   body.fresh #composer { font-size:16px; }
   body.fresh .preview { background:radial-gradient(1200px 600px at 50% 30%, #f3eeff, var(--bg)); }
   body.fresh .preview iframe, body.fresh #previewStatus { visibility:hidden; }
-  body.fresh .top #undoBtn, body.fresh .top #historyBtn { display:none; }
+  body.fresh .top #undoBtn, body.fresh .top #historyBtn, body.fresh .top #publishBtn { display:none; }
+  #publishBtn.live { background:#15803d; border-color:#15803d; }
+  /* publish modal */
+  .covers { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .covers label { border:2px solid var(--lav-2); border-radius:12px; padding:6px; cursor:pointer; text-align:center; font-size:12px; color:var(--muted); }
+  .covers label.on { border-color:var(--purple); color:var(--purple-deep); }
+  .covers img, .covers .ph { width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:8px; background:var(--lav); display:block; margin-bottom:4px; }
+  .covers .ph { display:grid; place-items:center; font-size:22px; }
+  .covers input { display:none; }
+  .pub-link { display:flex; gap:6px; align-items:center; }
+  .pub-link input { flex:1; font:13px Inter, sans-serif; border:1px solid var(--lav-2); border-radius:10px; padding:8px 10px; color:var(--ink); }
+  #pubQr { width:180px; margin:0 auto; background:#fff; border-radius:10px; padding:6px; }
+  #pubQr svg { width:100%; height:auto; display:block; }
+  .pub-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .vis { display:flex; gap:6px; }
+  .vis label { flex:1; border:1px solid var(--lav-2); border-radius:12px; padding:8px 10px; cursor:pointer; font-size:13px; }
+  .vis label.on { border-color:var(--purple); background:var(--lav); }
+  .vis input { margin-right:6px; }
   .welcome { display:none; position:absolute; inset:0; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px 20px 170px; overflow:auto; }
   body.fresh .welcome { display:flex; }
   .welcome h2 { font-family:Fredoka, system-ui, sans-serif; font-size:clamp(28px, 4vw, 42px); margin:0 0 6px; }
@@ -269,7 +286,7 @@
     <button class="newbtn" id="newGameBtn">&#10010; New game</button>
     <div class="side-h">My games</div>
     <div id="projectsList"></div>
-    <div class="side-foot">Games are saved as you chat. <a href="index.html">Home</a> &middot; <a href="game.html?screen=1">Big screen</a></div>
+    <div class="side-foot">Games are saved as you chat. <a href="index.html">Home</a> &middot; <a href="explore.html">Explore</a> &middot; <a href="game.html?screen=1">Big screen</a></div>
   </aside>
 
   <main>
@@ -286,7 +303,7 @@
       <button class="tb" id="phoneBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg><span class="lbl">Play with phone</span></button>
       <div class="user" id="userBox"><button class="tb" id="userBtn" title="Your account"><span class="av" id="userAv"></span><span class="lbl" id="userName">...</span><span class="credits" id="creditBadge" title="Credits">&#9679; <b id="creditNum">0</b></span></button>
         <div class="pop" id="userPop"><a class="v" href="profile.html"><b>Profile and credits</b></a><a class="v" href="admin.html" id="adminLink" hidden><b>Admin panel</b></a><a class="v" href="#" id="logoutBtn"><b>Log out</b></a></div></div>
-      <button class="tb primary" id="shareBtn" hidden disabled title="Share links arrive in a later step"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 15V3M8 7l4-4 4 4"/></svg><span class="lbl">Share</span></button>
+      <button class="tb primary" id="publishBtn" title="Publish this game: a link anyone can play, no account needed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 15V3M8 7l4-4 4 4"/></svg><span class="lbl">Publish</span></button>
     </header>
 
     <div class="split">
@@ -342,6 +359,26 @@
 <div id="toast"></div>
 <input type="file" id="cameraInput" accept="image/*" capture="environment">
 
+<div class="modal" id="publishModal">
+  <div class="sheet" style="width:min(96vw, 560px)">
+    <header><b>&#128640; Publish your game</b><button class="tool" id="pubClose">Close</button></header>
+    <div class="body" id="pubForm">
+      <label class="hint">Title<input id="pubTitle" maxlength="80" style="width:100%;font:15px Inter,sans-serif;border:1px solid var(--lav-2);border-radius:10px;padding:8px 10px;margin-top:4px"></label>
+      <label class="hint">Description (optional)<textarea id="pubDesc" maxlength="300" rows="2" placeholder="What is it about? Any tips?" style="width:100%;font:14px Inter,sans-serif;border:1px solid var(--lav-2);border-radius:10px;padding:8px 10px;margin-top:4px;resize:vertical"></textarea></label>
+      <div class="hint">Cover picture</div>
+      <div class="covers" id="pubCovers"></div>
+      <div class="hint">Who can see it</div>
+      <div class="vis" id="pubVis"><label class="on"><input type="radio" name="vis" value="public" checked>Public: in Explore, for everyone</label><label><input type="radio" name="vis" value="unlisted">Unlisted: only people with the link</label></div>
+      <div class="pub-row"><button class="tb primary" id="pubGo">Publish</button><button class="tb" id="pubUnpublish" hidden>Unpublish</button><span class="hint" id="pubStatus"></span></div>
+    </div>
+    <div class="body" id="pubDone" hidden>
+      <div class="hint">Your game is live. Anyone with the link can play it, no account needed.</div>
+      <div class="pub-link"><input id="pubUrl" readonly><button class="tb primary" id="pubCopy">Copy</button><button class="tb" id="pubShare" hidden>Share...</button></div>
+      <div id="pubQr"></div>
+      <div class="pub-row"><a class="tb" id="pubOpen" target="_blank" rel="noopener">Open the play page</a><a class="tb" href="explore.html" target="_blank" rel="noopener">Explore</a><button class="tb" id="pubEdit">Change details</button></div>
+    </div>
+  </div>
+</div>
 <div class="modal" id="sketchModal">
   <div class="sheet">
     <header><b>&#9998; Sketch a level</b>
@@ -459,7 +496,7 @@ function renderProjects(projects) {
   if (!projects.length) { list.innerHTML = `<div class="side-foot" style="border:0">No games yet. Start chatting!</div>`; return; }
   for (const p of projects) {
     const b = document.createElement("button"); b.className = "proj" + (S.project?.id === p.id ? " active" : ""); b.dataset.id = p.id;
-    b.innerHTML = `${p.photo ? `<img src="${p.photo}" alt="">` : `<span class="ph">&#127918;</span>`}<span class="t"><b>${esc(p.title)}</b><small>${timeAgo(p.updated_at)}${p.share_id ? " · shared" : ""}</small></span>`;
+    b.innerHTML = `${p.photo ? `<img src="${p.photo}" alt="">` : `<span class="ph">&#127918;</span>`}<span class="t"><b>${esc(p.title)}</b><small>${timeAgo(p.updated_at)}${p.visibility === "public" ? " · public" : p.visibility === "unlisted" ? " · unlisted" : ""}</small></span>`;
     b.addEventListener("click", () => { openProject(p.id); $("sidebar").classList.remove("open"); $("overlay").classList.remove("show"); });
     list.appendChild(b);
   }
@@ -472,6 +509,7 @@ async function openProject(id) {
     S.project = project; S.messages = messages; S.versions = versions;
     try { localStorage.setItem("playlab.studio.project", id); } catch {}
     $("title").value = project.title;
+    $("publishBtn").classList.toggle("live", !!(project.visibility && project.visibility !== "private"));
     setDim(dimOf(project.mode), { save: false });
     renderMessages();
     renderHistory();
@@ -481,7 +519,7 @@ async function openProject(id) {
 }
 function newProjectUI() {
   S.project = null; S.messages = []; S.versions = []; S.level = null;
-  $("title").value = "Untitled game";
+  $("title").value = "Untitled game"; $("publishBtn").classList.remove("live");
   try { localStorage.removeItem("playlab.studio.project"); } catch {}
   renderMessages(); renderHistory();
   $("previewStatus").textContent = "no game yet";
@@ -584,7 +622,7 @@ function renderHistory() {
 async function restoreVersion(n) {
   if (!S.project) return;
   try {
-    const { version } = await api(`api/version?project_id=${encodeURIComponent(S.project.id)}&n=${n}`);
+    const { version } = await api(`api/projects?id=${encodeURIComponent(S.project.id)}&version=${n}`);
     await applyLevel(version.level, { note: `restored v${n}`, toastText: `Restored v${n}` });
     await addCard({ icon: "&#8634;", title: `Restored v${n}`, text: `${version.level.objects.length} objects` });
   } catch (err) { toast(err.message); }
@@ -993,6 +1031,84 @@ const isArena = (l) => !!l && l.genre === "arena";
 const VIEW_NAME = { fps: "first person", tps: "third person", top: "top-down" };
 
 // ---------------------------------------------------------------------------
+// Publish: a link at /play/<id> for everyone. The cover is a screenshot of the preview (asked from the game by
+// postMessage), the drawing, or the player picture; a 1200 x 630 card for link previews is drawn here too.
+// ---------------------------------------------------------------------------
+const Pub = { shot: null, cover: "shot" };
+function askSnapshot() { return new Promise((resolve) => { if (!S.previewReady) return resolve(null); const t = setTimeout(() => { window.removeEventListener("message", on); resolve(null); }, 2500); const on = (e) => { if (e.data?.type === "playlab:snapshot") { clearTimeout(t); window.removeEventListener("message", on); resolve(e.data.image || null); } }; window.addEventListener("message", on); toPreview({ type: "playlab:snapshot" }); }); }
+const loadImage = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+/** A small JPEG for cards (480 x 270, cover-fit). */
+async function makeCover(src) {
+  const img = await loadImage(src); const c = document.createElement("canvas"); c.width = 480; c.height = 270; const g = c.getContext("2d");
+  const s = Math.max(480 / img.width, 270 / img.height), w = img.width * s, h = img.height * s;
+  g.fillStyle = "#1b1535"; g.fillRect(0, 0, 480, 270); g.drawImage(img, (480 - w) / 2, (270 - h) / 2, w, h);
+  return c.toDataURL("image/jpeg", 0.8);
+}
+/** The link preview card: cover + title + author + PlayLab, 1200 x 630. */
+async function makeOgCard(coverSrc, title, author) {
+  const c = document.createElement("canvas"); c.width = 1200; c.height = 630; const g = c.getContext("2d");
+  g.fillStyle = "#1b1535"; g.fillRect(0, 0, 1200, 630);
+  try { const img = await loadImage(coverSrc); const s = Math.max(1200 / img.width, 630 / img.height), w = img.width * s, h = img.height * s; g.drawImage(img, (1200 - w) / 2, (630 - h) / 2, w, h); } catch {}
+  const grad = g.createLinearGradient(0, 300, 0, 630); grad.addColorStop(0, "rgba(27,21,53,0)"); grad.addColorStop(1, "rgba(27,21,53,.92)"); g.fillStyle = grad; g.fillRect(0, 300, 1200, 330);
+  g.fillStyle = "#fff"; g.font = "700 58px Fredoka, Inter, sans-serif"; g.textBaseline = "alphabetic";
+  let t = title; while (g.measureText(t).width > 1080 && t.length > 4) t = t.slice(0, -4) + "...";
+  g.fillText(t, 60, 520);
+  g.fillStyle = "#c4b5fd"; g.font = "500 30px Inter, sans-serif"; g.fillText(`by ${author} · made in Sakanfar PlayLab · play it in your browser`, 60, 572);
+  try { const mark = await loadImage("assets/mark-256.webp"); g.drawImage(mark, 1060, 40, 100, 100); } catch {}
+  return c.toDataURL("image/jpeg", 0.82);
+}
+function pubCoverOptions() {
+  const opts = [];
+  if (Pub.shot) opts.push(["shot", "Screenshot", Pub.shot]);
+  if (S.project?.photo) opts.push(["photo", "Drawing", S.project.photo]);
+  if (S.project?.art?.player) opts.push(["player", "Character", S.project.art.player]);
+  if (!opts.some((o) => o[0] === Pub.cover)) Pub.cover = opts[0]?.[0] || null;
+  $("pubCovers").innerHTML = opts.length ? opts.map(([k, label, src]) => `<label class="${Pub.cover === k ? "on" : ""}"><input type="radio" name="cover" value="${k}"><img src="${src}" alt="">${label}</label>`).join("") : `<div class="hint">No picture yet: the game is being captured...</div>`;
+  $("pubCovers").querySelectorAll("input").forEach((r) => r.addEventListener("change", () => { Pub.cover = r.value; pubCoverOptions(); }));
+  return opts;
+}
+async function openPublish() {
+  if (!S.level || !S.project) return toast("Build a game first");
+  $("pubTitle").value = S.project.title; $("pubDesc").value = S.project.description || "";
+  const vis = S.project.visibility && S.project.visibility !== "private" ? S.project.visibility : "public";
+  $("pubVis").querySelectorAll("input").forEach((r) => { r.checked = r.value === vis; r.parentElement.classList.toggle("on", r.checked); });
+  $("pubUnpublish").hidden = !(S.project.visibility && S.project.visibility !== "private");
+  $("pubStatus").textContent = ""; $("pubForm").hidden = false; $("pubDone").hidden = true;
+  $("publishModal").classList.add("show");
+  Pub.shot = await askSnapshot(); pubCoverOptions();
+}
+function showPublished() {
+  const url = new URL("play/" + S.project.share_id, location.href).href;
+  $("pubUrl").value = url; $("pubOpen").href = url; $("pubShare").hidden = !navigator.share;
+  if (window.qrcode) { const qr = qrcode(0, "M"); qr.addData(url); qr.make(); $("pubQr").innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true }); }
+  $("pubForm").hidden = true; $("pubDone").hidden = false; $("publishBtn").classList.add("live");
+}
+$("publishBtn").addEventListener("click", openPublish);
+$("pubClose").addEventListener("click", () => $("publishModal").classList.remove("show"));
+$("pubVis").addEventListener("change", () => $("pubVis").querySelectorAll("label").forEach((l) => l.classList.toggle("on", l.querySelector("input").checked)));
+$("pubGo").addEventListener("click", async () => {
+  const title = $("pubTitle").value.trim(); if (!title) return toast("Give it a title");
+  const visibility = $("pubVis").querySelector("input:checked").value;
+  const src = { shot: Pub.shot, photo: S.project?.photo, player: S.project?.art?.player }[Pub.cover] || null;
+  $("pubGo").disabled = true; $("pubStatus").textContent = "publishing...";
+  try {
+    const cover = src ? await makeCover(src) : null;
+    const og_image = await makeOgCard(src || "assets/logo.webp", title, S.me.display_name || S.me.username || "a PlayLab maker");
+    const { project } = await api("api/projects", { method: "PATCH", body: { id: S.project.id, publish: { visibility, title, description: $("pubDesc").value.trim(), cover, og_image } } });
+    S.project = { ...S.project, ...project }; $("title").value = project.title; loadProjects();
+    showPublished(); toast(visibility === "public" ? "Published! It is in Explore now." : "Published as an unlisted link.");
+  } catch (err) { $("pubStatus").textContent = err.message; }
+  $("pubGo").disabled = false;
+});
+$("pubUnpublish").addEventListener("click", async () => {
+  try { const { project } = await api("api/projects", { method: "PATCH", body: { id: S.project.id, unpublish: true } }); S.project = { ...S.project, ...project }; $("publishBtn").classList.remove("live"); $("publishModal").classList.remove("show"); loadProjects(); toast("Unpublished: the link no longer works."); }
+  catch (err) { toast(err.message); }
+});
+$("pubEdit").addEventListener("click", () => { $("pubForm").hidden = false; $("pubDone").hidden = true; $("pubUnpublish").hidden = false; });
+$("pubCopy").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("pubUrl").value); toast("Link copied"); } catch { $("pubUrl").select(); } });
+$("pubShare").addEventListener("click", () => navigator.share({ title: S.project.title, text: `Play "${S.project.title}" on PlayLab`, url: $("pubUrl").value }).catch(() => {}));
+
+// ---------------------------------------------------------------------------
 // Mobile tabs + sidebar
 // ---------------------------------------------------------------------------
 function setTab(t) { document.body.classList.toggle("tab-preview", t === "preview"); $("mtabChat").classList.toggle("on", t !== "preview"); $("mtabPreview").classList.toggle("on", t === "preview"); }
@@ -1101,6 +1217,10 @@ $("logoutBtn").addEventListener("click", async (e) => { e.preventDefault(); try 
   if (!S.dbOk) toast("Saving is off: the server has no database configured", 5000);
   document.body.classList.toggle("phone", isPhoneNow());
   if (params.get("new") === "1") newProjectUI();
+  if (/^[a-z0-9]{6,12}$/.test(params.get("remix") || "")) {   // "Remix in Studio" on a play page: a copy in my games, charged as an edit
+    try { const { project } = await api("api/play", { method: "POST", body: { action: "remix", id: params.get("remix") } }); history.replaceState(null, "", "studio.html"); await loadProjects(); await openProject(project.id); toast("Remixed into your games: change anything you like"); }
+    catch (err) { if (err.status !== 402) toast("Could not remix: " + err.message, 5000); }
+  }
   if (params.get("camera") === "1") { if (isPhoneNow()) toast("Tap the camera button to take a picture of your drawing", 4000); else openCamLink(); }
   if (params.get("sketch") === "1") $("sketchModal").classList.add("show");
 })();

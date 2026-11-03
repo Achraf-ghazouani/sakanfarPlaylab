@@ -59,12 +59,16 @@ try {
   const versions = await db.listVersions(owner, project.id);
   check("versions listed newest first", versions.length === 2 && versions[0].n === 2);
   check("get a version", (await db.getVersion(owner, project.id, 1))?.level.theme === "db test");
-  check("shared project not visible publicly before sharing", (await db.getSharedProject("nope-" + rnd())) === null);
+  // publishing (008): a share id alone is not enough, the game must be public or unlisted; anyone can then read and count it
   const shared = await db.updateProject(owner, project.id, { share_id: "t" + rnd() });
-  const pub = await db.getSharedProject(shared.share_id);
-  check("shared project readable without a login", pub?.id === project.id && pub.owner === undefined);
-  const count = await db.rpc("bump_play_count", { p_share_id: shared.share_id });
+  check("a private game with a share id is not readable without a login", (await db.rpc("public_game", { p_share_id: shared.share_id })) === null);
+  await db.updateProject(owner, project.id, { visibility: "unlisted" });
+  const pub = await db.rpc("public_game", { p_share_id: shared.share_id });
+  check("a published game is readable without a login, author shown, owner never", pub?.id === shared.share_id && pub.owner === undefined && typeof pub.author === "string" && pub.level?.theme === "v2");
+  const count = await db.rpc("played_game", { p_share_id: shared.share_id });
   check("play count bump", count === 1, count);
+  let blocked = false; try { await db.updateProject(owner, project.id, { play_count: 50 }); } catch (e) { blocked = /counters/.test(e.message); }
+  check("the owner cannot set the play count", blocked);
 } catch (e) { console.log("ERROR", e.message); fails++; }
 finally {
   if (project && owner) { try { await db.deleteProject(owner, project.id); check("delete project (cascade)", (await db.getProject(owner, project.id)) === null); } catch (e) { console.log("cleanup failed:", e.message); fails++; } }

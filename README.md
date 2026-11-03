@@ -136,7 +136,7 @@ Endpoints (login required, keys stay on the server):
 | --- | --- |
 | `GET/POST/PATCH/DELETE /api/projects` | List, create, update (a `level` in a PATCH also adds a version), delete |
 | `GET/POST /api/messages` | Chat history of a project |
-| `GET /api/version?project_id=&n=` | One saved version |
+| `GET /api/projects?id=&version=n` | One saved version |
 | `POST /api/agent` | The game agent: `{ message, level?, history? }` -> `{ reply, level?, kind, note, diff, playtest, actions }` (`lib/agent.mjs`) |
 
 Schema: `db/schema.sql` (run it in the Supabase SQL editor once). Uses the same `SUPABASE_URL` / `SUPABASE_ANON_KEY` as the phone relay.
@@ -169,6 +169,19 @@ PlayLab is invite-only. Visitors can join the waitlist on the landing page and p
 Models: Muse Spark 1.3 ×1 (default), 1.2 ×0.8, 1.1 ×0.6, Muse Spark Open on Baseten ×0.5 (live re-scans from the phone use it). Replies that need no AI are free. A short balance answers 402 before any AI call, and the Studio shows the price of each action next to its button. Prices and multipliers are edited in the admin panel; `GET /api/costs` is the public price list.
 
 Database: `db/schema.sql` (games), then `db/002_accounts.sql`, `db/003_server_users.sql`, `db/004_credits.sql`, `db/005_admin.sql`, `db/006_sprites.sql` and `db/007_claim.sql` in the Supabase SQL editor.
+
+## Publish, share, remix
+
+**Publish** in the Studio's top bar: title, description, a cover (a screenshot of the running game, the drawing, or the player picture), public or unlisted. The game gets a short id and lives at `/play/<id>`:
+
+- **The play page** (`api/play.js` renders it, `shared/play.js` runs it): plays instantly with no account, in the right engine. Title, author, plays, likes, a **Share** sheet (copy link, the device's share sheet, a QR code), **Play with your phones** (a QR code; the page hosts the phone room and forwards the controls like the Studio does), **Report**, and **Remix in Studio**.
+- **Link previews** on WhatsApp, Facebook, X: the page carries Open Graph tags, and `/api/play?id=<id>&cover=1` serves a 1200 x 630 card (cover + title + author + PlayLab) drawn in the Studio when the game is published.
+- **Explore** (`explore.html`, linked from the landing page and the Studio): trending (plays and likes, newer games first), newest, featured; filter 2D / 3D / arena; search titles, descriptions and makers. Unlisted games stay out of it.
+- **Remix** copies a published game into the logged-in maker's games (level, art, a "remixed from" card) and costs one edit (2 credits for 2D, 5 for 3D and arena).
+- **Likes** are one per browser (a token) or per login; **reports** go to the admin queue; both are rate limited per caller. Plays, likes and the featured flag can only be changed by the game's own functions, never by the owner (a database trigger guards them).
+- **Admin**: Games (published, featured, reported, all) with feature / unfeature, unpublish, make public and delete; a Reports queue with close and unpublish.
+
+Database: `db/008_publish.sql` (columns, likes, reports, the public functions, the admin functions). API: `PATCH /api/projects {publish | unpublish}`, `/api/play` (JSON, cover, explore, played, like, report, remix). `api/version.js` folded into `GET /api/projects?id=&version=n` to keep the Vercel Hobby plan's 12 functions.
 
 ## Admin panel (`admin.html`)
 
@@ -206,6 +219,7 @@ Other commands:
 | `npm run test:db` | Round trip against the real Supabase tables as two throwaway accounts |
 | `node tests/credits.test.mjs` | Prices, multipliers, the atomic charge, refunds, daily limits, parallel charges, admin grants and one real AI call (needs `npm run dev`) |
 | `npm run test:arena` | Headless Chrome drives `arena.html`: waves, walking, shooting, the three views, death, restart, a level file (needs `npm run dev`) |
+| `npm run test:publish` | Publish, the play page and its Open Graph tags, plays, likes, reports, explore, unlisted, remix with its charge, admin feature / unpublish / delete, against the real project with throwaway accounts (needs `npm run dev`) |
 | `npm run test:admin` | The admin API against the real Supabase project with a throwaway admin and user: access, credits, limits, suspend, passwords, accounts, waitlist, prices, models, activity (needs `npm run dev`) |
 | `npm run test:studio` | Headless Chrome drives `studio.html`: chat, saved projects, versions, undo, sketch pad, reload, mobile tabs (needs `npm run dev` and Supabase) |
 | `node tests/studio-camera.test.mjs` | Two headless Chromes: the Studio camera link and a phone with the synthetic sheet, level lands in the chat (needs the dev server and the PeerServer or the relay) |
@@ -248,10 +262,11 @@ If it complains that `maxDuration` exceeds your plan, lower the value for `api/f
 | `game.html` | The game (Phaser 3 arcade physics, colored shapes, touch controls, drawing thumbnail, agent toast); `?embed=1` for the Studio preview, `?screen=1` for the big screen; opened on its own it is a clean full-screen player for the demo levels |
 | `studio.html` | PlayLab Studio: centered chat box first, then chat on the left and the game in the center, My games drawer, versions, history, undo (login required) |
 | `login.html`, `profile.html` | Login (email link, Google, username), profile with credits, credit history and games |
+| `explore.html`, `api/play.js`, `shared/play.js`, `shared/play.css`, `db/008_publish.sql` | Published games: the play page with Open Graph tags, the gallery, likes, reports, remix |
 | `admin.html`, `api/admin.js`, `db/005_admin.sql` | Admin panel: overview, waitlist, users, credits and usage, prices and models, activity |
 | `api/waitlist.js`, `api/me.js`, `lib/auth.mjs`, `shared/auth.js` | Waitlist, the logged-in account, server-side access checks, the browser's login helper |
 | `db/002_accounts.sql`, `db/003_server_users.sql` | Waitlist, profiles, credit ledger, approval trigger, admin and server functions |
-| `api/projects.js`, `api/messages.js`, `api/version.js` | Vercel functions for saved games (Supabase through PostgREST, `lib/db.mjs`) |
+| `api/projects.js`, `api/messages.js` | Vercel functions for saved games and their versions (Supabase through PostgREST, `lib/db.mjs`) |
 | `api/agent.js`, `lib/agent.mjs` | The Studio game agent: Muse Spark function tools, validation, quick fix, Baseten fallback (`node tests/agent.live.mjs` runs it for real) |
 | `db/schema.sql` | Supabase tables, row-level security and functions for the Studio |
 | `pad.html` | Phone controller page (joins a room by QR / code) |

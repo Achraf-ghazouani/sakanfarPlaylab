@@ -14,6 +14,9 @@
       "maxDuration": 60
     }
   },
+  "rewrites": [
+    { "source": "/play/:id", "destination": "/api/play?id=:id" }
+  ],
   "redirects": [
     {
       "source": "/lib/(.*)",

@@ -535,6 +535,9 @@ if (isEmbed) {
       await setSkins({ player: m.player, sprites: m.sprites });
       startLevel(m.level, m.name || "studio");
       if (m.toast) showToastMsg(String(m.toast).replace(/<[^>]+>/g, ""));
+    } else if (m.type === "playlab:snapshot") {
+      try { if (G.scene) renderer.render(G.scene, camera); const w = Math.min(960, canvas.width), h = Math.round(canvas.height * w / canvas.width), c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(canvas, 0, 0, w, h); parent.postMessage({ type: "playlab:snapshot", image: c.toDataURL("image/jpeg", 0.85) }, "*"); }
+      catch { parent.postMessage({ type: "playlab:snapshot", image: null }, "*"); }
     } else if (m.type === "playlab:restart") restart();
     else if (m.type === "playlab:mute") SFX.setMuted(!!m.muted);
     else if (m.type === "playlab:view") setView(String(m.view || ""));

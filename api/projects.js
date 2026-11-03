@@ -4,6 +4,9 @@
 //   POST   /api/projects {title?, level?, photo?, mode?}            -> { project }
 //   POST   /api/projects {claim: "u-<24 hex>"}                      -> { claimed }  (games made before accounts, from this browser's old id)
 //   PATCH  /api/projects {id, title?, level?, photo?, mode?, note?} -> { project, version? }  (a level change adds a version)
+//   PATCH  /api/projects {id, publish: {visibility, description?, cover?, og_image?, title?}} -> { project }  (public | unlisted, at /play/<share_id>)
+//   PATCH  /api/projects {id, unpublish: true}                       -> { project }
+//   GET    /api/projects?id=UUID&version=3                            -> { version }  (one saved version)
 //   DELETE /api/projects?id=UUID         -> { ok: true }
 // The caller must be logged in (Authorization: Bearer <Supabase access token>); rows are theirs through row-level security.
 
@@ -28,6 +31,12 @@ export default async function handler(req, res) {
   try {
     if (req.method === "GET") {
       if (!id) return res.status(200).json({ projects: await db.listProjects(owner) });
+      if (req.query?.version !== undefined) {
+        const n = Number(req.query.version);
+        if (!Number.isInteger(n) || n < 1) return res.status(400).json({ error: "version must be a number from 1." });
+        const version = await db.getVersion(owner, id, n);
+        return version ? res.status(200).json({ version }) : res.status(404).json({ error: "Version not found." });
+      }
       const project = await db.getProject(owner, id);
       if (!project) return res.status(404).json({ error: "Project not found." });
       const [messages, versions] = await Promise.all([db.listMessages(owner, id), db.listVersions(owner, id)]);
@@ -49,6 +58,30 @@ export default async function handler(req, res) {
     }
     if (req.method === "PATCH") {
       if (!id) return res.status(400).json({ error: "id is required." });
+      if (body.unpublish) {
+        const project = await db.updateProject(owner, id, { visibility: "private" });
+        return project ? res.status(200).json({ project }) : res.status(404).json({ error: "Project not found." });
+      }
+      if (body.publish && typeof body.publish === "object") {
+        const p = body.publish, fields = {};
+        if (!["public", "unlisted"].includes(p.visibility)) return res.status(400).json({ error: "visibility must be public or unlisted." });
+        fields.visibility = p.visibility;
+        if (p.title !== undefined) { const t = String(p.title).trim().slice(0, 80); if (!t) return res.status(400).json({ error: "Title cannot be empty." }); fields.title = t; }
+        if (p.description !== undefined) fields.description = String(p.description || "").trim().slice(0, 300) || null;
+        for (const [k, max] of [["cover", 250_000], ["og_image", 400_000]]) {
+          if (p[k] === undefined) continue;
+          if (p[k] !== null && (typeof p[k] !== "string" || !/^data:image\/(jpeg|png|webp);base64,/.test(p[k]) || p[k].length > max)) return res.status(400).json({ error: `${k} must be a small image data URL.` });
+          fields[k] = p[k];
+        }
+        const current = await db.getProject(owner, id);
+        if (!current) return res.status(404).json({ error: "Project not found." });
+        if (!current.level) return res.status(400).json({ error: "Build a game first: there is nothing to publish yet." });
+        fields.kind = current.mode === "3d-world" ? "arena" : current.mode === "3d-side" ? "3d" : "2d";
+        if (!current.share_id) fields.share_id = shortId();
+        if (!current.published_at) fields.published_at = new Date().toISOString();
+        const project = await db.updateProject(owner, id, fields);
+        return res.status(200).json({ project });
+      }
       const fields = pickFields(body);
       if (fields.error) return res.status(400).json({ error: fields.error });
       const project = await db.updateProject(owner, id, fields);
@@ -103,3 +136,5 @@ function pickFields(body) {
   return out;
 }
 function safeJson(s) { try { return JSON.parse(s); } catch { return {}; } }
+/** 8 characters of a-z 0-9 for /play/<id>: 2.8e12 possibilities, unique in the table. */
+function shortId() { const a = "abcdefghijklmnopqrstuvwxyz0123456789"; let s = ""; for (const b of crypto.getRandomValues(new Uint8Array(8))) s += a[b % 36]; return s; }

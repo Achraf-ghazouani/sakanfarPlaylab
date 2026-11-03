@@ -34,6 +34,8 @@ async function handler(req, res) {
   if (pathname === "/") pathname = "/index.html";
 
   if (/^\/api\/[a-z0-9_-]+$/i.test(pathname)) return runApi(req, res, pathname);
+  const play = /^\/play\/([a-z0-9]{1,16})$/i.exec(pathname);   // the share page, like the Vercel rewrite in vercel.json
+  if (play) { req.url = "/api/play?id=" + play[1].toLowerCase(); return runApi(req, res, "/api/play"); }
   if (BLOCKED.some((re) => re.test(pathname))) return send(res, 403, "Forbidden");
 
   const file = path.normalize(path.join(ROOT, pathname));

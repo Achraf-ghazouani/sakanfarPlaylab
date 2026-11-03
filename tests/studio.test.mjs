@@ -152,7 +152,7 @@ try {
   check("username + password login lands in the Studio", loggedIn, await evalJS(`location.href`));
   check("first screen: fresh layout, chat box at the bottom center", await evalJS(`document.body.classList.contains("fresh") && (() => { const r = document.querySelector(".chat").getBoundingClientRect(); return Math.abs(r.left + r.width / 2 - innerWidth / 2) < 4 && innerHeight - r.bottom < 60; })()`));
   check("first screen offers the drawing starts and Add your character", await evalJS(`[...document.querySelectorAll(".starts button")].map((b) => b.dataset.start).join()`) === "sketch,upload,camera,player");
-  check("unfinished 3D and Share are hidden", await evalJS(`getComputedStyle(document.getElementById("modeSeg")).display === "none" && getComputedStyle(document.getElementById("shareBtn")).display === "none"`));
+  check("the unfinished 3D mode switch is hidden; Publish waits for a game", await evalJS(`getComputedStyle(document.getElementById("modeSeg")).display === "none" && getComputedStyle(document.getElementById("publishBtn")).display === "none"`));
   await evalJS(`document.querySelector('.starts [data-start="sketch"]').click(); true`);
   check("Sketch it opens the sketch pad", await evalJS(`document.getElementById("sketchModal").classList.contains("show")`));
   await evalJS(`document.getElementById("sketchClose").click(); true`);
@@ -167,7 +167,7 @@ try {
   check("preview iframe reports ready", !!(await waitFor(`S.previewReady`, { timeout: 20_000 })));
   const ctx = iframeCtx();
   check("preview shows no-game message", ctx && /Your game appears here/.test(await evalJS(`document.getElementById("msgText").textContent`, ctx)));
-  check("3D toggle and Share are disabled placeholders", await evalJS(`document.querySelector('[data-mode="3d"]').disabled && document.getElementById("shareBtn").disabled`));
+  check("the old 3D toggle is a disabled placeholder", await evalJS(`document.querySelector('[data-mode="3d"]').disabled`));
 
   // 1. first text message: project auto-created, reply streamed, both messages saved
   await type("A lava castle with moving platforms"); await sendMsg();
@@ -228,8 +228,8 @@ try {
   await waitFor(`S.versions[0] && S.versions[0].n === 5`, { timeout: 15_000 }); await idle();
   check("undo restored v3 as a new version 5", await evalJS(`S.versions[0].n === 5 && S.level.objects.length === 7 && /restored v3/.test(S.versions[0].note)`), await evalJS(`S.versions.map((v) => v.n + ":" + v.note)`));
   check("restored card in the chat", /Restored v3/.test(await evalJS(`document.body.innerText`)));
-  const v = await api(`api/version?project_id=${pid}&n=2`);
-  check("GET /api/version returns a stored version", v.version?.n === 2 && /^edited /.test(v.version.level.theme));
+  const v = await api(`api/projects?id=${pid}&version=2`);
+  check("GET /api/projects?version=n returns a stored version", v.version?.n === 2 && /^edited /.test(v.version.level.theme));
 
   // 5. rename
   await evalJS(`(() => { const t = document.getElementById("title"); t.value = "Lava Castle"; t.dispatchEvent(new Event("change")); return true; })()`);

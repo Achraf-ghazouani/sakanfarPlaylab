@@ -32,7 +32,7 @@ async function login(email, password) {
 if (!SB || !ANON || !KEY) { console.log("SKIP  missing SUPABASE_URL / SUPABASE_ANON_KEY / PLAYLAB_SERVER_KEY in .env"); process.exit(0); }
 
 // ---------------------------------------------------------------- no account needed
-for (const p of ["api/projects", "api/me", "api/messages?project_id=x", "api/version?project_id=x&n=1"]) {
+for (const p of ["api/projects", "api/me", "api/messages?project_id=x", "api/projects?id=x&version=1"]) {
   const r = await api(p);
   check(`${p} without a login -> 401`, r.status === 401 && r.data.login === true, r.status);
 }

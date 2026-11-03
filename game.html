@@ -343,6 +343,18 @@ async function setViewMode(mode) {
   catch (err) { viewMode = "2d"; showToast("<b>3D could not start</b> (WebGL or the network). Playing in 2D.", 5000); await View3D.setOn(false, $("game")); }
   publishState();
 }
+/** A picture of the game right now (the publish cover): Phaser renders one frame into an image, shrunk to 960 wide. */
+function snapshot() {
+  return new Promise((resolve) => {
+    if (!game) return resolve(null);
+    try {
+      game.renderer.snapshot((img) => {
+        try { const w = Math.min(960, img.width), h = Math.round(img.height * w / img.width), c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h); resolve(c.toDataURL("image/jpeg", 0.85)); }
+        catch { resolve(null); }
+      });
+    } catch { resolve(null); }
+  });
+}
 // Player character from a picture (the Studio's "use this as the player"): an <img> the main character wears.
 let playerSkin = null, playerSkinSrc = null, playerSkinGen = 0;
 // Object sprites (Muse Image, from the Studio): { enemy, coin, goal, spike, decoration } -> <img>, worn by every object of that type.
@@ -1460,7 +1472,8 @@ async function init() {
         const s = playScene();
         if (s?.player && s.state === "play") pendingSpawn = { x: s.player.x / s.ax, y: s.player.body.bottom };
         if (currentLevel) restartScene();
-      } else if (m.type === "playlab:restart") restartScene();
+      } else if (m.type === "playlab:snapshot") snapshot().then((image) => { try { parent.postMessage({ type: "playlab:snapshot", image }, "*"); } catch {} });
+      else if (m.type === "playlab:restart") restartScene();
       else if (m.type === "playlab:phone") openPhonePanel();
       else if (m.type === "playlab:mute") SFX.setMuted(!!m.muted);
       else if (m.type === "playlab:art") setArtOn(!!m.on);

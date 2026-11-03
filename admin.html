@@ -133,6 +133,8 @@
   <button data-tab="users">Users</button>
   <button data-tab="usage">Credits &amp; usage</button>
   <button data-tab="pricing">Prices &amp; models</button>
+  <button data-tab="games">Games</button>
+  <button data-tab="reports">Reports <span class="count" id="reportCount" hidden></span></button>
   <button data-tab="activity">Activity</button>
 </nav>
 <main id="main">
@@ -213,6 +215,23 @@
     </div>
   </div>
 
+  <!-- GAMES -->
+  <div data-pane="games" hidden>
+    <div class="card">
+      <div class="bar">
+        <select id="gFilter"><option value="published">Published</option><option value="featured">Featured</option><option value="reported">Reported</option><option value="all">All games</option></select>
+        <span class="muted">Feature a game to put it first in Explore. Unpublish takes the link down; delete removes the game and its chat.</span>
+      </div>
+      <div class="tablewrap"><table class="t" id="gTable"></table></div>
+    </div>
+  </div>
+  <!-- REPORTS -->
+  <div data-pane="reports" hidden>
+    <div class="card">
+      <div class="bar"><select id="rStatus"><option value="open">Open</option><option value="closed">Closed</option><option value="all">All</option></select></div>
+      <div class="tablewrap"><table class="t" id="rTable"></table></div>
+    </div>
+  </div>
   <!-- ACTIVITY -->
   <div data-pane="activity" hidden>
     <div class="card">
@@ -258,7 +277,7 @@ const shownEmail = (e) => (e || "").endsWith("@demo.playlab.invalid") ? "usernam
 // ---------------------------------------------------------------------------
 // Tabs
 // ---------------------------------------------------------------------------
-const LOADERS = { overview: loadOverview, waitlist: loadWaitlist, users: loadUsers, usage: () => loadLedger(true), pricing: loadPricing, activity: loadActivity };
+const LOADERS = { overview: loadOverview, waitlist: loadWaitlist, users: loadUsers, usage: () => loadLedger(true), pricing: loadPricing, games: loadGames, reports: loadReports, activity: loadActivity };
 function showTab(t) {
   S.tab = t;
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
@@ -531,6 +550,41 @@ async function loadPricing() {
 }
 
 // ---------------------------------------------------------------------------
+// Games (published) and reports
+// ---------------------------------------------------------------------------
+const KIND_LABEL = { "2d": "2D", "3d": "3D", arena: "Arena" };
+async function loadGames() {
+  let games; try { ({ games } = await api({ action: "games", filter: $("gFilter").value })); } catch (err) { return toast(err.message, true); }
+  $("gTable").innerHTML = `<thead><tr><th></th><th>Game</th><th>Maker</th><th>Kind</th><th>Visibility</th><th class="num">Plays</th><th class="num">Likes</th><th>Published</th><th></th></tr></thead><tbody>` +
+    (games.length ? games.map((g) => `<tr>
+      <td>${g.cover ? `<img src="${g.cover}" alt="" style="width:64px;height:36px;object-fit:cover;border-radius:6px">` : ""}</td>
+      <td class="who"><b>${esc(g.title)}</b><small>${g.share_id ? `<a href="play/${esc(g.share_id)}" target="_blank" rel="noopener">play/${esc(g.share_id)}</a>` : "not published"}${g.open_reports ? ` · <span class="pill rejected">${g.open_reports} report${g.open_reports > 1 ? "s" : ""}</span>` : ""}</small></td>
+      <td class="who"><b>${esc(g.author)}</b><small>${esc(shownEmail(g.email))}</small></td><td>${KIND_LABEL[g.kind] || g.kind}</td>
+      <td><span class="pill ${g.visibility === "public" ? "approved" : g.visibility === "unlisted" ? "pending" : "off"}">${g.visibility}</span>${g.featured_at ? ` <span class="pill admin">featured</span>` : ""}</td>
+      <td class="num">${fmt(g.plays)}</td><td class="num">${fmt(g.likes)}</td><td class="muted">${g.published_at ? day(g.published_at) : "—"}</td>
+      <td style="white-space:nowrap"><button class="tb" data-feature="${g.id}" data-on="${g.featured_at ? 1 : 0}">${g.featured_at ? "Unfeature" : "Feature"}</button> ${g.visibility !== "private" ? `<button class="tb" data-unpublish="${g.id}">Unpublish</button>` : `<button class="tb" data-publish="${g.id}">Make public</button>`} <button class="tb danger" data-delete="${g.id}" data-title="${esc(g.title)}">Delete</button></td></tr>`).join("") : `<tr><td colspan="9" class="empty">No games here.</td></tr>`) + "</tbody>";
+  const t = $("gTable");
+  t.querySelectorAll("[data-feature]").forEach((b) => b.addEventListener("click", () => act({ action: "game_set", id: b.dataset.feature, featured: b.dataset.on !== "1" }, (d) => d.game.featured ? "Featured: it is first in Explore now." : "No longer featured.", loadGames)));
+  t.querySelectorAll("[data-unpublish]").forEach((b) => b.addEventListener("click", () => act({ action: "game_set", id: b.dataset.unpublish, visibility: "private" }, () => "Unpublished: the link is down.", loadGames, loadReports)));
+  t.querySelectorAll("[data-publish]").forEach((b) => b.addEventListener("click", () => act({ action: "game_set", id: b.dataset.publish, visibility: "public" }, () => "Public again.", loadGames)));
+  t.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", () => { if (prompt(`Type DELETE to remove "${b.dataset.title}" and its chat for good.`) === "DELETE") act({ action: "game_delete", id: b.dataset.delete }, () => "Game deleted.", loadGames, loadReports); }));
+}
+const REASON = { inappropriate: "Inappropriate content", broken: "Does not work", spam: "Spam", copyright: "Copyright", other: "Something else" };
+async function loadReports() {
+  let reports; try { ({ reports } = await api({ action: "reports", status: $("rStatus").value })); } catch (err) { return toast(err.message, true); }
+  const open = reports.filter((r) => r.status === "open").length; const c = $("reportCount"); if ($("rStatus").value === "open") { c.hidden = !open; c.textContent = open; }
+  $("rTable").innerHTML = `<thead><tr><th>When</th><th>Game</th><th>Reason</th><th>Details</th><th>Status</th><th></th></tr></thead><tbody>` +
+    (reports.length ? reports.map((r) => `<tr><td class="muted">${when(r.created_at)}</td>
+      <td class="who"><b>${esc(r.title || "(deleted)")}</b><small>${r.share_id ? `<a href="play/${esc(r.share_id)}" target="_blank" rel="noopener">play/${esc(r.share_id)}</a>` : ""} ${r.visibility ? `· ${r.visibility}` : ""}</small></td>
+      <td>${REASON[r.reason] || esc(r.reason)}</td><td class="msgcell">${esc(r.details || "")}</td><td><span class="pill ${r.status === "open" ? "pending" : "off"}">${r.status}</span></td>
+      <td style="white-space:nowrap">${r.status === "open" ? `<button class="tb" data-close="${r.id}">Close</button> ` : ""}${r.project_id && r.visibility !== "private" ? `<button class="tb danger" data-unpub="${r.project_id}" data-rid="${r.id}">Unpublish</button>` : ""}</td></tr>`).join("") : `<tr><td colspan="6" class="empty">No reports.</td></tr>`) + "</tbody>";
+  $("rTable").querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => act({ action: "report_close", id: Number(b.dataset.close) }, () => "Report closed.", loadReports)));
+  $("rTable").querySelectorAll("[data-unpub]").forEach((b) => b.addEventListener("click", () => act({ action: "game_set", id: b.dataset.unpub, visibility: "private" }, () => "Unpublished.", () => act({ action: "report_close", id: Number(b.dataset.rid) }, () => "Report closed.", loadReports, loadGames))));
+}
+$("gFilter").addEventListener("change", loadGames);
+$("rStatus").addEventListener("change", loadReports);
+
+// ---------------------------------------------------------------------------
 // Activity
 // ---------------------------------------------------------------------------
 const ACT_LABEL = { waitlist_approved: "approved on the waitlist", waitlist_rejected: "rejected on the waitlist", waitlist_pending: "moved back to pending", waitlist_invited: "marked invited",
@@ -556,6 +610,7 @@ async function loadActivity() {
   $("gate").remove(); $("tabs").hidden = false;
   $("whoami").textContent = S.me.email;
   loadPricing();   // fills the usage filter with the action names
+  loadReports();   // the open-reports badge
   const start = location.hash.slice(1);
   showTab(LOADERS[start] ? start : "overview");
 })();

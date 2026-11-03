@@ -3,6 +3,7 @@
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
+import { generateArena } from "../shared/arena.mjs";
 
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const PORT = 9341, BASE = process.argv[2] || "http://localhost:3000";
@@ -45,7 +46,9 @@ try {
 
   // aim at the nearest zombie and shoot until it drops
   const shot = await evalJS(`(async () => { const A = window.__arena, G = A.G; const alive = () => G.zombies.filter((z) => !z.dead); let shots = 0; const k0 = G.kills, a0 = G.player.ammo;
-    for (let i = 0; i < 14 && G.kills === k0; i++) { const z = alive()[0]; if (!z) break; const dx = z.x - G.player.x, dz = z.z - G.player.z, d = Math.hypot(dx, dz); G.yaw = Math.atan2(-dx, -dz); G.pitch = Math.atan2(-30, d); if (A.shoot()) shots++; await new Promise((r) => setTimeout(r, 190)); }
+    const aimAt = (z) => { const dx = z.x - G.player.x, dz = z.z - G.player.z, d = Math.hypot(dx, dz); G.yaw = Math.atan2(-dx, -dz); G.pitch = Math.atan2(-30, d); };
+    const visible = () => alive().find((z) => { aimAt(z); const p = A.probe(); const hit = p.zombies.find((q) => q.t !== null); return hit && hit.t < p.wallT; });
+    for (let i = 0; i < 14 && G.kills === k0; i++) { const z = visible() || alive()[0]; if (!z) break; aimAt(z); if (A.shoot()) shots++; await new Promise((r) => setTimeout(r, 190)); }
     return { shots, kills: G.kills - k0, ammoUsed: a0 - G.player.ammo }; })()`);
   check("shooting a zombie kills it in two hits and costs ammo", shot.kills === 1 && shot.shots <= 4 && shot.ammoUsed === shot.shots, shot);
 
@@ -72,5 +75,52 @@ try {
   await send("Page.navigate", { url: `${BASE}/arena.html?level=levels/zombies.json` });
   const fromFile = await (async () => { for (let i = 0; i < 60; i++) { try { const v = await evalJS(`window.__arena && window.__arena.G.level ? window.__arena.G.level.theme : null`); if (v) return v; } catch {} await sleep(200); } return null; })();
   check("levels/zombies.json loads as an arena", fromFile === "zombie graveyard", fromFile);
+
+  // phone sticks: the Studio forwards the pad's messages to the embedded arena; on a touch device the same sticks are on screen
+  await send("Page.navigate", { url: `${BASE}/arena.html?embed=1&touch=1` });
+  const emb = await (async () => { for (let i = 0; i < 60; i++) { try { if (await evalJS(`!!(window.__arena && window.__arena.R)`)) return true; } catch {} await sleep(200); } return false; })();
+  check("the embedded arena is up", emb);
+  await evalJS(`window.postMessage({ type: "playlab:level", level: ${JSON.stringify(generateArena("top down zombie arena, 3 waves"))}, name: "studio" }, "*"); true`);
+  const builtTop = await (async () => { for (let i = 0; i < 40; i++) { if (await evalJS(`!!(window.__arena.G.level && window.__arena.G.level.view === "top")`)) return true; await sleep(150); } return false; })();
+  check("a level from the Studio builds (top-down, 3 waves)", builtTop && (await evalJS(`window.__arena.G.level.waves`)) === 3);
+  check("on a touch device the sticks and FIRE are on screen", await evalJS(`getComputedStyle(document.getElementById("touch")).display === "block" && document.querySelectorAll("#touch .stick").length === 2 && /Tap to start/.test(document.getElementById("msgText").textContent)`));
+  await evalJS(`window.postMessage({ type: "playlab:fire", slot: 1, down: true }, "*"); true`); await sleep(200);
+  check("FIRE from the phone starts the fight", (await evalJS(`window.__arena.G.state`)) === "play");
+  await evalJS(`window.postMessage({ type: "playlab:fire", slot: 1, down: false }, "*"); true`);
+  const p0 = await evalJS(`[window.__arena.G.player.x, window.__arena.G.player.z]`);
+  await evalJS(`window.postMessage({ type: "playlab:stick", slot: 1, m: [0, 1], a: [0, 0] }, "*"); true`); await sleep(500);
+  await evalJS(`window.postMessage({ type: "playlab:stick", slot: 1, m: [0, 0], a: [0, 0] }, "*"); true`);
+  const p1 = await evalJS(`[window.__arena.G.player.x, window.__arena.G.player.z]`);
+  check("the move stick walks the player (top-down: forward = north)", p0[1] - p1[1] > 60 && Math.abs(p1[0] - p0[0]) < 20, { p0: p0.map(Math.round), p1: p1.map(Math.round) });
+  const a0 = await evalJS(`window.__arena.G.player.ammo`);
+  await evalJS(`window.postMessage({ type: "playlab:stick", slot: 1, m: [0, 0], a: [1, 0] }, "*"); true`); await sleep(450);
+  await evalJS(`window.postMessage({ type: "playlab:stick", slot: 1, m: [0, 0], a: [0, 0] }, "*"); true`);
+  const aim = await evalJS(`({ x: +window.__arena.G.aim.x.toFixed(2), z: +window.__arena.G.aim.z.toFixed(2), ammo: window.__arena.G.player.ammo })`);
+  check("the aim stick aims east and shoots by itself (twin-stick)", aim.x > 0.9 && Math.abs(aim.z) < 0.1 && aim.ammo < a0, aim);
+  await evalJS(`window.__arena.setView("fps"); true`);
+  const yaw0 = await evalJS(`window.__arena.G.yaw`);
+  await evalJS(`window.postMessage({ type: "playlab:stick", slot: 1, m: [0, 0], a: [1, 0] }, "*"); true`); await sleep(400);
+  await evalJS(`window.postMessage({ type: "playlab:stick", slot: 1, m: [0, 0], a: [0, 0] }, "*"); true`);
+  const yaw1 = await evalJS(`window.__arena.G.yaw`);
+  check("in first person the aim stick turns the view", yaw0 - yaw1 > 0.5, { yaw0: +yaw0.toFixed(2), yaw1: +yaw1.toFixed(2) });
+  await evalJS(`window.postMessage({ type: "playlab:input", slot: 1, l: 1, r: 0 }, "*"); true`); await sleep(300);
+  await evalJS(`window.postMessage({ type: "playlab:input", slot: 1, l: 0, r: 0 }, "*"); true`);
+  check("the platformer pad's arrows turn too", (await evalJS(`window.__arena.G.yaw`)) > yaw1 + 0.3);
+
+  // the pad on a phone: an arena state switches it to the shooter layout
+  await send("Page.navigate", { url: `${BASE}/pad.html?room=ZZZZ` });
+  const padUp = await (async () => { for (let i = 0; i < 60; i++) { try { if (await evalJS(`typeof window.__padShowState === "function"`)) return true; } catch {} await sleep(200); } return false; })();
+  check("the pad is up", padUp);
+  await evalJS(`window.__padShowState({ t: "state", layout: "arena", state: "play", theme: "zombie graveyard", wave: 2, waves: 5, hp: 80, ammo: 12, coins: 3, total: 45, view: "fps" }); true`);
+  const pad = await evalJS(`({ arena: document.body.classList.contains("layout-arena"), sticks: [...document.querySelectorAll("#pad .stick")].filter((e) => getComputedStyle(e).display !== "none").length, fire: getComputedStyle(document.getElementById("fire")).display, jumpHidden: getComputedStyle(document.getElementById("jump")).display === "none", text: document.getElementById("gameState").textContent })`);
+  check("the pad shows move + aim sticks and FIRE, no jump button, wave and health", pad.arena && pad.sticks === 2 && pad.fire === "flex" && pad.jumpHidden && /wave 2\/5/.test(pad.text) && /80/.test(pad.text), pad);
+  const stickVal = await evalJS(`(() => { const el = document.getElementById("stickMove"), r = el.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    el.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 7, clientX: cx, clientY: cy, bubbles: true })); el.dispatchEvent(new PointerEvent("pointermove", { pointerId: 7, clientX: cx + r.width * 0.4, clientY: cy - r.height * 0.1, bubbles: true }));
+    const v = window.__padStick && window.__padStick.m.map((n) => +n.toFixed(2)); el.dispatchEvent(new PointerEvent("pointerup", { pointerId: 7, clientX: cx, clientY: cy, bubbles: true })); return { v, after: window.__padStick.m }; })()`);
+  check("dragging the move stick right gives x≈0.8, y≈0.2, release gives 0", stickVal.v && stickVal.v[0] > 0.7 && stickVal.v[1] > 0.1 && stickVal.after[0] === 0 && stickVal.after[1] === 0, stickVal);
+  const fireVal = await evalJS(`(() => { const el = document.getElementById("fire"); el.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 8, bubbles: true })); const d = window.__padFire; el.dispatchEvent(new PointerEvent("pointerup", { pointerId: 8, bubbles: true })); return { d, u: window.__padFire }; })()`);
+  check("FIRE is a hold", fireVal.d === true && fireVal.u === false, fireVal);
+  await evalJS(`window.__padShowState({ t: "state", layout: "2d", state: "play", level: "sample", coins: 1, total: 4 }); true`);
+  check("a platformer state brings the arrows and JUMP back", await evalJS(`!document.body.classList.contains("layout-arena") && getComputedStyle(document.getElementById("jump")).display !== "none"`));
 } catch (err) { console.log("ERROR", err.message); fails++; }
 finally { ws.close(); chrome.kill(); console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED"); process.exit(fails ? 1 : 0); }

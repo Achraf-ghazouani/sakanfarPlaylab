@@ -8,6 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<script src="shared/joystick.js"></script>
 <style>
   html, body { margin:0; height:100%; overflow:hidden; background:#111; font-family:system-ui, sans-serif; color:#eee; user-select:none; -webkit-user-select:none; }
   #c { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
@@ -38,7 +39,15 @@
   body.embed #homeBtn, body.embed #hint { display:none !important; }
   body.embed #hud { background:rgba(27,21,53,.85); }
   body.embed #vitals { left:auto; right:14px; }   /* the Studio shows its status pill bottom-left */
-  body.touch #hint { display:block; }
+  body.touch #hint { display:none; }
+  /* on a phone the sticks are on the screen itself */
+  #touch { display:none; position:fixed; inset:0; z-index:2; pointer-events:none; }
+  body.touch #touch { display:block; }
+  #touch #stickMove { left:max(26px, env(safe-area-inset-left)); bottom:40px; }
+  #touch #stickAim { right:max(26px, env(safe-area-inset-right)); bottom:40px; }
+  #touch #fireBtn { right:calc(max(26px, env(safe-area-inset-right)) + 150px); bottom:56px; }
+  body.touch #vitals { bottom:auto; top:52px; left:14px; }
+  body.touch #cross { top:46%; }
   @media (max-width: 700px) { #theme { display:none; } #stats { gap:8px; font-size:12px; } }
 </style>
 </head>
@@ -57,6 +66,7 @@
 <div id="hurt"></div>
 <div id="wave"></div>
 <div id="msg"><div id="msgText">Loading...</div></div>
+<div id="touch"><div class="stick" id="stickMove"><span class="lbl">MOVE</span></div><div class="stick" id="stickAim"><span class="lbl">AIM</span></div><div class="hold" id="fireBtn">FIRE</div></div>
 <div id="hint">Move: WASD / arrows &nbsp;·&nbsp; Aim: mouse &nbsp;·&nbsp; Shoot: click / space &nbsp;·&nbsp; 1 2 3 views &nbsp;·&nbsp; R restart &nbsp;·&nbsp; M sound</div>
 
 <script type="module">
@@ -73,7 +83,7 @@ const $ = (id) => document.getElementById(id);
 const PARAMS = new URLSearchParams(location.search);
 const isEmbed = PARAMS.get("embed") === "1";
 if (isEmbed) document.body.classList.add("embed");
-const isTouch = matchMedia("(pointer: coarse)").matches;
+const isTouch = PARAMS.get("touch") === "1" || matchMedia("(pointer: coarse)").matches;
 if (isTouch) document.body.classList.add("touch");
 
 // ---------------------------------------------------------------------------
@@ -144,6 +154,11 @@ const mat = (c, extra = {}) => new THREE.MeshStandardMaterial({ color: c, roughn
 const G = { level: null, name: null, view: "fps", theme: DEFAULT_THEME, scene: null, solids: [], spawners: [], pickups: [], zombies: [], player: null,
   wave: 0, pending: 0, nextSpawn: 0, kills: 0, total: 0, state: "none", nextWaveAt: 0, lastShot: 0, firing: false, yaw: 0, pitch: -0.08, aim: new THREE.Vector3(0, 0, -1), mouse: { x: 0, y: 0 }, keys: {}, tracer: null, tracerUntil: 0, hurtUntil: 0 };
 let playerSkin = null, enemySkin = null;   // <img> from the Studio: the player picture and the enemy sprite
+// Sticks: from the phone pad through the Studio (playlab:stick / playlab:fire) or from the on-screen sticks on a touch
+// device. m = move (x right, y forward), a = aim / turn, fire = hold. turn = the old left/right pad buttons.
+const R = { m: [0, 0], a: [0, 0], fire: false, turn: 0 };
+function setSticks(m, a) { if (Array.isArray(m)) R.m = [clamp1(m[0]), clamp1(m[1])]; if (Array.isArray(a)) R.a = [clamp1(a[0]), clamp1(a[1])]; }
+const clamp1 = (v) => Math.max(-1, Math.min(1, Number(v) || 0));
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 function showMsg(title, sub) { $("msgText").innerHTML = title + (sub ? `<small>${sub}</small>` : ""); $("msg").classList.add("show"); }
 function hideMsg() { $("msg").classList.remove("show"); }
@@ -253,7 +268,7 @@ function build(level, name) {
   $("theme").textContent = (name ? name + " · " : "") + (level.theme || "");
   updateHud();
   if (Array.isArray(level.fixes) && level.fixes.length) showToastMsg(`Playtest agent: ${level.fixes.map(esc).join(" · ")}`);
-  showMsg(`${esc(level.theme || "Arena")}`, `${level.waves} wave${level.waves > 1 ? "s" : ""} of enemies. ${isTouch ? "This game needs a computer with a mouse and keyboard." : "Click to start: WASD to move, mouse to aim, click to shoot."}`);
+  showMsg(`${esc(level.theme || "Arena")}`, `${level.waves} wave${level.waves > 1 ? "s" : ""} of enemies. ${isTouch ? "Tap to start: left stick moves, right stick aims, FIRE shoots." : "Click to start: WASD to move, mouse to aim, click to shoot."}`);
   publishState();
 }
 let toastTimer = null;
@@ -361,8 +376,12 @@ function frame(now) {
     const f = G.view === "top" ? new THREE.Vector3(0, 0, -1) : forward(), r = G.view === "top" ? new THREE.Vector3(1, 0, 0) : right();
     if (K.KeyW || K.ArrowUp) { mx += f.x; mz += f.z; } if (K.KeyS || K.ArrowDown) { mx -= f.x; mz -= f.z; }
     if (K.KeyD || K.ArrowRight) { mx += r.x; mz += r.z; } if (K.KeyA || K.ArrowLeft) { mx -= r.x; mz -= r.z; }
-    const len = Math.hypot(mx, mz); if (len > 0) { mx /= len; mz /= len; moveCircle(P, mx * SPEED * dt, mz * SPEED * dt, PLAYER_R); }
-    if (G.firing || K.Space) shoot(now);
+    mx += r.x * R.m[0] + f.x * R.m[1]; mz += r.z * R.m[0] + f.z * R.m[1];                        // the move stick
+    const len = Math.hypot(mx, mz); if (len > 0) { const k = Math.min(1, len); mx /= len; mz /= len; moveCircle(P, mx * SPEED * k * dt, mz * SPEED * k * dt, PLAYER_R); }
+    if (G.view === "top") { if (Math.hypot(R.a[0], R.a[1]) > 0.35) { G.aim.set(R.a[0], 0, -R.a[1]).normalize(); G.stickAimAt = now; } }   // twin-stick aim
+    else { G.yaw -= (R.a[0] + R.turn) * 2.4 * dt; if (G.view === "fps") G.pitch = Math.max(-1.2, Math.min(1.2, G.pitch + R.a[1] * 1.2 * dt)); }
+    const stickFire = G.view === "top" && Math.hypot(R.a[0], R.a[1]) > 0.6;                       // top-down: pushing the aim stick shoots
+    if (G.firing || K.Space || R.fire || stickFire) shoot(now);
     // waves
     if (G.pending > 0 && now >= G.nextSpawn) { G.pending--; spawnZombie(); G.nextSpawn = now + 650; updateHud(); }
     const alive = G.zombies.filter((z) => !z.dead);
@@ -420,7 +439,9 @@ function frame(now) {
     camera.lookAt(P.x, 0, P.z);
     // aim at the mouse: a ray from the camera to the floor plane
     const v = new THREE.Vector3(G.mouse.x, G.mouse.y, 0.5).unproject(camera).sub(camera.position).normalize();
-    const t = (34 - camera.position.y) / v.y; if (t > 0) { const hit = camera.position.clone().addScaledVector(v, t); const a = new THREE.Vector3(hit.x - P.x, 0, hit.z - P.z); if (a.length() > 2) G.aim.copy(a.normalize()); }
+    if ((G.mouse.at || 0) > (G.stickAimAt || 0)) {   // the mouse aims only when it moved after the stick was last used
+      const t = (34 - camera.position.y) / v.y; if (t > 0) { const hit = camera.position.clone().addScaledVector(v, t); const a = new THREE.Vector3(hit.x - P.x, 0, hit.z - P.z); if (a.length() > 2) G.aim.copy(a.normalize()); }
+    }
   }
   G.snapCam = false;
   if (G.sun) { G.sun.position.set(P.x - 400, 900, P.z + 300); G.sun.target.position.set(P.x, 0, P.z); }
@@ -442,7 +463,7 @@ canvas.addEventListener("mousedown", (e) => {
 });
 addEventListener("mouseup", () => { G.firing = false; });
 addEventListener("mousemove", (e) => {
-  if (G.view === "top") { G.mouse.x = (e.clientX / innerWidth) * 2 - 1; G.mouse.y = -(e.clientY / innerHeight) * 2 + 1; return; }
+  if (G.view === "top") { G.mouse.x = (e.clientX / innerWidth) * 2 - 1; G.mouse.y = -(e.clientY / innerHeight) * 2 + 1; G.mouse.at = performance.now(); return; }
   if (!locked()) return;
   G.yaw -= e.movementX * 0.0024; if (G.view === "fps") G.pitch = Math.max(-1.2, Math.min(1.2, G.pitch - e.movementY * 0.0022));
 });
@@ -476,6 +497,13 @@ function setView(v) {
   publishState();
 }
 try { SFX.setMuted(localStorage.getItem("playlab.muted") === "1"); } catch {}
+if (isTouch) {
+  Joystick.css();
+  Joystick.stick($("stickMove"), ({ x, y }) => setSticks([x, y], null));
+  Joystick.stick($("stickAim"), ({ x, y }) => setSticks(null, [x, y]));
+  Joystick.button($("fireBtn"), () => { SFX.ensure(); if (G.state === "ready" || G.state === "paused") startPlay(); else if (G.state === "dead" || G.state === "won") restart(); R.fire = true; }, () => { R.fire = false; });
+  canvas.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+}
 
 // ---------------------------------------------------------------------------
 // Studio preview (postMessage) and standalone loading
@@ -507,6 +535,11 @@ if (isEmbed) {
     } else if (m.type === "playlab:restart") restart();
     else if (m.type === "playlab:mute") SFX.setMuted(!!m.muted);
     else if (m.type === "playlab:view") setView(String(m.view || ""));
+    else if (m.type === "playlab:stick") { setSticks(m.m, m.a); if (G.state === "ready" && (Math.hypot(...R.m) > 0.5 || Math.hypot(...R.a) > 0.5)) startPlay(); }
+    else if (m.type === "playlab:fire") { R.fire = !!m.down; if (R.fire && (G.state === "ready" || G.state === "paused")) startPlay(); else if (R.fire && (G.state === "dead" || G.state === "won")) restart(); }
+    else if (m.type === "playlab:input") R.turn = (m.r ? 1 : 0) - (m.l ? 1 : 0);          // the platformer pad's arrows turn
+    else if (m.type === "playlab:jump") { R.fire = !!m.down; if (R.fire && G.state === "ready") startPlay(); }   // and JUMP shoots
+    else if (m.type === "playlab:players") { if (!(m.players || []).length) { R.m = [0, 0]; R.a = [0, 0]; R.fire = false; R.turn = 0; } }
     else if (m.type === "playlab:player" || m.type === "playlab:sprites") { if (await setSkins(m.type === "playlab:player" ? { player: m.image ?? null } : { sprites: m.sprites || {} })) restart(); }
     else if (m.type === "playlab:menu") { if (m.action === "restart") restart(); else if (m.action === "pause") { if (G.state === "play") togglePause(); } else if (m.action === "resume") { if (G.state === "paused") startPlay(); } else if (m.action === "toggle-pause") togglePause(); else if (m.action === "mute") SFX.setMuted(!SFX.muted); }
     else if (m.type === "playlab:state") publishState();
@@ -531,7 +564,7 @@ function probe() {
   const zombies = G.zombies.filter((z) => !z.dead).map((z) => { const b = new THREE.Box3(new THREE.Vector3(z.x - ZOMBIE_R, 0, z.z - ZOMBIE_R), new THREE.Vector3(z.x + ZOMBIE_R, ZOMBIE_H, z.z + ZOMBIE_R)); const p = ray.intersectBox(b, tmp); return { x: Math.round(z.x), z: Math.round(z.z), t: p ? Math.round(p.distanceTo(origin)) : null }; });
   return { origin: origin.toArray().map(Math.round), dir: dir.toArray().map((v) => +v.toFixed(3)), wallT: Math.round(wallT), zombies };
 }
-window.__arena = { G, shoot: () => shoot(performance.now()), setView, startPlay, restart, state: () => lastState, camera, probe };
+window.__arena = { G, R, shoot: () => shoot(performance.now()), setView, startPlay, restart, state: () => lastState, camera, probe };
 </script>
 </body>
 </html>

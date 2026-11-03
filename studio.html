@@ -708,9 +708,10 @@ function startCamHost() {
       if (p === Cam.player) { Cam.player = null; Cam.stream = null; $("camVideo").srcObject = null; $("camPip").classList.remove("show"); $("cameraBtn").classList.remove("live"); $("camTag").textContent = "phone disconnected, scan again"; camStatus("phone disconnected", ""); }
       else camStatus(`${p.name} phone left`, "");
       toPreview({ type: "playlab:input", slot: p.slot, l: 0, r: 0 }); toPreview({ type: "playlab:jump", slot: p.slot, down: false });
+      toPreview({ type: "playlab:stick", slot: p.slot, m: [0, 0], a: [0, 0] }); toPreview({ type: "playlab:fire", slot: p.slot, down: false });
       syncPlayers();
     },
-    onMessage: (p, msg) => { if (msg.t === "ink") onCamInk(msg); else if (msg.t === "scan") runPhoneScan(p, msg); else if (msg.t === "menu") toPreview({ type: "playlab:menu", action: msg.action }); },
+    onMessage: (p, msg) => { if (msg.t === "ink") onCamInk(msg); else if (msg.t === "scan") runPhoneScan(p, msg); else if (msg.t === "menu") toPreview({ type: "playlab:menu", action: msg.action }); else if (msg.t === "stick") toPreview({ type: "playlab:stick", slot: p.slot, m: msg.m, a: msg.a }); else if (msg.t === "fire") toPreview({ type: "playlab:fire", slot: p.slot, down: !!msg.down }); },
   });
   camConfig.then(() => { if (Cam.relay && Cam.host) Cam.host.startRelay(Cam.relay); });
   Cam.host.start(sessionStorage.getItem("playlab.studio.room") || undefined);

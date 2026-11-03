@@ -163,11 +163,11 @@
   .welcome .continue b { max-width:260px; display:inline-block; vertical-align:bottom; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
   /* the first build: a loader on the stage until the level arrives */
-  .building { display:none; position:absolute; inset:0; z-index:2; flex-direction:column; align-items:center; justify-content:center; gap:6px; background:#1b1535; color:#fff; text-align:center; padding:20px; }
-  body.building .building { display:flex; }
-  .building b { font-family:Fredoka, system-ui, sans-serif; font-size:24px; }
-  .building small { color:#cfc6ee; }
-  .building .spin { width:44px; height:44px; border-radius:50%; border:4px solid rgba(255,255,255,.2); border-top-color:#c4b5fd; animation:spin 0.9s linear infinite; margin-bottom:10px; }
+  #building { display:none; position:absolute; inset:0; z-index:2; flex-direction:column; align-items:center; justify-content:center; gap:6px; background:#1b1535; color:#fff; text-align:center; padding:20px; }
+  body.building #building { display:flex; }
+  #building b { font-family:Fredoka, system-ui, sans-serif; font-size:24px; }
+  #building small { color:#cfc6ee; }
+  #building .spin { width:44px; height:44px; border-radius:50%; border:4px solid rgba(255,255,255,.2); border-top-color:#c4b5fd; animation:spin 0.9s linear infinite; margin-bottom:10px; }
   @keyframes spin { to { transform:rotate(360deg); } }
   .drop-hint { display:none; position:absolute; inset:14px; z-index:4; border:3px dashed var(--purple); border-radius:20px; background:rgba(239,234,255,.92); color:var(--purple-deep); font:700 22px Fredoka, sans-serif; align-items:center; justify-content:center; pointer-events:none; }
   body.dragging .drop-hint { display:flex; }
@@ -565,9 +565,7 @@ function pushLevel(level, { name = "studio", thumb = null, keepPlayer = false, t
   S.level = level; layout(); setDim(S.mode); queueMicrotask(updateCosts); renderCodeMode();
   const f = $("preview");
   if (isCode(level)) {   // a game written as code runs in the sandbox (shared/coderun.mjs): no origin, strict policy, the SDK inside
-    S.previewReady = false; S.codeRun = { ready: false, readyAt: 0, errors: [], blank: null };
-    if (S.code) S.code.destroy();
-    S.code = CodeRun.mount(f, level.html, { assets: codeAssets(), on: onCodeMessage });
+    if (!S.code || S.codeRun?.html !== level.html) mountCode(level.html);   // the build loop already mounted and tested this very file
     $("previewStatus").textContent = `${levelSummary(level)}${S.versions[0] ? ` · v${S.versions[0].n}` : ""}`;
     return;
   }
@@ -1502,6 +1500,8 @@ const VIEW_NAME = { fps: "first person", tps: "third person", top: "top-down" };
 // ---------------------------------------------------------------------------
 const isCode = (l) => !!l && l.genre === "code";
 const ENGINE_NAME = { canvas: "canvas", phaser: "Phaser 3", three: "three.js" };
+const MAX_FIXES = 3;   // free fix attempts after a paid build (the server enforces it through the build token)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const levelSummary = (l) => (isCode(l) ? `${l.title || "custom game"} · AI code · ${ENGINE_NAME[l.engine] || l.engine}` : `${l?.objects?.length || 0} objects`);
 const GO_RE = /^\s*(go|go!|build( it)?|go,? build it|ok|okay|yes|yes!|do it|let'?s go|start|make it|allez|vas-y|construis(-le)?|oui|c'?est parti|هيا|ابدأ|نعم|ابنها)[\s.!]*$/i;
 const DROP_RE = /^\s*(cancel|stop|never ?mind|forget it|drop it|annule|annuler|laisse tomber|إلغاء|ألغ)[\s.!]*$/i;
@@ -1556,7 +1556,7 @@ async function planCode(prompt, { change = null, previous = null, history = [] }
 }
 /** The build, streamed: the SSE events of api/build-code (start, progress, done | error). Throws on a refusal or an error event. */
 async function streamCode(body, onEvent) {
-  const r = await PlayAuth.api("api/build-code", { method: "POST", body });
+  const r = await PlayAuth.api(body.task === "code" ? "api/build-code" : "api/agent", { method: "POST", body });   // builds have their own route; fixes go to the agent with task "fix"
   if (!r.ok || !/text\/event-stream/.test(r.headers.get("content-type") || "")) {
     const data = await r.json().catch(() => ({}));
     if (typeof data?.credits?.balance === "number") setBalance(data.credits.balance);
@@ -1583,28 +1583,45 @@ async function streamCode(body, onEvent) {
   if (!done) throw new Error("The build stopped before it finished.");
   return done;
 }
-/** Waits for the mounted game: ok after the first frames with no error for 3 s, else the first error or a blank canvas. */
-function waitCodeReady(ms = 12_000) {
-  return new Promise((resolve) => {
-    const t0 = performance.now();
-    const tick = () => {
-      const r = S.codeRun;
-      if (!r) return resolve({ ok: false, error: "no game mounted" });
-      if (r.errors.length) return resolve({ ok: false, error: r.errors[0].message });
-      if (r.blank) return resolve({ ok: false, blank: r.blank });
-      if (r.ready && performance.now() - r.readyAt > 3000) return resolve({ ok: true });
-      if (performance.now() - t0 > ms) return resolve(r.ready ? { ok: true } : { ok: false, error: `no first frame after ${Math.round(ms / 1000)} s` });
-      setTimeout(tick, 150);
-    };
-    tick();
-  });
+/** Mounts a game in the sandbox without saving it; what it reports (ready, errors, blank, the last state) lands in S.codeRun. */
+function mountCode(html) {
+  S.previewReady = false; S.codeRun = { ready: false, readyAt: 0, errors: [], blank: null, lastState: null, html };
+  if (S.code) S.code.destroy();
+  S.code = CodeRun.mount($("preview"), html, { assets: codeAssets(), on: onCodeMessage });
+}
+function waitState(state, ms) { return new Promise((resolve) => { const t0 = performance.now(); const tick = () => { if (S.codeRun?.lastState === state) return resolve(true); if (performance.now() - t0 > ms) return resolve(false); setTimeout(tick, 100); }; tick(); }); }
+/** The smoke test of the mounted game: first frames within 12 s, no exception and no blank canvas for 6 s, the screen changes
+ *  after a second of test input (right, the stick, A, a tap in the middle), a restart from the menu brings it back to playing. */
+async function smokeTest() {
+  const r = { ok: false, ready: false, errors: [], blank: null, responds: null, restart: null, why: "" };
+  const t0 = performance.now();
+  while (performance.now() - t0 < 12_000 && !(S.codeRun?.ready || S.codeRun?.errors.length)) await sleep(150);
+  r.ready = !!S.codeRun?.ready;
+  if (S.codeRun) { const f = $("preview"), b = f.getBoundingClientRect(), rect = (sel) => { const el = document.querySelector(sel); if (!el) return null; const r = el.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height), getComputedStyle(el).display]; }; S.codeRun.frameInfo = { w: b.width, h: b.height, display: getComputedStyle(f).display, vis: getComputedStyle(f).visibility, body: document.body.className, src: f.getAttribute("src"), srcdoc: (f.getAttribute("srcdoc") || "").length, preview: rect(".preview"), split: rect(".split"), main: rect("main"), app: rect(".app"), cols: getComputedStyle(document.querySelector(".split")).gridTemplateColumns, win: [innerWidth, innerHeight] }; }
+  if (r.ready) await sleep(6500);   // early exceptions and the SDK's blank check (seen twice, 3 s apart)
+  r.errors = (S.codeRun?.errors || []).slice(0, 5).map((e) => ({ kind: e.kind, message: e.message, line: e.line, col: e.col, stack: e.stack })); r.blank = S.codeRun?.blank || null;
+  if (r.errors.length) { r.why = `it crashed: ${r.errors[0].message}`; return r; }
+  if (!r.ready) { r.why = "no first frame after 12 s"; return r; }
+  if (r.blank) { r.why = `nothing was drawn (${r.blank})`; return r; }
+  const a = await askSnapshot();
+  S.code.send({ type: "playlab:input", slot: 1, l: 0, r: 1, u: 0, d: 0 }); S.code.send({ type: "playlab:stick", slot: 1, m: [1, 0], a: [0, 0] }); S.code.send({ type: "playlab:jump", slot: 1, down: true }); S.code.send({ type: "playlab:tap", nx: 0.5, ny: 0.5 });
+  await sleep(900);
+  const b = await askSnapshot();
+  S.code.send({ type: "playlab:input", slot: 1, l: 0, r: 0, u: 0, d: 0 }); S.code.send({ type: "playlab:stick", slot: 1, m: [0, 0], a: [0, 0] }); S.code.send({ type: "playlab:jump", slot: 1, down: false });
+  r.responds = a && b ? a !== b : null;
+  if (S.codeRun) S.codeRun.lastState = null;
+  S.code.send({ type: "playlab:menu", action: "restart" });
+  r.restart = await waitState("play", 4000);
+  r.ok = true;
+  if (r.responds === false) r.why = "the screen did not react to my test input";
+  return r;
 }
 function onCodeMessage(m) {
-  const r = S.codeRun || (S.codeRun = { ready: false, readyAt: 0, errors: [], blank: null });
+  const r = S.codeRun || (S.codeRun = { ready: false, readyAt: 0, errors: [], blank: null, lastState: null, html: "" });
   if (m.type === "playlab:ready") { S.previewReady = true; r.ready = true; r.readyAt = performance.now(); if (Cam.host) syncPlayers(); }
-  else if (m.type === "playlab:error") { if (r.errors.length < 20) r.errors.push({ message: m.message, kind: m.kind, line: m.line, stack: m.stack }); }
-  else if (m.type === "playlab:blank") r.blank = m.why;
-  else if (m.type === "playlab:state" && m.state) Cam.host?.broadcast(m.state);
+  else if (m.type === "playlab:error") { if (r.errors.length < 20) r.errors.push({ message: m.message, kind: m.kind, line: m.line, col: m.col, stack: m.stack }); }
+  else if (m.type === "playlab:blank") { r.blank = m.why; r.blankInfo = m.info || null; }
+  else if (m.type === "playlab:state" && m.state) { r.lastState = m.state.state; Cam.host?.broadcast(m.state); }
   else if (m.type === "playlab:event") { if (m.kind === "win") toast("You won on the preview!"); Cam.host?.event(m.name || m.kind, m.slot); }
 }
 /** The person's pictures for PlayLab.assets.get(role) inside the game: the player, the object sprites, the asset list, the model. */
@@ -1637,29 +1654,83 @@ async function buildCode(pending, { change = null } = {}) {
     return;
   }
   hideTyping();
-  const kb = (out.html.length / 1024).toFixed(1), secs = ((performance.now() - t0) / 1000).toFixed(0);
-  th.set(writing, { state: "done", label: `${change ? "Rewrote" : "Wrote"} ${kb} KB of ${ENGINE_NAME[out.engine] || out.engine} in ${secs} s` });
-  await th.reveal(out.scan.ok ? "Scanned for forbidden APIs: clean" : `Forbidden APIs found: ${out.scan.problems.join("; ")}`, "code scan", out.scan.ok ? "done" : "fail");
-  if (!out.scan.ok) {
-    th.fail("Not loaded");
-    S.pendingPlan = pending; renderCodeMode(); updateCosts();
-    await streamAssistant(`The code tried something the sandbox forbids (${out.scan.problems[0]}), so I did not load it. Say go to write it again.`);
-    return;
+  let html = out.html, notes = out.notes || {}, engine = out.engine, scan = out.scan, token = out.fix || null;
+  th.set(writing, { state: "done", label: `${change ? "Rewrote" : "Wrote"} ${(html.length / 1024).toFixed(1)} KB of ${ENGINE_NAME[engine] || engine} in ${((performance.now() - t0) / 1000).toFixed(0)} s` });
+  const progress = (step, base) => (ev) => { if (ev.e === "progress") th.set(step, { label: `${base} · ${(ev.chars / 1024).toFixed(1)} KB, ${ev.lines} lines` }); };
+  // the self-healing loop: scan, sandbox, smoke test; a failure goes back to Muse Wonder for a free fix, up to MAX_FIXES times
+  const build = { attempts: 0, fixes: [], report: null, look: null, improved: false, ok: false };
+  S.lastBuild = build;
+  for (;;) {
+    let report;
+    if (!scan.ok) { th.add(`Forbidden APIs found: ${scan.problems.join("; ")}`, "code scan", "fail"); report = { ok: false, scan, errors: [], ready: null, why: `the code uses ${scan.problems[0]}` }; }
+    else {
+      if (build.attempts === 0) await th.reveal("Scanned for forbidden APIs: clean", "code scan");
+      const running = th.add("Loading it in the sandbox and playing it for a few seconds", "smoke test");
+      mountCode(html);
+      report = await smokeTest();
+      th.set(running, { state: report.ok && !report.why ? "done" : report.ok ? "skip" : "fail", label: report.ok ? `Smoke test: first frames, ${report.responds === false ? report.why : "reacts to input"}, restart ${report.restart ? "ok" : "unclear"}` : `Smoke test failed: ${report.why}` });
+    }
+    build.report = report;
+    if (report.ok && !(report.responds === false && build.attempts === 0 && token)) { build.ok = true; break; }   // one free try to make it react, then it is accepted as is
+    if (build.attempts >= MAX_FIXES || !token) break;
+    build.attempts++;
+    const fixing = th.add(`Fix ${build.attempts} of ${MAX_FIXES}: ${report.why}`, "Muse Wonder 1.0");
+    let fixed;
+    try { fixed = await streamCode({ task: "fix", token, project_id: S.project?.id, plan, prompt, html, report: { errors: report.errors, blank: report.blank, ready: report.ready, responds: report.responds, restart: report.restart, scan: report.scan } }, progress(fixing, `Fix ${build.attempts} of ${MAX_FIXES}`)); }
+    catch (err) { th.set(fixing, { state: "fail", label: `Fix ${build.attempts} failed: ${err.message}` }); break; }
+    th.set(fixing, { state: "done", label: `Fix ${build.attempts} of ${MAX_FIXES} for "${report.why}": rewrote ${(fixed.html.length / 1024).toFixed(1)} KB` });
+    build.fixes.push(report.why);
+    html = fixed.html; notes = fixed.notes || notes; engine = fixed.engine || engine; scan = fixed.scan; token = fixed.fix || null;
   }
-  const level = { genre: "code", engine: out.engine, title: plan.title, theme: plan.genre, note: out.notes?.note || (change ? change.slice(0, 60) : plan.title), prompt, plan, html: out.html, notes: out.notes || {}, objects: [] };
-  const running = th.add("Loading it in the sandbox", "sandbox");
+  // the vision check: a screenshot after a few seconds, Muse Spark says whether it looks like the game asked for; one improvement round
+  if (build.ok && token) {
+    const looking = th.add("Looking at a screenshot of it", "Muse Spark 1.3");
+    try {
+      const shot = await askSnapshot();
+      if (!shot) throw new Error("no screenshot came back");
+      const look = await api("api/agent", { method: "POST", body: { task: "look", token, plan, prompt, snapshot: shot } });
+      build.look = look;
+      const pct = Math.round(look.match * 100);
+      th.set(looking, { state: look.match >= 0.5 ? "done" : "skip", label: `Looks ${look.match >= 0.8 ? "like" : look.match >= 0.5 ? "mostly like" : "unlike"} the game asked for (${pct}%): ${look.looksLike}`, model: modelName(look.model) });
+      if (look.match < 0.5 && build.attempts < MAX_FIXES && (look.suggestion || look.problems?.length)) {
+        build.attempts++;
+        const improving = th.add(`Improving it: ${look.suggestion || look.problems[0]}`, "Muse Wonder 1.0");
+        const feedback = `match ${pct}%: ${look.looksLike}. Problems: ${(look.problems || []).join("; ") || "none named"}. Suggestion: ${look.suggestion || ""}`;
+        try {
+          const better = await streamCode({ task: "fix", token, project_id: S.project?.id, plan, prompt, html, report: { feedback } }, progress(improving, "Improving it"));
+          if (!better.scan.ok) th.set(improving, { state: "skip", label: "The improved version used something forbidden: keeping the first one" });
+          else {
+            const testing = th.add("Smoke test of the improved version", "smoke test");
+            mountCode(better.html);
+            const again = await smokeTest();
+            if (again.ok) { html = better.html; notes = better.notes || notes; engine = better.engine || engine; token = better.fix || null; build.improved = true; th.set(testing, { state: "done", label: "The improved version runs" }); }
+            else { th.set(testing, { state: "skip", label: `The improved version failed (${again.why}): keeping the first one` }); th.set(improving, { state: "skip" }); mountCode(html); await smokeTest(); }
+          }
+        } catch (err) { th.set(improving, { state: "skip", label: `Could not improve it: ${err.message}` }); }
+      }
+    } catch (err) { th.set(looking, { state: "skip", label: `Could not look at it: ${err.message}` }); }
+  }
+  // save it as a version (the loop already mounted this file), then say honestly what happened
+  const problem = build.ok ? "" : build.report?.why || "it did not run";
+  const level = { genre: "code", engine, title: plan.title, theme: plan.genre, note: (notes.note || (change ? change.slice(0, 60) : plan.title)).slice(0, 60) + (build.ok ? "" : " (not running)"), prompt, plan, html, notes, objects: [] };
+  await th.finish(build.ok ? (build.fixes.length ? `Ready after ${build.fixes.length} fix${build.fixes.length > 1 ? "es" : ""}` : "Ready") : `Not working after ${build.attempts} fix attempt${build.attempts === 1 ? "" : "s"}`);
   await applyLevel(level, { note: level.note, toastText: level.note });
-  const verdict = await waitCodeReady(12_000);
-  const problem = verdict.ok ? "" : verdict.error ? `it crashed: ${verdict.error}` : `nothing was drawn (${verdict.blank})`;
-  th.set(running, { state: verdict.ok ? "done" : "fail", label: verdict.ok ? "Running: the first frames are on screen" : problem[0].toUpperCase() + problem.slice(1) });
-  await th.finish(verdict.ok ? "Ready" : "Built, but it does not run yet");
-  await addCard({ icon: verdict.ok ? "&#127918;" : "&#9888;&#65039;", title: `${plan.title} · v${S.versions[0]?.n || 1}`, text: `${ENGINE_NAME[out.engine] || out.engine} · ${kb} KB · ${out.notes?.built || plan.goal}` });
-  const reply = verdict.ok
-    ? `${out.notes?.built || "Done."}${out.notes?.missing ? ` Not in this version: ${out.notes.missing}` : ""} Tell me what to change.`
-    : `I wrote the game but it does not run yet: ${problem}. The automatic fix loop comes in the next step; for now say go to write it again, or tell me what to change in the plan.`;
+  const kb = (html.length / 1024).toFixed(1);
+  await addCard({ icon: build.ok ? "&#127918;" : "&#9888;&#65039;", title: `${plan.title} · v${S.versions[0]?.n || 1}`, text: `${ENGINE_NAME[engine] || engine} · ${kb} KB · ${build.ok ? notes.built || plan.goal : "not running: " + problem}` });
+  let reply;
+  if (build.ok) {
+    reply = `${notes.built || "Done."}${notes.missing ? ` Not in this version: ${notes.missing}` : ""}`;
+    const stillSilent = build.report?.responds === false;
+    if (build.fixes.length) reply += ` It ${build.fixes.length === 1 ? "failed once" : `failed ${build.fixes.length} times`} at first (${build.fixes[0]}) and I ${stillSilent ? "tried to fix it" : "fixed it"}.`;
+    if (stillSilent) reply += " It did not react to my test input, so try the controls yourself.";
+    if (build.look) reply += build.look.match >= 0.5 ? ` A look at the screen: ${build.look.looksLike}${build.improved ? " I improved it once." : ""}` : ` A look at the screen says it does not look like what you asked for yet (${build.look.looksLike}).${build.improved ? " I improved it once." : ""}`;
+    reply += " Tell me what to change.";
+  } else {
+    reply = `I wrote the game and tried ${build.attempts} fix${build.attempts === 1 ? "" : "es"}, but it still does not run: ${problem}. It is saved as v${S.versions[0]?.n || 1} so you can read it, but I will not call it working. I can write it again, or a simpler version (another ${codePrice(plan) ?? "?"} credits either way).`;
+  }
   await streamAssistant(reply);
-  await saveMessage("assistant", reply, { code: true, ok: verdict.ok });
-  if (!verdict.ok) { S.pendingPlan = pending; renderCodeMode(); updateCosts(); }
+  await saveMessage("assistant", reply, { code: true, ok: build.ok, fixes: build.fixes, look: build.look ? { match: build.look.match, looksLike: build.look.looksLike } : null });
+  if (!build.ok) suggestChips([{ label: "Write it again", run: () => buildCode({ plan, prompt }) }, { label: "A simpler version", run: () => planCode(prompt, { change: "make it much simpler: fewer features, plain shapes, one screen", previous: plan }) }]);
 }
 
 // ---------------------------------------------------------------------------

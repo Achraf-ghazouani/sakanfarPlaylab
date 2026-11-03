@@ -1,0 +1,15 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Cards</title>
+<style>body { margin:0; background:#1b2a41; display:grid; grid-template-columns:repeat(4, 70px); gap:10px; padding:20px; } .card { width:70px; height:90px; background:#f4d35e; border-radius:8px; }</style>
+</head>
+<body>
+<div class="card"></div><div class="card"></div><div class="card"></div><div class="card"></div>
+<div class="card"></div><div class="card"></div><div class="card"></div><div class="card"></div>
+<script>
+// A sample game made of DOM elements and no canvas at all (tests/samples): a memory card grid. The SDK must not call it blank.
+PlayLab.controller({ type: "tap" });
+PlayLab.hud.set({ score: 0, text: "tap two cards" });
+function loop() { requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+</script>
+</body></html>

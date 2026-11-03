@@ -68,7 +68,17 @@
     else if (m.type === "playlab:assets") { for (const k of Object.keys(assets)) delete assets[k]; Object.assign(assets, m.assets && typeof m.assets === "object" ? m.assets : {}); }
     else if (m.type === "playlab:state") publish(true);
     else if (m.type === "playlab:snapshot") screenshot().then((image) => post({ type: "playlab:snapshot", image }));
+    else if (m.type === "playlab:tap") tap(Number(m.nx), Number(m.ny));
   });
+  /** A tap from the host (the smoke test, a phone's tap layout): a real-looking pointer press and release at (nx, ny) of the page. */
+  function tap(nx, ny) {
+    const x = (Number.isFinite(nx) ? nx : 0.5) * innerWidth, y = (Number.isFinite(ny) ? ny : 0.5) * innerHeight;
+    const el = document.elementFromPoint(x, y) || document.body;
+    const init = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, screenX: x, screenY: y, button: 0, buttons: 1, pointerId: 1, pointerType: "mouse", isPrimary: true, view: window };
+    const fire = (type, extra = {}) => el.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, { ...init, ...extra }) : new MouseEvent(type, { ...init, ...extra }));
+    fire("pointerdown"); fire("mousedown");
+    setTimeout(() => { fire("pointerup", { buttons: 0 }); fire("mouseup", { buttons: 0 }); fire("click", { buttons: 0 }); }, 120);
+  }
   const clamp = (v) => Math.max(-1, Math.min(1, Number(v) || 0));
 
   // ---- what the host hears ----
@@ -95,20 +105,24 @@
     const c = mainCanvas(); if (!c) return null;
     try { const o = document.createElement("canvas"), w = Math.min(640, c.width), h = Math.round(c.height * w / c.width); o.width = w; o.height = h; o.getContext("2d").drawImage(c, 0, 0, w, h); return o.toDataURL("image/jpeg", 0.7); } catch { return null; }
   }
-  // blank = nothing drawn (transparent) or fewer than 0.25 % of the pixels differ from the average colour, seen twice 3 s apart
+  // blank = nothing drawn (transparent) or fewer than 0.25 % of the pixels differ from the average colour, seen twice 3 s apart.
+  // No canvas yet is not blank while a library may still be loading (checked again for 12 s), nor for a game made of DOM elements.
+  function visibleElements() { let n = 0; for (const el of document.body ? document.body.querySelectorAll("*") : []) { if (/^(script|style|link|meta)$/i.test(el.tagName) || el.closest(".pl-hud, .pl-touch")) continue; const r = el.getBoundingClientRect(); if (r.width >= 12 && r.height >= 12) n++; } return n; }
   async function blankCheck(attempt = 1) {
-    const c = mainCanvas(); if (!c) { post({ type: "playlab:blank", why: "no canvas" }); return; }
-    let why = null;
+    const c = mainCanvas();
+    if (!c) { if (visibleElements() >= 3) return; if (attempt < 5) setTimeout(() => blankCheck(attempt + 1), 2500); else post({ type: "playlab:blank", why: "no canvas and nothing on the page" }); return; }
+    let why = null, info = { canvases: document.querySelectorAll("canvas").length, w: c.width, h: c.height, frames, vis: document.visibilityState, iw: innerWidth, ih: innerHeight, attempt };
     try {
       const S = 96, o = document.createElement("canvas"); o.width = S; o.height = S; const x = o.getContext("2d", { willReadFrequently: true }); x.drawImage(c, 0, 0, S, S);
       const d = x.getImageData(0, 0, S, S).data, n = S * S; let r = 0, g = 0, b = 0, a = 0;
       for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; a += d[i + 3]; }
       const mr = r / n, mg = g / n, mb = b / n; let differ = 0;
       for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - mr) + Math.abs(d[i + 1] - mg) + Math.abs(d[i + 2] - mb) > 40) differ++;
+      info.alpha = Math.round(a / n); info.differ = differ; info.mean = [Math.round(mr), Math.round(mg), Math.round(mb)];
       if (a / n < 8) why = "transparent canvas"; else if (differ < n * 0.0025) why = "one flat colour";
     } catch (err) { why = "unreadable canvas: " + err.message; }
     if (!why) return;
-    if (attempt < 2) setTimeout(() => blankCheck(2), 3000); else post({ type: "playlab:blank", why });
+    if (attempt < 2) setTimeout(() => blankCheck(2), 3000); else post({ type: "playlab:blank", why, info });
   }
 
   // ---- the HUD ----

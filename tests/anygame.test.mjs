@@ -81,7 +81,8 @@ try {
       await evalJS(`[...document.querySelectorAll(".card .choices button")][0].click(); true`);
       const built = await waitFor(`!S.busy`, 360_000);
       r.buildS = +((Date.now() - t0) / 1000).toFixed(0);
-      r.attempts = await evalJS(`[...document.querySelectorAll(".card.think .th b")].filter((b) => /Writing your game|Changing your game/.test(b.textContent)).length`);
+      r.attempts = await evalJS(`S.lastBuild ? S.lastBuild.attempts : 0`);
+      r.fixes = await evalJS(`JSON.stringify(S.lastBuild ? { fixes: S.lastBuild.fixes, look: S.lastBuild.look ? { match: S.lastBuild.look.match, looksLike: S.lastBuild.look.looksLike } : null, improved: S.lastBuild.improved } : null)`).then(JSON.parse);
       const state = await evalJS(`JSON.stringify({ code: S.level?.genre === "code", engine: S.level?.engine, kb: +(((S.level?.html || "").length) / 1024).toFixed(1), ready: !!S.codeRun?.ready, errors: (S.codeRun?.errors || []).slice(0, 3).map((e) => e.message), blank: S.codeRun?.blank || null, reply: [...document.querySelectorAll(".msg.assistant .bubble")].slice(-1)[0]?.textContent || "", steps: [...document.querySelectorAll(".card.think")].slice(-1)[0]?.textContent || "" })`).then(JSON.parse);
       if (!built) { r.note = "the build did not finish within 6 min"; console.log(`${key}: ${r.note}`); continue; }
       r.engine = state.engine || r.engine; r.kb = state.kb; r.ready = state.ready; r.errors = state.errors; r.blank = state.blank;
@@ -99,8 +100,8 @@ try {
       const shots = await evalJS(`JSON.stringify(__shots.map((s) => (s || "").length))`).then(JSON.parse);
       r.responds = shots.length >= 2 ? (await evalJS(`__shots[0] !== __shots[1]`)) : null;
       r.pass = r.ready && r.errors.length === 0 && !r.blank && r.responds !== false;
-      r.note = state.reply.slice(0, 160);
-      console.log(`${key}: ${r.pass ? "PASS" : "FAIL"} build ${r.buildS} s, ${r.engine}, ${r.kb} KB, ready ${r.ready}, errors ${r.errors.length}, blank ${r.blank}, responds ${r.responds}`);
+      r.note = (r.fixes?.fixes?.length ? `fixed: ${r.fixes.fixes.join("; ")}. ` : "") + (r.fixes?.look ? `look ${Math.round(r.fixes.look.match * 100)}%: ${r.fixes.look.looksLike}. ` : "") + state.reply.slice(0, 160);
+      console.log(`${key}: ${r.pass ? "PASS" : "FAIL"} build ${r.buildS} s, ${r.engine}, ${r.kb} KB, fixes ${r.attempts}, ready ${r.ready}, errors ${r.errors.length}, blank ${r.blank}, responds ${r.responds}, look ${r.fixes?.look ? Math.round(r.fixes.look.match * 100) + "%" : "-"}`);
     } catch (err) { r.note = "error: " + err.message; console.log(`${key}: ${r.note}`); }
   }
 } catch (err) { console.log("ERROR", err.message); }
@@ -111,7 +112,7 @@ finally {
 
 const passed = results.filter((r) => r.pass).length;
 const md = [`# Any game from a prompt: results`, ``, `Run on ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC against ${BASE} with the real Meta models (plan: Muse Spark 1.3, code: Muse Wonder 1.0). ${passed} of ${results.length} prompts passed. Generated files: ${OUT}.`, ``,
-  `| prompt | plan (s) | build (s) | engine | KB | attempts | ready | errors | responds | result | notes |`, `|---|---|---|---|---|---|---|---|---|---|---|`,
+  `| prompt | plan (s) | build (s) | engine | KB | fixes | ready | errors | responds | result | notes |`, `|---|---|---|---|---|---|---|---|---|---|---|`,
   ...results.map((r) => `| ${r.prompt} | ${r.planS ?? "-"} | ${r.buildS ?? "-"} | ${r.engine || "-"} | ${r.kb || "-"} | ${r.attempts} | ${r.ready ? "yes" : "no"} | ${r.errors.length ? r.errors.join("; ").replace(/\|/g, "/").slice(0, 120) : "none"}${r.blank ? " (blank: " + r.blank + ")" : ""} | ${r.responds === null ? "-" : r.responds ? "yes" : "no"} | ${r.pass ? "PASS" : "FAIL"} | ${r.note.replace(/\|/g, "/").replace(/\s+/g, " ")} |`),
   ``, `A prompt passes when the game loads with no error, draws something, and the screen changes after a phone input.`, ``].join("\n");
 await fs.writeFile("tests/anygame-results.md", md);

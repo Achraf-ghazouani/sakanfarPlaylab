@@ -99,6 +99,17 @@ try {
   await sleep(4000);
   check("no error and no blank canvas from the three.js example", !(await evalJS(`!!__has("playlab:error") || !!__has("playlab:blank")`)), await evalJS(`JSON.stringify([__has("playlab:error"), __has("playlab:blank")])`));
 
+  // a tap from the host (the smoke test, a phone's tap layout) reaches a game that only listens for pointer presses
+  await evalJS(`__run("tap")`);
+  check("the tap sample says ready", !!(await has("playlab:ready")));
+  await evalJS(`__msgs = __msgs.filter((m) => m.type !== "playlab:snapshot"); __send({ type: "playlab:snapshot" }); true`);
+  const tap1 = await has("playlab:snapshot");
+  await evalJS(`__msgs = __msgs.filter((m) => m.type !== "playlab:snapshot" && m.type !== "playlab:event"); __send({ type: "playlab:tap", nx: 0.5, ny: 0.5 }); true`);
+  await sleep(500);
+  await evalJS(`__send({ type: "playlab:snapshot" }); true`);
+  const tap2 = await has("playlab:snapshot");
+  check("playlab:tap presses the page where asked: the game drew a dot and sent its event, the screen changed", !!tap1?.image && !!tap2?.image && tap1.image !== tap2.image && !!(await has("playlab:event", `, (m) => m.kind === "coin"`)));
+
   // a game that throws: the error reaches the host with its message
   await evalJS(`__run("broken")`);
   const err = await has("playlab:error");
@@ -108,6 +119,12 @@ try {
   await evalJS(`__run("blank")`);
   const blank = await has("playlab:blank", "", 9000);
   check("a blank canvas is reported", !!blank && /flat colour|transparent/.test(blank.why), blank);
+
+  // a game made of DOM elements with no canvas at all (a card grid) is not blank
+  await evalJS(`__run("dom")`);
+  check("the DOM game says ready and asks for the tap layout", !!(await has("playlab:ready", "", 8000)) && (await has("playlab:controller"))?.layout === "tap");
+  await sleep(7000);
+  check("no canvas but eight visible cards: not reported as blank", !(await evalJS(`!!__has("playlab:blank")`)), await evalJS(`JSON.stringify(__has("playlab:blank"))`));
 
   // a game that reaches out at run time: the policy blocks it and the SDK reports the block
   await evalJS(`__run("leaky")`);

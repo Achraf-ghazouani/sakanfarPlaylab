@@ -3,7 +3,7 @@
 // detector, the validator the projects API uses, the system prompt. Then live calls when MODEL_API_KEY is set: a plan from
 // Muse Spark (a few seconds) and, with PLAYLAB_LIVE_CODE=1, a whole game from Muse Wonder (about a minute).
 //   node tests/code.test.mjs
-import { codeKind, normalizePlan, parseGameHtml, engineOf, validateCodeLevel, systemPrompt, planGame, generateGame, actionFor, describePlan, ENGINES, LAYOUTS } from "../lib/code.mjs";
+import { codeKind, normalizePlan, parseGameHtml, engineOf, validateCodeLevel, systemPrompt, planGame, generateGame, actionFor, describePlan, ENGINES, LAYOUTS, makeFixToken, readFixToken, MAX_FIXES, cleanReport, describeFailure, repairGame, lookAtGame, LOOK_BRIEF } from "../lib/code.mjs";
 import { EXAMPLES } from "../lib/code-examples.mjs";
 import { scan, wrap, csp } from "../shared/codescan.mjs";
 try { process.loadEnvFile(".env"); } catch {}
@@ -50,6 +50,26 @@ const sp = systemPrompt();
 const apis = ["PlayLab.input.axis", "PlayLab.input.button", "PlayLab.input.pressed", "PlayLab.input.aim", "PlayLab.input.pointer", "PlayLab.players", "PlayLab.controller", "PlayLab.onRestart", "PlayLab.paused", "PlayLab.start()", "PlayLab.gameOver", "PlayLab.event", "PlayLab.hud.set", "PlayLab.assets.get", "PlayLab.env"];
 check("the system prompt documents every SDK call", apis.every((a) => sp.includes(a)), apis.filter((a) => !sp.includes(a)));
 check("the system prompt pins the exact library addresses and includes the three examples and the notes format", sp.includes("https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js") && sp.includes("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js") && sp.includes(EXAMPLES.snake) && sp.includes(EXAMPLES.phaser) && sp.includes(EXAMPLES.three) && /<!-- playlab \{"note"/.test(sp) && sp.length < 40_000, sp.length);
+
+// ---- the self-healing loop: tokens, the failure report, the repair prompt, the vision check (no network) ----
+if (!process.env.PLAYLAB_SERVER_KEY) process.env.PLAYLAB_SERVER_KEY = "test-secret-for-tokens-only";
+const tok = makeFixToken({ ledger: 42, n: 0, project: "p1" });
+const read = readFixToken(tok);
+check("fix tokens: a build hands out a signed token that reads back with its ledger, attempt 0 and project", !!tok && tok.includes(".") && read?.ledger === 42 && read.n === 0 && read.project === "p1" && read.exp > Date.now(), read);
+check("fix tokens: a tampered, a garbage and an expired token are refused; the attempt count carries over", readFixToken(tok.slice(0, -2) + "xx") === null && readFixToken("nope") === null && readFixToken(makeFixToken({ ledger: 1, n: 2, ttl: -1000 })) === null && readFixToken(makeFixToken({ ledger: 1, n: 2 })).n === 2 && MAX_FIXES === 3);
+const rep = cleanReport({ errors: [{ kind: "exception", message: "x".repeat(700), line: "9", col: 1, stack: "s" }, "junk"], blank: "one flat colour", ready: true, responds: false, restart: "yes", scan: { ok: false, problems: ["uses eval / new Function"] }, feedback: "f" });
+check("cleanReport: errors capped and typed, booleans kept only when booleans, the scan and feedback kept", rep.errors.length === 1 && rep.errors[0].message.length === 600 && rep.errors[0].line === 9 && rep.blank === "one flat colour" && rep.ready === true && rep.responds === false && rep.restart === null && rep.scan.ok === false && rep.feedback === "f", rep);
+const failLines = describeFailure({ errors: [{ kind: "exception", message: "notAFunction is not defined", line: 9, col: 1, stack: "ReferenceError: notAFunction is not defined\n    at about:srcdoc:9:1" }], responds: false, restart: false, feedback: "match 30%: a black screen" });
+check("describeFailure: one line per problem with the line number, the input and restart advice, the look's feedback", failLines.length === 4 && /exception: notAFunction is not defined \(line 9:1/.test(failLines[0]) && /PlayLab\.input every frame/.test(failLines[1]) && /PlayLab\.onRestart/.test(failLines[2]) && /match 30%/.test(failLines[3]), failLines);
+let seen = null;
+const fakeStream = async ({ messages }) => { seen = messages; return { content: EXAMPLES.snake, finishReason: "stop", usage: {}, provider: "meta", model: "muse-wonder-1.0", ms: 1 }; };
+const fixed = await repairGame({ plan: { title: "Snake", engine: "canvas" }, prompt: "a snake game", html: "<html><body><canvas></canvas><script>notAFunction()</script></body></html>", report: { errors: [{ kind: "exception", message: "notAFunction is not defined", line: 1 }] } }, { stream: fakeStream, provider: { name: "meta", url: "x", key: "k", model: "m" } });
+check("repairGame: the system prompt, the report and the whole file go to the model; the answer is parsed like a build", seen?.length === 2 && seen[0].content === systemPrompt() && /WHAT WENT WRONG:\n- exception: notAFunction is not defined/.test(seen[1].content) && /THE FILE:\n<html>/.test(seen[1].content) && /COMPLETE corrected file/.test(seen[1].content) && fixed.html === EXAMPLES.snake && fixed.scan.ok && fixed.engine === "canvas", seen?.[1]?.content?.slice(0, 200));
+const fakeChat = async ({ system, prompt, imageBase64, mime }) => ({ text: `Here: {"match": 0.85, "looks_like": "a green snake on a dark grid with a score", "problems": [], "suggestion": ""}`, model: "muse-spark-1.3", ms: 1, system, prompt, imageBase64, mime });
+const look = await lookAtGame({ plan: { title: "Snake" }, prompt: "a snake game", snapshot: "data:image/jpeg;base64,/9j/4AAQ" }, { chatFn: fakeChat });
+check("lookAtGame: the screenshot goes to Muse Spark with the brief, the JSON verdict is parsed and clamped", look.match === 0.85 && /green snake/.test(look.looksLike) && look.problems.length === 0 && look.suggestion === "" && look.model === "muse-spark-1.3" && /JSON object only/.test(LOOK_BRIEF), look);
+let bad = null; try { await lookAtGame({ plan: {}, prompt: "", snapshot: "not an image" }, { chatFn: fakeChat }); } catch (e) { bad = e.message; }
+check("lookAtGame refuses a missing screenshot", /screenshot is required/.test(bad || ""));
 
 // ---- live (skipped without a key) ----
 if (process.env.MODEL_API_KEY) {

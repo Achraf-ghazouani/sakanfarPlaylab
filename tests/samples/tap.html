@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Tap</title></head>
+<body style="margin:0;background:#123">
+<canvas id="c" width="320" height="240"></canvas>
+<script>
+// A sample that only reacts to pointer presses (tests/samples): a dot appears where the page is tapped, so the host's
+// playlab:tap (the smoke test, a phone's tap layout) must change the screen.
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+const dots = [];
+window.addEventListener("pointerdown", (e) => { dots.push([e.clientX, e.clientY]); PlayLab.event("coin"); });
+function loop() {
+  requestAnimationFrame(loop);
+  ctx.fillStyle = "#123"; ctx.fillRect(0, 0, 320, 240);
+  ctx.fillStyle = "#fa0"; ctx.fillRect(10, 10, 60, 30);
+  ctx.fillStyle = "#0f8"; for (const [x, y] of dots) { ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI * 2); ctx.fill(); }
+}
+requestAnimationFrame(loop);
+</script>
+</body></html>

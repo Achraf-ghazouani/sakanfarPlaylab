@@ -33,6 +33,7 @@ async function handler(req, res) {
   try { pathname = decodeURIComponent(new URL(req.url, "http://localhost").pathname); } catch { return send(res, 400, "Bad request"); }
   if (pathname === "/") pathname = "/index.html";
 
+  if (pathname === "/api/build-code") { req.url = "/api/agent?task=code"; return runApi(req, res, "/api/agent"); }   // like the Vercel rewrite
   if (/^\/api\/[a-z0-9_-]+$/i.test(pathname)) return runApi(req, res, pathname);
   const play = /^\/play\/([a-z0-9]{1,16})$/i.exec(pathname);   // the share page, like the Vercel rewrite in vercel.json
   if (play) { req.url = "/api/play?id=" + play[1].toLowerCase(); return runApi(req, res, "/api/play"); }

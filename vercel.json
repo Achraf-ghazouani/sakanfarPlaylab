@@ -8,14 +8,15 @@
       "maxDuration": 120
     },
     "api/agent.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/art.js": {
       "maxDuration": 60
     }
   },
   "rewrites": [
-    { "source": "/play/:id", "destination": "/api/play?id=:id" }
+    { "source": "/play/:id", "destination": "/api/play?id=:id" },
+    { "source": "/api/build-code", "destination": "/api/agent?task=code" }
   ],
   "redirects": [
     {

@@ -47,7 +47,7 @@
   // ---- the host's messages ----
   const flow = { start: [], pause: [], resume: [], restart: [], mute: [] };
   let state = "play", score = 0, hud = {}, layout = "dpad+jump", level = document.title || "game", muted = false;
-  const assets = {};
+  const assets = Object.assign({}, window.__playlabAssets && typeof window.__playlabAssets === "object" ? window.__playlabAssets : {});   // the host writes the pictures in before this script
   function menu(action) {
     if (action === "restart") { if (flow.restart.length) { for (const f of flow.restart) f(); state = "play"; publish(true); } else post({ type: "playlab:remount" }); }
     else if (action === "pause") { if (state === "play") { state = "paused"; for (const f of flow.pause) f(); publish(true); } }
@@ -95,18 +95,20 @@
     const c = mainCanvas(); if (!c) return null;
     try { const o = document.createElement("canvas"), w = Math.min(640, c.width), h = Math.round(c.height * w / c.width); o.width = w; o.height = h; o.getContext("2d").drawImage(c, 0, 0, w, h); return o.toDataURL("image/jpeg", 0.7); } catch { return null; }
   }
-  // blank = nothing drawn (transparent) or fewer than 0.5 % of the pixels differ from the average colour
-  async function blankCheck() {
+  // blank = nothing drawn (transparent) or fewer than 0.25 % of the pixels differ from the average colour, seen twice 3 s apart
+  async function blankCheck(attempt = 1) {
     const c = mainCanvas(); if (!c) { post({ type: "playlab:blank", why: "no canvas" }); return; }
+    let why = null;
     try {
-      const S = 64, o = document.createElement("canvas"); o.width = S; o.height = S; const x = o.getContext("2d", { willReadFrequently: true }); x.drawImage(c, 0, 0, S, S);
+      const S = 96, o = document.createElement("canvas"); o.width = S; o.height = S; const x = o.getContext("2d", { willReadFrequently: true }); x.drawImage(c, 0, 0, S, S);
       const d = x.getImageData(0, 0, S, S).data, n = S * S; let r = 0, g = 0, b = 0, a = 0;
       for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; a += d[i + 3]; }
       const mr = r / n, mg = g / n, mb = b / n; let differ = 0;
       for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - mr) + Math.abs(d[i + 1] - mg) + Math.abs(d[i + 2] - mb) > 40) differ++;
-      if (a / n < 8) post({ type: "playlab:blank", why: "transparent canvas" });
-      else if (differ < n * 0.005) post({ type: "playlab:blank", why: "one flat colour" });
-    } catch (err) { post({ type: "playlab:blank", why: "unreadable canvas: " + err.message }); }
+      if (a / n < 8) why = "transparent canvas"; else if (differ < n * 0.0025) why = "one flat colour";
+    } catch (err) { why = "unreadable canvas: " + err.message; }
+    if (!why) return;
+    if (attempt < 2) setTimeout(() => blankCheck(2), 3000); else post({ type: "playlab:blank", why });
   }
 
   // ---- the HUD ----
@@ -164,10 +166,10 @@
     input, env, assets: { get: (role) => assets[role] || null, list: () => ({ ...assets }) },
     players: () => [...present].sort(),
     onStart: (f) => flow.start.push(f), onPause: (f) => flow.pause.push(f), onResume: (f) => flow.resume.push(f), onRestart: (f) => flow.restart.push(f), onMute: (f) => flow.mute.push(f),
-    gameOver({ win = false, score: s } = {}) { state = "over"; if (s !== undefined) score = Number(s) || 0; post({ type: "playlab:event", kind: win ? "win" : "lose", score }); publish(true); },
+    gameOver({ win = false, score: s } = {}) { state = "over"; if (s !== undefined) score = Number(s) || 0; post({ type: "playlab:event", kind: win ? "win" : "lose", name: win ? "win" : "lose", score }); publish(true); },
     start() { state = "play"; publish(true); },
     controller({ type = "dpad+jump" } = {}) { layout = String(type); buildTouch(layout); post({ type: "playlab:controller", layout }); publish(true); },
-    event(kind, extra) { post({ type: "playlab:event", kind: String(kind), ...(extra && typeof extra === "object" ? extra : {}) }); },
+    event(kind, extra) { post({ type: "playlab:event", kind: String(kind), name: String(kind), ...(extra && typeof extra === "object" ? extra : {}) }); },
     hud: { set(fields) { Object.assign(hud, fields || {}); if (fields && fields.score !== undefined) score = Number(fields.score) || 0; hudRender(); publish(false); }, hide() { hudEl.style.display = "none"; }, show() { hudEl.style.display = ""; }, clear() { hud = {}; hudRender(); } },
     setLevel(name) { level = String(name || level); publish(false); },
     ready, screenshot, state: () => snapshotState(),

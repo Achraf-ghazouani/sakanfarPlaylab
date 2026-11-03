@@ -3,23 +3,24 @@
 <head>
 <meta charset="utf-8">
 <title>PlayLab code harness</title>
-<script src="../shared/coderun.js"></script>
+<script type="module" src="../shared/coderun.mjs"></script>
 <style>body { margin:0; background:#222; } iframe { width:640px; height:400px; border:0; display:block; }</style>
 </head>
 <body>
 <iframe id="game"></iframe>
 <script>
-// A page for the tests: mounts a sample game through CodeRun and keeps every message it sends.
+// A page for the tests: mounts a sample game (tests/samples/<name>.html, or HTML given directly) through CodeRun and keeps
+// every message it sends.
 window.__msgs = [];
 window.__handle = null;
-window.__run = async (name, assets) => {
-  const html = await (await fetch("samples/" + name + ".html", { cache: "no-store" })).text();
+window.__runHtml = (html, assets) => {
   window.__msgs = [];
   if (window.__handle) window.__handle.destroy();
   window.__scan = CodeRun.scan(html);
   window.__handle = CodeRun.mount(document.getElementById("game"), html, { assets, on: (m) => window.__msgs.push(m) });
   return window.__scan;
 };
+window.__run = async (name, assets) => window.__runHtml(await (await fetch("samples/" + name + ".html", { cache: "no-store" })).text(), assets);
 window.__send = (m) => window.__handle && window.__handle.send(m);
 window.__has = (type, pred) => window.__msgs.find((m) => m.type === type && (!pred || pred(m))) || null;
 </script>

@@ -52,6 +52,8 @@
 <script src="shared/assetcheck.js"></script>
 <script src="shared/zip.js"></script>
 <script src="shared/model3d.js"></script>
+<script type="module" src="shared/coderun.mjs"></script>
+<script type="module" src="shared/codekinds.mjs"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js" defer></script>
@@ -239,6 +241,9 @@
   .dim { display:inline-flex; align-self:center; flex:none; border:1px solid var(--lav-2); border-radius:999px; padding:2px; background:var(--lav); margin-right:2px; }
   .dim button { border:0; background:transparent; border-radius:999px; padding:5px 10px; font-size:12px; font-weight:800; color:var(--purple-deep); letter-spacing:.02em; }
   .dim button.on { background:var(--purple); color:#fff; box-shadow:0 2px 6px rgba(124,58,237,.35); }
+  .box .code { align-self:center; flex:none; border:1px solid var(--lav-2); background:var(--lav); color:var(--purple-deep); border-radius:999px; padding:6px 10px; font-size:12px; font-weight:800; letter-spacing:.02em; margin-right:2px; }
+  .box .code.on { background:var(--purple); border-color:var(--purple); color:#fff; box-shadow:0 2px 6px rgba(124,58,237,.35); }
+  .box .code:disabled { opacity:.85; }
   #sendBtn { background:var(--purple); color:#fff; }
   #sendBtn:hover { background:var(--purple-deep); }
   #sendBtn:disabled { background:var(--lav-2); color:#fff; cursor:default; }
@@ -393,6 +398,7 @@
           <div id="attachments"></div>
           <div class="box">
             <div class="dim" id="dimSeg" role="radiogroup" aria-label="Game type"><button data-dim="2d" class="on" role="radio" aria-checked="true" title="A 2D game">2D</button><button data-dim="3d" role="radio" aria-checked="false" title="The same game in 3D (three.js)">3D</button></div>
+            <button class="code" id="codeBtn" role="switch" aria-checked="false" title="Custom game: the AI writes any kind of game as code (racing, puzzle, sports...)" data-i18n-title="code.toggleTitle"><span data-i18n="code.toggle">AI code</span></button>
             <button class="ib" id="attachBtn" title="Attach an image, sketch, sprite or 3D model"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.5l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l9-9a3.5 3.5 0 0 1 5 5l-9 9a1.5 1.5 0 0 1-2.1-2.1l8-8"/></svg></button>
             <input type="file" id="attachInput" multiple accept="image/*,.png,.webp,.glb,.gltf">
             <button class="ib" id="sketchBtn" title="Sketch a level"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg></button>
@@ -425,6 +431,7 @@
             <button data-prompt="A space level with floating platforms and lots of coins" data-i18n="ex.space" data-i18n-data-prompt="ex.spacePrompt">&#128640; A space level with floating platforms</button>
             <button data-prompt="A jungle level for kids, easy" data-i18n="ex.jungle" data-i18n-data-prompt="ex.junglePrompt">&#127796; A jungle level for kids, easy</button>
             <button data-prompt="A first-person shooter with 5 waves of zombies" data-i18n="ex.fps" data-i18n-data-prompt="ex.fpsPrompt">&#129503; First-person shooter, zombie waves</button>
+            <button data-prompt="A car race with 3 laps and 4 AI cars" data-i18n="ex.race" data-i18n-data-prompt="ex.racePrompt">&#127950; A car race with 3 laps and 4 AI cars</button>
           </div>
           <button class="continue" id="continueBtn" hidden><span data-i18n="welcome.continue">Continue</span> <b></b> &rarr;</button>
         </div>
@@ -504,21 +511,21 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const S = { project: null, messages: [], versions: [], level: null, attachments: [], busy: false, previewReady: false, dbOk: true, mode: "2d" };
+const S = { project: null, messages: [], versions: [], level: null, attachments: [], busy: false, previewReady: false, dbOk: true, mode: "2d", codeMode: false, pendingPlan: null, code: null, codeRun: null };
 /** 2D or 3D: the chat box switch. Saved on the game (projects.mode "2d" | "3d-side"), sent to the preview (game.html draws it with
  *  shared/view3d.js), and 3D turns cost the 3D prices. Words like "3D" in a message switch it too. */
 function setDim(d, { save = true } = {}) {
-  const arena = isArena(S.level);
-  S.mode = arena || d === "3d" ? "3d" : "2d";
-  document.querySelectorAll("#dimSeg button").forEach((b) => { const on = b.dataset.dim === S.mode; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); b.disabled = arena && b.dataset.dim === "2d"; });
-  $("dimSeg").title = arena ? "Arena shooters are always 3D" : "";
-  if (S.previewReady && !arena) preview().postMessage({ type: "playlab:mode", mode: S.mode }, "*");
+  const arena = isArena(S.level), code = isCode(S.level);   // a game written as code carries its engine in its code: the switch is locked
+  S.mode = arena || (code ? S.level.engine === "three" : d === "3d") ? "3d" : "2d";
+  document.querySelectorAll("#dimSeg button").forEach((b) => { const on = b.dataset.dim === S.mode; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); b.disabled = (arena && b.dataset.dim === "2d") || code; });
+  $("dimSeg").title = arena ? "Arena shooters are always 3D" : code ? "This game is written as code: its engine is in the code" : "";
+  if (S.previewReady && !arena && !code) preview().postMessage({ type: "playlab:mode", mode: S.mode }, "*");
   const projMode = arena ? "3d-world" : S.mode === "3d" ? "3d-side" : "2d";
   if (save && S.project && S.project.mode !== projMode) {
     S.project.mode = projMode;
     api("api/projects", { method: "PATCH", body: { id: S.project.id, mode: projMode } }).catch((err) => toast("Could not save the game type: " + err.message));
   }
-  if (S.level && !arena) $("previewStatus").textContent = $("previewStatus").textContent.replace(/ · 3D$/, "") + (S.mode === "3d" ? " · 3D" : "");
+  if (S.level && !arena && !code) $("previewStatus").textContent = $("previewStatus").textContent.replace(/ · 3D$/, "") + (S.mode === "3d" ? " · 3D" : "");
   if (typeof updateCosts === "function") updateCosts();
 }
 const dimOf = (mode) => (String(mode || "").startsWith("3d") ? "3d" : "2d");
@@ -549,16 +556,26 @@ function toast(text, ms = 2500) { const t = $("toast"); t.textContent = text; t.
 const preview = () => $("preview").contentWindow;
 window.addEventListener("message", (e) => {
   const m = e.data; if (!m || typeof m !== "object") return;
+  if (isCode(S.level)) return;   // a game written as code: the sandbox runner hands its messages to onCodeMessage
   if (m.type === "playlab:ready") { S.previewReady = true; if (S.level) pushLevel(S.level, { quiet: true }); if (Cam.host) syncPlayers(); }
   if (m.type === "playlab:event") { if (m.name === "goal") toast("Level complete on the preview!"); Cam.host?.event(m.name, m.slot); }   // phones vibrate
   if (m.type === "playlab:state" && m.state) Cam.host?.broadcast(m.state);                                                            // phones show level, coins, paused
 });
 function pushLevel(level, { name = "studio", thumb = null, keepPlayer = false, toastText = null, quiet = false } = {}) {
-  S.level = level; layout(); setDim(S.mode); queueMicrotask(updateCosts);
+  S.level = level; layout(); setDim(S.mode); queueMicrotask(updateCosts); renderCodeMode();
+  const f = $("preview");
+  if (isCode(level)) {   // a game written as code runs in the sandbox (shared/coderun.mjs): no origin, strict policy, the SDK inside
+    S.previewReady = false; S.codeRun = { ready: false, readyAt: 0, errors: [], blank: null };
+    if (S.code) S.code.destroy();
+    S.code = CodeRun.mount(f, level.html, { assets: codeAssets(), on: onCodeMessage });
+    $("previewStatus").textContent = `${levelSummary(level)}${S.versions[0] ? ` · v${S.versions[0].n}` : ""}`;
+    return;
+  }
   const n = level?.objects?.length || 0;
   // the right engine for the game: a platformer runs in game.html, an arena shooter in arena.html (it asks for the level when ready)
   const want = isArena(level) ? "arena.html?embed=1" : "game.html?embed=1";
-  if ($("preview").getAttribute("src") !== want) { S.previewReady = false; $("preview").setAttribute("src", want); }
+  if (S.code) { S.code.destroy(); S.code = null; S.codeRun = null; f.removeAttribute("sandbox"); f.removeAttribute("srcdoc"); S.previewReady = false; f.setAttribute("src", want); }   // back from the sandbox to the engines
+  else if (f.getAttribute("src") !== want) { S.previewReady = false; f.setAttribute("src", want); }
   $("previewStatus").textContent = `${n} objects${S.versions[0] ? ` · v${S.versions[0].n}` : ""}${level?.theme ? ` · ${level.theme}` : ""}${isArena(level) ? ` · ${VIEW_NAME[level.view] || level.view} shooter · ${level.waves} waves` : S.mode === "3d" ? " · 3D" : ""}`;
   if (S.previewReady) preview().postMessage({ type: "playlab:level", level, name, thumb: thumb || S.project?.photo || null, player: S.project?.art?.player || null, sprites: S.project?.art?.sprites || null, assets: S.project?.art?.assets || [], model: S.project?.art?.model || null, mode: S.mode, keepPlayer, toast: quiet ? null : toastText }, "*");
 }
@@ -593,7 +610,7 @@ function timeAgo(iso) { const s = (Date.now() - new Date(iso).getTime()) / 1000;
 async function openProject(id) {
   try {
     const { project, messages, versions } = await api(`api/projects?id=${encodeURIComponent(id)}`);
-    S.project = project; S.messages = messages; S.versions = versions;
+    S.project = project; S.messages = messages; S.versions = versions; S.codeMode = false; S.pendingPlan = null; renderCodeMode();
     try { localStorage.setItem("playlab.studio.project", id); } catch {}
     $("title").value = project.title;
     $("publishBtn").classList.toggle("live", !!(project.visibility && project.visibility !== "private"));
@@ -605,7 +622,9 @@ async function openProject(id) {
   } catch (err) { toast("Could not open that game: " + err.message); }
 }
 function newProjectUI() {
-  S.project = null; S.messages = []; S.versions = []; S.level = null;
+  S.project = null; S.messages = []; S.versions = []; S.level = null; S.codeMode = false; S.pendingPlan = null;
+  if (S.code) { S.code.destroy(); S.code = null; S.codeRun = null; const f = $("preview"); f.removeAttribute("sandbox"); f.removeAttribute("srcdoc"); S.previewReady = false; f.setAttribute("src", "game.html?embed=1"); }
+  renderCodeMode();
   $("title").value = "Untitled game"; $("publishBtn").classList.remove("live");
   try { localStorage.removeItem("playlab.studio.project"); } catch {}
   renderMessages(); renderHistory();
@@ -671,7 +690,7 @@ function hideTyping() { $("typing")?.remove(); }
 // doing it (Muse Spark 1.3 / Open, Muse Image 1.0, SAM 3.1, the playtest agent); the steps after the call are filled in
 // from the answer (objects found, problems, fixes) and the card stays in the chat as the record of what the AI did.
 // ---------------------------------------------------------------------------
-const MODEL_LABEL = { "muse-spark-1.3": "Muse Spark 1.3", "muse-spark-1.2": "Muse Spark 1.2", "muse-spark-1.1": "Muse Spark 1.1", "muse-spark-open": "Muse Spark Open", baseten: "Muse Spark Open", meta: "Muse Spark 1.3", "muse-image-1.0": "Muse Image 1.0", "sam-3.1": "SAM 3.1", mock: "mock" };
+const MODEL_LABEL = { "muse-spark-1.3": "Muse Spark 1.3", "muse-spark-1.2": "Muse Spark 1.2", "muse-spark-1.1": "Muse Spark 1.1", "muse-spark-open": "Muse Spark Open", baseten: "Muse Spark Open", meta: "Muse Spark 1.3", "muse-image-1.0": "Muse Image 1.0", "sam-3.1": "SAM 3.1", "muse-wonder-1.0": "Muse Wonder 1.0", mock: "mock" };
 const modelName = (id) => MODEL_LABEL[id] || (id ? String(id) : "Muse Spark 1.3");
 const REVEAL_MS = 180;   // the steps after an answer appear one by one
 function startThinking(title) {
@@ -751,7 +770,7 @@ async function restoreVersion(n) {
   try {
     const { version } = await api(`api/projects?id=${encodeURIComponent(S.project.id)}&version=${n}`);
     await applyLevel(version.level, { note: `restored v${n}`, toastText: `Restored v${n}` });
-    await addCard({ icon: "&#8634;", title: `Restored v${n}`, text: `${version.level.objects.length} objects` });
+    await addCard({ icon: "&#8634;", title: `Restored v${n}`, text: levelSummary(version.level) });
   } catch (err) { toast(err.message); }
 }
 $("historyBtn").addEventListener("click", (e) => { if (e.target.closest(".pop")) return; $("historyPop").classList.toggle("show"); });
@@ -1004,7 +1023,7 @@ async function send() {
     else {
       if (img) await runScan(img);                                   // a picture goes through the scanner, like the phone flow
       if (model3d && !img) await handleModel(model3d, text);          // a 3D model: the game goes 3D and the model is the player
-      else if (text || !img) await askAgent(text, history);           // the agent gets the words (after the scan, if there was one)
+      else if (text || !img) await routeWords(text, history);         // the words: a plan, a code game, or the game agent (after the scan, if there was one)
     }
   } catch (err) {
     hideTyping();
@@ -1201,15 +1220,24 @@ function offerUndo3D(a, model) {
   row.appendChild(b); el.appendChild(row);
 }
 /** Choices the agent offers (a kind of game it cannot make: the closest two): each chip sends its words as the next message. */
+/** Chips under a card: a string is sent as the next message; { label, run } runs its own function (the label shows as the message). */
 function suggestChips(items) {
   const el = appendMessage({ role: "tool", content: "", meta: { card: { icon: "&#128161;", title: "Pick one, or describe something else", text: "" } } });
   const row = document.createElement("div"); row.className = "choices";
   for (const item of items.slice(0, 4)) {
-    const b = document.createElement("button"); b.type = "button"; b.textContent = String(item).slice(0, 120);
-    b.addEventListener("click", () => { if (S.busy) return; row.remove(); $("composer").value = b.textContent; send(); });
+    const it = item && typeof item === "object" ? item : { label: String(item) };
+    const b = document.createElement("button"); b.type = "button"; b.textContent = String(it.label).slice(0, 120);
+    b.addEventListener("click", () => { if (S.busy) return; row.remove(); if (it.run) runChip(it.run, b.textContent); else { $("composer").value = b.textContent; send(); } });
     row.appendChild(b);
   }
   el.appendChild(row);
+}
+async function runChip(fn, label) {
+  if (S.busy) return;
+  S.busy = true; $("sendBtn").disabled = true; layout();
+  appendMessage({ role: "user", content: label }); await saveMessage("user", label);
+  try { await fn(); } catch (err) { hideTyping(); await streamAssistant("Something went wrong: " + err.message); }
+  S.busy = false; $("sendBtn").disabled = false; layout(); $("composer").focus();
 }
 /** A picture landed in a 3D game: it stays 3D (cut-outs, textures, UI), with one chip back to 2D. */
 function offerSwitch2D() {
@@ -1427,6 +1455,7 @@ async function askAgent(text, history) {
 async function runAction(action) {
   if (action.type === "mode") { setDim(action.mode); return; }
   if (action.type === "chips" && Array.isArray(action.items)) { suggestChips(action.items); return; }
+  if (action.type === "code") { await planCode(String(action.prompt || ""), {}); return; }   // a kind the engines do not have: the code builder, plan first
   if (action.type === "view" && isArena(S.level)) {
     S.level = { ...S.level, view: action.view };
     toPreview({ type: "playlab:view", view: action.view });
@@ -1464,6 +1493,174 @@ async function runAction(action) {
 const strip = (l) => ({ ...(l.genre === "arena" ? { genre: "arena", view: l.view, waves: l.waves } : {}), theme: l.theme, aspect: l.aspect, objects: l.objects.map(({ type, label, x, y, w, h }) => ({ type, label, x, y, w, h })) });
 const isArena = (l) => !!l && l.genre === "arena";
 const VIEW_NAME = { fps: "first person", tps: "third person", top: "top-down" };
+
+// ---------------------------------------------------------------------------
+// Any game from a prompt: a kind the engines do not have (racing, puzzle, sports, snake...) or the AI code switch. Muse Spark
+// writes a short plan (free) shown as a card; "go" has Muse Wonder write the whole game as one HTML file (api/build-code,
+// streamed into the thinking panel, charged code_create_2d / 3d); the page scans it, saves it as a version (level.genre
+// "code") and runs it in the sandbox (shared/coderun.mjs) with the PlayLab SDK inside. Words on a code game rewrite its code.
+// ---------------------------------------------------------------------------
+const isCode = (l) => !!l && l.genre === "code";
+const ENGINE_NAME = { canvas: "canvas", phaser: "Phaser 3", three: "three.js" };
+const levelSummary = (l) => (isCode(l) ? `${l.title || "custom game"} · AI code · ${ENGINE_NAME[l.engine] || l.engine}` : `${l?.objects?.length || 0} objects`);
+const GO_RE = /^\s*(go|go!|build( it)?|go,? build it|ok|okay|yes|yes!|do it|let'?s go|start|make it|allez|vas-y|construis(-le)?|oui|c'?est parti|هيا|ابدأ|نعم|ابنها)[\s.!]*$/i;
+const DROP_RE = /^\s*(cancel|stop|never ?mind|forget it|drop it|annule|annuler|laisse tomber|إلغاء|ألغ)[\s.!]*$/i;
+function describePlan(p) {
+  return [`${p.title} · ${p.genre} · ${ENGINE_NAME[p.engine] || p.engine}${p.players > 1 ? ` · ${p.players} players` : ""}`, `Goal: ${p.goal}`, `Controls: ${p.controls}`, `Win: ${p.win} · Lose: ${p.lose}`,
+    p.entities?.length ? `In the game: ${p.entities.join(", ")}` : "", p.opponents && p.opponents !== "none" ? `Opponents: ${p.opponents}` : "", p.levels ? `Levels: ${p.levels}` : "", p.notes ? `Kept simple: ${p.notes}` : ""].filter(Boolean);
+}
+const codePrice = (plan) => price(plan?.engine === "three" ? "code_create_3d" : "code_create_2d");
+const creditWord = (n) => I18N.t(n === 1 ? "credit.one" : "credit.many");
+/** The words of a message: a pending plan takes them (go = build it, anything else changes the plan), a code game is rewritten,
+ *  the AI code switch forces the code builder, otherwise the game agent (which hands kinds it cannot build to the code builder). */
+async function routeWords(text, history) {
+  if (S.pendingPlan) {
+    if (GO_RE.test(text)) return buildCode(S.pendingPlan);
+    if (DROP_RE.test(text)) { S.pendingPlan = null; renderCodeMode(); updateCosts(); return streamAssistant("Plan dropped. Describe another game whenever you like."); }
+    return planCode(S.pendingPlan.prompt, { change: text, previous: S.pendingPlan.plan, history });
+  }
+  if (isCode(S.level)) return buildCode({ plan: S.level.plan, prompt: S.level.prompt || text }, { change: text });
+  if (S.codeMode) return planCode(text, { history });
+  return askAgent(text, history);
+}
+function renderCodeMode() {
+  const on = S.codeMode || !!S.pendingPlan || isCode(S.level), b = $("codeBtn");
+  b.classList.toggle("on", on); b.setAttribute("aria-checked", on); b.disabled = isCode(S.level);
+}
+$("codeBtn").addEventListener("click", () => {
+  if (isCode(S.level)) return;
+  S.codeMode = !S.codeMode; if (!S.codeMode) S.pendingPlan = null;
+  renderCodeMode(); updateCosts();
+  toast(S.codeMode ? "AI code: describe any kind of game and Muse Wonder writes it as code" : "Back to the built-in engines: platformers and arena shooters", 3000);
+  $("composer").focus();
+});
+async function planCode(prompt, { change = null, previous = null, history = [] } = {}) {
+  showTyping();
+  const th = startThinking(previous ? "Changing the plan" : "Planning your game");
+  const step = th.add(previous ? "Rewriting the plan with your change" : "Designing a plan from your words", "Muse Spark 1.3");
+  let res;
+  try { res = await api("api/agent", { method: "POST", body: { task: "plan", project_id: S.project?.id, message: change || prompt, plan: previous, history } }); }
+  catch (err) { hideTyping(); th.fail("Could not plan: " + err.message); await streamAssistant("I could not write a plan: " + err.message); return; }
+  hideTyping();
+  th.set(step, { state: "done", model: modelName(res.meta?.model) });
+  await th.finish("Plan ready");
+  const plan = res.plan;
+  S.pendingPlan = { plan, prompt: previous ? `${S.pendingPlan?.prompt || prompt}. ${change}` : prompt };
+  S.codeMode = true; renderCodeMode(); updateCosts();
+  await addCard({ icon: "&#128203;", title: `${I18N.t("code.planTitle")}: ${plan.title}`, text: describePlan(plan).join(" · ") });
+  const n = codePrice(plan);
+  const reply = I18N.t("code.planReply", { title: plan.title, n: n ?? "?", credits: creditWord(n) });
+  await streamAssistant(reply);
+  await saveMessage("assistant", reply, { plan });
+  suggestChips([{ label: I18N.t("chip.go"), run: () => buildCode(S.pendingPlan) }, { label: I18N.t("chip.simpler"), run: () => planCode(S.pendingPlan.prompt, { change: "make it simpler", previous: S.pendingPlan.plan }) }]);
+}
+/** The build, streamed: the SSE events of api/build-code (start, progress, done | error). Throws on a refusal or an error event. */
+async function streamCode(body, onEvent) {
+  const r = await PlayAuth.api("api/build-code", { method: "POST", body });
+  if (!r.ok || !/text\/event-stream/.test(r.headers.get("content-type") || "")) {
+    const data = await r.json().catch(() => ({}));
+    if (typeof data?.credits?.balance === "number") setBalance(data.credits.balance);
+    if (r.status === 402) showNoCredits(data);
+    throw new Error(data.error || `The build failed (${r.status}).`);
+  }
+  const reader = r.body.getReader(), dec = new TextDecoder();
+  let buf = "", done = null;
+  while (true) {
+    const { value, done: end } = await reader.read();
+    if (end) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+      for (const line of chunk.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+        let ev; try { ev = JSON.parse(line.slice(5)); } catch { continue; }
+        if (typeof ev.credits?.balance === "number") setBalance(ev.credits.balance);
+        if (ev.e === "done") done = ev; else if (ev.e === "error") throw new Error(ev.error || "The build failed."); else onEvent(ev);
+      }
+    }
+  }
+  if (!done) throw new Error("The build stopped before it finished.");
+  return done;
+}
+/** Waits for the mounted game: ok after the first frames with no error for 3 s, else the first error or a blank canvas. */
+function waitCodeReady(ms = 12_000) {
+  return new Promise((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      const r = S.codeRun;
+      if (!r) return resolve({ ok: false, error: "no game mounted" });
+      if (r.errors.length) return resolve({ ok: false, error: r.errors[0].message });
+      if (r.blank) return resolve({ ok: false, blank: r.blank });
+      if (r.ready && performance.now() - r.readyAt > 3000) return resolve({ ok: true });
+      if (performance.now() - t0 > ms) return resolve(r.ready ? { ok: true } : { ok: false, error: `no first frame after ${Math.round(ms / 1000)} s` });
+      setTimeout(tick, 150);
+    };
+    tick();
+  });
+}
+function onCodeMessage(m) {
+  const r = S.codeRun || (S.codeRun = { ready: false, readyAt: 0, errors: [], blank: null });
+  if (m.type === "playlab:ready") { S.previewReady = true; r.ready = true; r.readyAt = performance.now(); if (Cam.host) syncPlayers(); }
+  else if (m.type === "playlab:error") { if (r.errors.length < 20) r.errors.push({ message: m.message, kind: m.kind, line: m.line, stack: m.stack }); }
+  else if (m.type === "playlab:blank") r.blank = m.why;
+  else if (m.type === "playlab:state" && m.state) Cam.host?.broadcast(m.state);
+  else if (m.type === "playlab:event") { if (m.kind === "win") toast("You won on the preview!"); Cam.host?.event(m.name || m.kind, m.slot); }
+}
+/** The person's pictures for PlayLab.assets.get(role) inside the game: the player, the object sprites, the asset list, the model. */
+function codeAssets() {
+  const out = {}, art = S.project?.art || {};
+  if (art.player) out.player = { src: art.player, kind: "image", name: "player" };
+  for (const [role, src] of Object.entries(art.sprites || {})) if (src) out[role] = { src, kind: "image", name: role };
+  for (const a of art.assets || []) if (a?.src && a.role && !out[a.role]) out[a.role] = { src: a.src, kind: "image", name: a.name || a.role, width: a.width, height: a.height };
+  if (art.model?.src) out[art.model.role || "player"] = { src: art.model.src, kind: "model", name: art.model.name || "model" };
+  return out;
+}
+const assetRoles = () => Object.fromEntries(Object.entries(codeAssets()).map(([r, a]) => [r, { kind: a.kind, name: a.name, width: a.width, height: a.height }]));
+async function buildCode(pending, { change = null } = {}) {
+  const { plan, prompt } = pending;
+  S.pendingPlan = null; renderCodeMode();
+  showTyping();
+  const th = startThinking(change ? "Changing your game" : "Writing your game");
+  const label = change ? "Muse Wonder rewrites the code with your change" : `Muse Wonder writes the game (${ENGINE_NAME[plan.engine] || plan.engine})`;
+  const writing = th.add(label, "Muse Wonder 1.0"), t0 = performance.now();
+  let out;
+  try {
+    out = await streamCode({ task: "code", project_id: S.project?.id, plan, prompt, change, previous_html: change ? S.level.html : null, assets: assetRoles() }, (ev) => {
+      if (ev.e === "progress") th.set(writing, { label: `${label} · ${(ev.chars / 1024).toFixed(1)} KB, ${ev.lines} lines` });
+      if (ev.e === "start" && ev.modelName) th.set(writing, { model: ev.modelName });
+    });
+  } catch (err) {
+    hideTyping(); th.fail(err.message);
+    S.pendingPlan = pending; renderCodeMode(); updateCosts();
+    await streamAssistant(`${change ? "I could not change the game" : "I could not write the game"}: ${err.message} Say go to try again, or tell me what to change in the plan.`);
+    return;
+  }
+  hideTyping();
+  const kb = (out.html.length / 1024).toFixed(1), secs = ((performance.now() - t0) / 1000).toFixed(0);
+  th.set(writing, { state: "done", label: `${change ? "Rewrote" : "Wrote"} ${kb} KB of ${ENGINE_NAME[out.engine] || out.engine} in ${secs} s` });
+  await th.reveal(out.scan.ok ? "Scanned for forbidden APIs: clean" : `Forbidden APIs found: ${out.scan.problems.join("; ")}`, "code scan", out.scan.ok ? "done" : "fail");
+  if (!out.scan.ok) {
+    th.fail("Not loaded");
+    S.pendingPlan = pending; renderCodeMode(); updateCosts();
+    await streamAssistant(`The code tried something the sandbox forbids (${out.scan.problems[0]}), so I did not load it. Say go to write it again.`);
+    return;
+  }
+  const level = { genre: "code", engine: out.engine, title: plan.title, theme: plan.genre, note: out.notes?.note || (change ? change.slice(0, 60) : plan.title), prompt, plan, html: out.html, notes: out.notes || {}, objects: [] };
+  const running = th.add("Loading it in the sandbox", "sandbox");
+  await applyLevel(level, { note: level.note, toastText: level.note });
+  const verdict = await waitCodeReady(12_000);
+  const problem = verdict.ok ? "" : verdict.error ? `it crashed: ${verdict.error}` : `nothing was drawn (${verdict.blank})`;
+  th.set(running, { state: verdict.ok ? "done" : "fail", label: verdict.ok ? "Running: the first frames are on screen" : problem[0].toUpperCase() + problem.slice(1) });
+  await th.finish(verdict.ok ? "Ready" : "Built, but it does not run yet");
+  await addCard({ icon: verdict.ok ? "&#127918;" : "&#9888;&#65039;", title: `${plan.title} · v${S.versions[0]?.n || 1}`, text: `${ENGINE_NAME[out.engine] || out.engine} · ${kb} KB · ${out.notes?.built || plan.goal}` });
+  const reply = verdict.ok
+    ? `${out.notes?.built || "Done."}${out.notes?.missing ? ` Not in this version: ${out.notes.missing}` : ""} Tell me what to change.`
+    : `I wrote the game but it does not run yet: ${problem}. The automatic fix loop comes in the next step; for now say go to write it again, or tell me what to change in the plan.`;
+  await streamAssistant(reply);
+  await saveMessage("assistant", reply, { code: true, ok: verdict.ok });
+  if (!verdict.ok) { S.pendingPlan = pending; renderCodeMode(); updateCosts(); }
+}
 
 // ---------------------------------------------------------------------------
 // Publish: a link at /play/<id> for everyone. The cover is a screenshot of the preview (asked from the game by
@@ -1504,6 +1701,7 @@ function pubCoverOptions() {
 }
 async function openPublish() {
   if (!S.level || !S.project) return toast("Build a game first");
+  if (isCode(S.level)) return toast("Sharing games written as code arrives in a later step", 3000);
   $("pubTitle").value = S.project.title; $("pubDesc").value = S.project.description || "";
   const vis = S.project.visibility && S.project.visibility !== "private" ? S.project.visibility : "public";
   $("pubVis").querySelectorAll("input").forEach((r) => { r.checked = r.value === vis; r.parentElement.classList.toggle("on", r.checked); });
@@ -1608,11 +1806,10 @@ function updateCosts() {
     return;
   }
   const hasImg = false;
-  // a kind of game the engines do not have (racing, puzzle, sports...): the agent answers for free and offers the closest (lib/agent.mjs unsupportedKind)
-  const shooterish = /\b(shooter|fps|tps|first.?person|third.?person|top.?down|zombies?|horde|waves?\s+of|survive|survival|arena|platformer|platform game)\b/i.test(text);
-  if (!shooterish && /\b(racing|race ?cars?|car race|karts?|karting|formula ?(1|one)|grand prix|rally|driving game|cars? game|puzzle|tetris|sudoku|card game|poker|solitaire|chess|checkers|board game|football|soccer|basketball|tennis|golf|hockey|tower defen[cs]e|rpg|role.?playing|rhythm game|fighting game)\b/i.test(text)) {
-    $("sendCost").textContent = "Send · free (PlayLab builds platformers and arena shooters; I will offer the closest one)"; return;
-  }
+  // games written as code: a pending plan (go builds it), a code game (words rewrite it), the AI code switch or a kind the engines do not have (a free plan first)
+  if (S.pendingPlan) { const n = codePrice(S.pendingPlan.plan); $("sendCost").textContent = I18N.t("send.go", { n: n ?? "?", credits: creditWord(n) }); return; }
+  if (isCode(S.level)) { const n = price("code_edit"); $("sendCost").textContent = !text ? "" : n === undefined ? `Send · ${I18N.t("send.changeCode")}` : I18N.t("send.line", { n, credits: creditWord(n), what: I18N.t("send.changeCode"), balance: S.me?.balance ?? 0 }); return; }
+  if (S.codeMode || (window.CodeKinds && CodeKinds.codeKind(text))) { const n = price(/\b3d\b/i.test(text) ? "code_create_3d" : "code_create_2d"); $("sendCost").textContent = !text ? "" : I18N.t("send.planFree", { n: n ?? "?", credits: creditWord(n) }); return; }
   const d3 = S.mode === "3d" || /\b3d\b/i.test(text) || /\b(shooter|fps|tps|first.?person|third.?person|top.?down|zombies?|horde|waves?\s+of|survive|survival|arena)\b/i.test(text);
   const action = hasImg ? "scan" : S.level ? (d3 ? "edit_3d" : "edit_2d") : (d3 ? "create_3d" : "create_2d");
   const n = price(action);

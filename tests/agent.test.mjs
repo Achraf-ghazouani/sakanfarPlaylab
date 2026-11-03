@@ -1,14 +1,14 @@
 // Unit checks for lib/agent.mjs with a fake model (no network).  Run: npm test
 import { runAgent, TOOLS, cleanHistory, systemPrompt, quickReply, BRIEF, unsupportedKind } from "../lib/agent.mjs";
 check("the brief asks for the person's language and keeps the level JSON in English", /language the person writes in/.test(BRIEF) && /French in, French out/.test(BRIEF) && /stay in English/.test(BRIEF));
-check("the brief forbids dressing a shooter up as another kind of game", /exactly two kinds of games/.test(BRIEF) && /never dress a shooter/.test(BRIEF));
-// kinds the engines do not have: an honest free answer with the closest two as chips, never a build
+check("the brief forbids dressing a shooter up as another kind of game and names the code builder", /exactly two kinds of games/.test(BRIEF) && /never dress a shooter/.test(BRIEF) && /AI code/.test(BRIEF));
+// kinds the engines do not have: an honest free answer that hands the person's own words to the code builder (a plan first), never a build
 const racing = quickReply("create car game racing with 3 labs and race with 4 deferent ai card", false, [], null);
-check("a racing request is caught before the model: no build, two kinds named, nothing charged", !!racing && /two kinds of games/.test(racing.reply) && /not one of them/.test(racing.reply) && /Nothing was charged/.test(racing.reply) && racing.unsupported === "a racing game" && !racing.level, racing && racing.reply);
-check("the chips offer a platformer race track and an arena with the numbers asked for", racing?.actions?.[0]?.type === "chips" && racing.actions[0].items.length === 2 && /platformer[^]*race track[^]*3 laps/.test(racing.actions[0].items[0]) && /arena[^]*4 rival drivers/.test(racing.actions[0].items[1]), racing?.actions);
+check("a racing request is caught before the model: no build, the code builder named, nothing charged", !!racing && /write it as code/.test(racing.reply) && /Nothing was charged/.test(racing.reply) && racing.unsupported === "a racing game" && !racing.level, racing && racing.reply);
+check("the action carries the person's own words and the kind to the code builder", racing?.actions?.[0]?.type === "code" && racing.actions[0].prompt === "create car game racing with 3 labs and race with 4 deferent ai card" && racing.actions[0].kind === "a racing game", racing?.actions);
 check("other kinds: puzzle, chess, football, RPG", unsupportedKind("a tetris puzzle game") === "a puzzle game" && unsupportedKind("chess against the computer") === "a board game" && unsupportedKind("a soccer game") === "a sports game" && unsupportedKind("an rpg with quests") === "a role-playing game");
 check("platformers and shooters pass, even with race or car words", unsupportedKind("race to the flag in a lava castle") === null && unsupportedKind("a zombie shooter in a car park") === null && unsupportedKind("a platformer where you drive a car over lava") === null && unsupportedKind("A lava castle with moving platforms") === null);
-check("the chip texts themselves build the right kind", unsupportedKind(racing.actions[0].items[0]) === null && unsupportedKind(racing.actions[0].items[1]) === null && /arena|top-down/i.test(racing.actions[0].items[1]));
+check("the kinds the code builder takes: snake, a runner, flight, a dungeon, memory cards", unsupportedKind("snake") === "a snake game" && unsupportedKind("an endless runner") === "an endless runner" && unsupportedKind("a flight game through rings") === "a flight game" && unsupportedKind("a dungeon crawler with keys and doors") === "a dungeon crawler" && unsupportedKind("a memory card game") === "a card game");
 
 let fails = 0;
 function check(name, cond, extra) {

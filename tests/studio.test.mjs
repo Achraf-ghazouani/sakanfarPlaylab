@@ -5,6 +5,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import { generateArena } from "../shared/arena.mjs";
+import { EXAMPLES } from "../lib/code-examples.mjs";
 import os from "node:os";
 import path from "node:path";
 
@@ -108,14 +109,20 @@ const inject = `
     new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.id === "typing") window.__sawTyping = true; }).observe(document.documentElement, { childList: true, subtree: true });
   });
   const LA = ${JSON.stringify(LEVEL_A)}, LB = ${JSON.stringify(LEVEL_B)}, LC = ${JSON.stringify(LEVEL_C)}, AR = ${JSON.stringify(ARENA)};
+  // the code builder, mocked: Muse Spark's plan and Muse Wonder's build (the snake example, streamed as the real endpoint streams it)
+  const PLAN = { title: "Lap Dash", genre: "racing", engine: "canvas", goal: "Finish 3 laps before the rivals.", controls: "Left and right steer, A is gas, B brakes.", controller: "steering+gas+brake", win: "First after 3 laps", lose: "Last after 3 laps", entities: ["car", "4 rival cars", "track"], opponents: "4 AI cars on the racing line", levels: "3 laps", players: 1, notes: "" };
+  const SNAKE = ${JSON.stringify(EXAMPLES.snake)};
+  const sse = (b) => ["start", "progress", "done"].map((e) => "data: " + JSON.stringify(e === "start" ? { e, action: b.change ? "code_edit" : "code_create_2d", cost: 20, balance: 180, model: "mock", modelName: "mock" } : e === "progress" ? { e, chars: 1200, lines: 30 } : { e, html: SNAKE, notes: { note: b.change ? "blue apples" : "snake v1", built: "Steer the snake with the d-pad; eat apples to grow.", missing: "" }, scan: { ok: true, problems: [] }, engine: "canvas", ms: 1, credits: { spent: b.change ? 6 : 20, balance: 180, action: b.change ? "code_edit" : "code_create_2d", model: "mock" } }) + "\\n\\n").join("");
   const realFetch = window.fetch.bind(window);
   const json = (o) => Promise.resolve(new Response(JSON.stringify(o), { status: 200, headers: { "Content-Type": "application/json" } }));
   window.fetch = (url, init) => {
     const u = String(url);
+    if (/api\\/build-code$/.test(u)) { const b = JSON.parse(init.body); window.__lastBuildBody = b; (window.__buildCalls = window.__buildCalls || []).push(b.change || "create"); return Promise.resolve(new Response(sse(b), { status: 200, headers: { "Content-Type": "text/event-stream" } })); }
     if (/api\\/agent$/.test(u)) {
       window.__agentCalls++; const b = JSON.parse(init.body); window.__lastAgentBody = b;
+      if (b.task === "plan") { window.__lastPlanBody = b; return json({ plan: PLAN, meta: { model: "mock", ms: 1 } }); }
       if (/playtest/i.test(b.message)) return json({ reply: "Running the playtest agent.", actions: [{ type: "playtest" }] });
-      if (/racing/i.test(b.message)) return json({ reply: "PlayLab builds two kinds of games today. Pick one below.", actions: [{ type: "chips", items: ["A platformer laid out like a race track: 3 laps of coins, rival cars as enemies", "A top-down arena: dodge 4 rival drivers, 3 waves"] }] });
+      if (/racing/i.test(b.message)) return realFetch(url, init);   // the real agent answers for free: it hands racing to the code builder
       if (/top.?down/i.test(b.message) && b.level && b.level.genre === "arena") return json({ reply: "Top-down it is.", actions: [{ type: "view", view: "top" }] });
       if (/shooter|zombie/i.test(b.message)) return json({ reply: "Zombies incoming!", level: AR, kind: "create", note: "zombie graveyard, 5 waves", playtest: { ok: true, fixed: 0, fixes: [] }, actions: [] });
       if (/lava castle/i.test(b.message)) return json({ reply: "Built a lava castle with a ledge and a guard.", level: { ...LA, checked: true, fixes: [] }, kind: "create", note: "lava castle, one ledge", playtest: { ok: true, fixed: 0 }, actions: [] });
@@ -448,13 +455,32 @@ try {
   await send("Emulation.setTouchEmulationEnabled", { enabled: false });
   await send("Emulation.clearDeviceMetricsOverride");
 
-  // 8b. a kind of game the engines do not have: the agent offers the closest two as chips, a chip sends its words
+  // 8b. a kind of game the engines do not have: the real agent answers for free and hands it to the code builder: a plan card
+  // (mocked Muse Spark) with Go / Simpler chips and no game yet; Go streams the build (mocked Muse Wonder: the snake example)
+  // into the thinking panel, the game is saved as a code level and a version through the real API and runs in the sandbox;
+  // words on it rewrite it (mocked edit); a new game restores the engines' preview
   await click("#newGameBtn");
-  await type("a car racing game with 3 laps"); await sendMsg(); await idle();
+  await type("a car racing game with 3 laps");
+  check("the send line announces a free plan first for a racing game", /free plan first/.test(await evalJS(`document.getElementById("sendCost").textContent`)));
+  await sendMsg(); await idle();
+  const planCard = await evalJS(`[...document.querySelectorAll(".card")].map((c) => c.textContent).find((t) => /Game plan/.test(t)) || ""`);
   const chips = await evalJS(`[...document.querySelectorAll(".card .choices button")].map((b) => b.textContent)`);
-  check("the racing request got a choice card with two chips and no game", chips.length === 2 && /platformer[^]*race track/.test(chips[0]) && /arena/.test(chips[1]) && (await evalJS(`!S.level`)), chips);
+  check("the racing request got a plan card (title, goal, controls), Go / Simpler chips, no game yet, the AI code switch on", /Lap Dash/.test(planCard) && /Goal:/.test(planCard) && /Controls:/.test(planCard) && chips.length === 2 && /Go, build it/.test(chips[0]) && (await evalJS(`!S.level && !!S.pendingPlan && document.getElementById("codeBtn").classList.contains("on") && window.__lastPlanBody.message === "a car racing game with 3 laps"`)), [planCard.slice(0, 90), chips]);
+  check("the send line now says go builds it", /go = build it/.test(await evalJS(`document.getElementById("sendCost").textContent`)));
   await evalJS(`[...document.querySelectorAll(".card .choices button")][0].click(); true`); await idle();
-  check("the chip sent its words as the next message and the game was built from them", await evalJS(`S.messages.some((m) => m.role === "user" && /platformer laid out like a race track/.test(m.content)) && !!S.level && document.querySelectorAll(".card .choices button").length === 0`));
+  const built = await evalJS(`JSON.stringify({ genre: S.level?.genre, engine: S.level?.engine, title: S.level?.title, html: (S.level?.html || "").length, sandbox: document.getElementById("preview").getAttribute("sandbox"), status: document.getElementById("previewStatus").textContent, version: S.versions[0]?.note, versions: S.versions.length, ready: !!S.codeRun?.ready, errors: S.codeRun?.errors?.length, blank: S.codeRun?.blank, pending: !!S.pendingPlan, dim3d: document.querySelector('#dimSeg button[data-dim="3d"]').disabled, codeOff: document.getElementById("codeBtn").disabled, lastAssistant: S.messages.filter((m) => m.role === "assistant").slice(-1)[0]?.content, steps: [...document.querySelectorAll(".card.think .steps li")].map((l) => l.textContent).join(" | ") })`).then(JSON.parse);
+  check("Go: the build streamed in, the game is saved as a code level and version v1 through the API, the iframe is sandboxed and the game said ready", built.genre === "code" && built.engine === "canvas" && built.title === "Lap Dash" && built.html > 1000 && built.sandbox === "allow-scripts allow-pointer-lock" && /AI code · canvas · v1/.test(built.status) && built.version === "snake v1" && built.versions === 1 && built.ready && built.errors === 0 && !built.blank && !built.pending && built.dim3d && built.codeOff, built);
+  check("the reply says what was built and the thinking panel recorded the write, the scan and the sandbox steps", /Steer the snake/.test(built.lastAssistant) && /Wrote .* KB of canvas/.test(built.steps) && /Scanned for forbidden APIs: clean/.test(built.steps) && /first frames are on screen/.test(built.steps), built.steps);
+  check("the page cannot read into the sandboxed game", await evalJS(`(() => { try { return document.getElementById("preview").contentDocument === null; } catch { return true; } })()`));
+  const savedCode = await api(`api/projects?id=${await evalJS(`S.project.id`)}`);
+  check("the saved project carries the code level (html, plan, notes, engine) and nothing else was lost", savedCode.project?.level?.genre === "code" && savedCode.project.level.html.length > 1000 && savedCode.project.level.plan?.title === "Lap Dash" && savedCode.project.level.notes?.built.length > 5 && savedCode.versions?.length === 1, Object.keys(savedCode.project?.level || {}));
+  await type("make the apples blue");
+  check("the send line prices a change as a code rewrite", /rewrites its code/.test(await evalJS(`document.getElementById("sendCost").textContent`)));
+  await sendMsg(); await idle();
+  check("a change rewrites the code with the current file (code_edit flow) as version v2, still sandboxed", await evalJS(`S.level?.genre === "code" && S.versions.length === 2 && S.versions[0].note === "blue apples" && window.__lastBuildBody.change === "make the apples blue" && typeof window.__lastBuildBody.previous_html === "string" && window.__lastBuildBody.previous_html.length > 1000 && document.getElementById("preview").getAttribute("sandbox") === "allow-scripts allow-pointer-lock"`), await evalJS(`JSON.stringify({ versions: S.versions.map((v) => v.note), calls: window.__buildCalls })`));
+  await click("#newGameBtn");
+  check("a new game puts the preview back on game.html without the sandbox, the switch off", await evalJS(`!document.getElementById("preview").getAttribute("sandbox") && /game\\.html/.test(document.getElementById("preview").getAttribute("src") || "") && !document.getElementById("codeBtn").classList.contains("on") && !S.pendingPlan && !S.code`));
+  check("the engines' preview says ready again after the sandbox", !!(await waitFor(`S.previewReady`, { timeout: 15_000 })));
 
   // 9. another owner cannot see the project through the API
   const foreign = await fetch(`${BASE}/api/projects?id=${pid}`);

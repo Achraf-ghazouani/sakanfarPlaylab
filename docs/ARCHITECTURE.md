@@ -54,6 +54,24 @@ Terminal tools do the same without the pages: `node scan.mjs photos/level1.jpg` 
 
 Coordinates are on a 1000 x 1000 grid, y goes down, `x,y` is the top-left corner. `aspect` is the photo's width / height; the game stretches the grid by it so the level keeps the paper's proportions. Types: `start`, `goal`, `platform`, `moving_platform`, `coin`, `enemy`, `spike`, `decoration`. `checked` and `fixes` come from the playtest agent; `diff` is added when a scan was a re-scan of an edited drawing.
 
+## Any game from a prompt
+
+The two engines make platformers and arena shooters. Every other kind of game (racing, puzzles, tower defense, runners, flight, sports, snake, dungeon crawlers, card games...) is **written as code** by Muse Wonder and run in a sandbox. The branch `anygame` builds this in seven steps; this section grows with them.
+
+**The router** (`shared/codekinds.mjs`, shared by the server and the Studio). Shooter or platformer words keep the engines; the words of every other kind route to the code builder (`codeKind()` names the kind for people: "a racing game"). The game agent's free reply hands those words to the Studio as a `code` action, so nothing is built or charged by the engines. The **AI code** switch next to 2D | 3D forces the code builder for any words; it is locked on while a code game is open.
+
+**The plan** (`lib/code.mjs planGame`, Muse Spark 1.3, structured output, a few seconds, free). Title, genre, engine (`canvas` | `phaser` | `three`), goal, controls, the phone controller layout, win and lose, entities, AI opponents, levels, players (1-4), what stays simple. It shows as a card in the chat with **Go, build it** and **Make it simpler** chips; any other message changes the plan (free) and "go" builds it.
+
+**The build** (`POST /api/build-code`, a rewrite to `api/agent.js task:"code"`; Muse Wonder 1.0, streamed, 40-90 s). Charged first (`code_create_2d` 20, `code_create_3d` 30, `code_edit` 6, refunded when the model fails), then the answer streams back as Server-Sent Events (`start`, `progress` with the characters and lines so far, `done` with the file, or `error`) into the thinking panel. The system prompt (`lib/code.mjs systemPrompt`) carries the runtime rules, the exact library addresses (Phaser 3.80.1 on cdnjs, three.js 0.160.0 on jsdelivr with its import map, cannon-es), the PlayLab SDK reference, the rules of a PlayLab game and three complete example games (`lib/code-examples.mjs`: a canvas snake, a Phaser star catcher, a three.js ring flight) that the SDK test runs through the sandbox. The model answers with one HTML file whose second line is a `<!-- playlab {note, built, missing} -->` comment: the notes become the version name and the reply. A change to a code game sends the current file back with the change and gets the whole updated file (`code_edit`); the patch-based edits of step 5 replace this.
+
+**The level** (`projects.level` with `genre: "code"`): `engine`, `title`, `theme`, `note`, `prompt`, `plan`, `html`, `notes` and an empty `objects` list, validated by `lib/code.mjs validateCodeLevel` (size, a clean scan). Every build or change is a version like any other level, so history and undo work unchanged.
+
+**The sandbox** (`shared/coderun.mjs`, the host; `shared/codescan.mjs`, the rules). The game runs in the preview iframe with `sandbox="allow-scripts"` and no `allow-same-origin`: an opaque origin, so no cookies, storage, login token or parent page. The host wraps the file with a strict Content Security Policy (scripts and connections only from cdnjs, jsdelivr and unpkg; images from data and blob URLs; no frames, forms, objects or navigation) and the SDK script, after a scan that names forbidden APIs (cookies, storage, parent, eval, network calls, outside addresses) before anything runs; the server runs the same scan before saving. The SDK talks to the host only through `postMessage` with the fixed `playlab:*` messages.
+
+**The PlayLab SDK** (`shared/playlab-sdk.js`, `window.PlayLab` inside every generated game). One input API for the keyboard, mouse, touch and up to four phones (`input.axis`, `button`, `pressed`, `aim`, `pointer`, `players()`); the host's pause / resume / restart / mute (`onPause`, `onResume`, `onRestart`, `onMute`, `paused`); `start()` and `gameOver({ win, score })`; `controller({ type })` so the phones show the right pad; `event()` for vibration and sound; `assets.get(role)` for the person's own pictures (written into the page before the SDK, so they are there from the first line); a small HUD (`hud.set`); `screenshot()`. It reports `ready` after the first frames, `state` every half second, exceptions, failed loads, policy blocks and a blank canvas (seen twice) to the host, which the Studio shows honestly ("it crashed: ...", "nothing was drawn").
+
+**Not yet** (later steps): the self-healing loop and the vision check (step 3), phone layouts from the SDK on the pad (step 4), patch edits with history (step 5), assets, publish and share for code games (step 6), the nine test prompts and their report (step 7).
+
 ## Pictures: the player, the objects, the cutouts
 
 Every attached picture has a toggle (**Auto**, **Level**, **Player**, **Object**, **UI**, **Asset**) and the words always win ("use this as my player", "make this the enemy", "this is my pause button", "these are UI icons"). On Auto, `shared/assetcheck.js` reads the pixels first (transparency, size and aspect, a grid of cells, a straight frame border, paper with pen strokes, a wide scene) and guesses the role; a sure guess (sprite sheet, tileset, font sheet, button, panel, level drawing) costs nothing, anything else goes to Muse Spark with those facts as hints, and when the model is not sure either the chat asks with chips. The roles (`ASSET_ROLES` in `lib/image.mjs`): `level`, `player`, `enemy`, `collectible`, `hazard`, `goal`, `texture`, `tileset`, `spritesheet`, `background`, `decoration`, and the UI ones `ui_button` (hint start / pause / restart / menu / gameover), `ui_panel`, `ui_hud` (health / coins / timer / score), `ui_icon` (heart / coin / star / timer), `ui_logo`, `ui_cursor`, `ui_font`, `ui_mockup`. Characters and objects become sprites; everything else is saved on the game as an asset (`projects.art.assets[]`: id, role, name, hint, the original PNG so transparency survives, size) for the engines and the UI kit. Every upload ends with a "Detected: 1 pause UI button. Game is 2D." card.
@@ -125,7 +143,7 @@ All functions set `Cache-Control: no-store`. "Login" means a Supabase access tok
 
 | Function | Routes |
 | --- | --- |
-| `api/agent.js` | `POST` `{ message, level?, history?, mode? }` -> `{ reply, level?, kind, note, diff, playtest, actions, credits }` (login) |
+| `api/agent.js` | `POST` `{ message, level?, history?, mode? }` -> `{ reply, level?, kind, note, diff, playtest, actions, credits }` (login); `{ task: "plan", message, plan? }` -> `{ plan }` (free); `{ task: "code", plan, prompt, change?, previous_html? }` (also `POST /api/build-code`) -> a Server-Sent Events stream ending in `done { html, notes, scan, engine, credits }` or `error` |
 | `api/scan.js` | `POST` `{ image, previous?, provider? }` -> `{ level, original, meta }` (login; the phone sends through the computer) |
 | `api/fix.js` | `POST` `{ level }` -> `{ level, report }` (login; charged only when the AI repair runs) |
 | `api/art.js` | `POST` `{ task: "classify" \| "sprite" \| "cutout", image, ... }` (login) |
@@ -163,7 +181,10 @@ npm run dev:https                 # same on https://...:3443/ (needed for the ph
 
 | Command | What it checks |
 | --- | --- |
-| `npm test` | Unit: level normalizer, reachability and auto-fix, diff, the AI client, the paper detector, the agent (with one live Muse Spark call), pictures (with one live SAM 3.1 call), the arena format |
+| `npm test` | Unit: level normalizer, reachability and auto-fix, diff, the AI client, the paper detector, the agent (with one live Muse Spark call), pictures (with one live SAM 3.1 call), the arena format, the code builder (router, plan, parser, validator, prompt; a live plan; `PLAYLAB_LIVE_CODE=1` adds a live Muse Wonder build) |
+| `npm run test:sdk` | Headless Chrome runs games through the sandbox: the scan and the policy, the three example games (plain canvas, Phaser from cdnjs, three.js from jsdelivr) with the SDK's ready / state / input / menu / screenshots, and samples that must fail (an exception, a blank canvas, a theft, a run-time reach-out) |
+| `npm run run:html -- file.html` | One generated game file through the sandbox: ready, layout, state, errors, blank, responds to input |
+| `npm run test:anygame` | Live: the nine test prompts through the Studio with the real models (plan, build, run), results in `tests/anygame-results.md` (needs `db/011_code.sql`) |
 | `npm run test:assets` | Headless Chrome runs the local picture checks on every sample in `tests/samples/` (one per role, drawn by `npm run samples`): sure guesses are right, unsure ones say so |
 | `npm run test:kit` | Headless Chrome gives `game.html`, `arena.html` and `pad.html` the sample assets: parallax background, textured platforms, the player animated from the sheet, the UI kit on the HUD, panel, score and pad, the arena's sky dome and floor |
 | `npm run playtest` | Headless Chrome drives `game.html` through its checks (needs `npm run dev`) |
@@ -194,6 +215,7 @@ The repo is ready: `vercel.json` sets the function timeouts (scan 60 s, fix 120 
 | `explore.html`, `shared/play.js`, `shared/play.css`, `api/play.js` | Published games: the gallery and the play page |
 | `login.html`, `profile.html`, `admin.html` | Login, profile (credits, history, games), the admin panel |
 | `shared/inkart.js`, `shared/cutout.js`, `shared/photo.js`, `shared/diff.mjs`, `shared/reach.mjs` | Drawn art, cutouts, photo resize, scan diff, the reachability checker (shared by pages and server) |
+| `shared/playlab-sdk.js`, `shared/coderun.mjs`, `shared/codescan.mjs`, `shared/codekinds.mjs`, `lib/code.mjs`, `lib/code-examples.mjs` | Any game from a prompt: the SDK inside generated games, the sandbox host, the policy and scan, the kind router, the plan and build prompts, the three example games |
 | `shared/auth.js`, `lib/auth.mjs`, `lib/db.mjs`, `lib/credits.mjs` | The browser's login helper, server-side access checks, PostgREST client, the charge wrapper |
 | `lib/ai.mjs`, `lib/agent.mjs`, `lib/game-knowledge.mjs`, `lib/scan-level.mjs`, `lib/fix-level.mjs`, `lib/image.mjs`, `lib/segment.mjs` | The AI: chat client (Meta, Baseten), the game agent and its brief, the scan prompt, the playtest repair, pictures (classify, sprite), SAM 3.1 |
 | `api/` | The 12 Vercel functions (see API) |

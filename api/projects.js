@@ -13,6 +13,7 @@
 import { normalizeLevel } from "../lib/scan-level.mjs";
 import { normalizeArena } from "../shared/arena.mjs";
 import { ASSET_ROLES } from "../lib/image.mjs";
+import { validateCodeLevel } from "../lib/code.mjs";
 import * as db from "../lib/db.mjs";
 import { requireUser } from "../lib/auth.mjs";
 
@@ -110,7 +111,11 @@ function pickFields(body) {
   const out = {};
   if (body.title !== undefined) { const t = String(body.title).trim().slice(0, 80); if (!t) return { error: "Title cannot be empty." }; out.title = t; }
   if (body.mode !== undefined) { if (!["2d", "3d-side", "3d-world"].includes(body.mode)) return { error: "Unknown mode." }; out.mode = body.mode; }
-  if (body.level !== undefined && body.level !== null) {
+  if (body.level !== undefined && body.level !== null && body.level.genre === "code") {   // a game written as code (lib/code.mjs): the HTML, its plan and notes
+    const v = validateCodeLevel(body.level);
+    if (v.error) return { error: v.error };
+    out.level = v.level;
+  } else if (body.level !== undefined && body.level !== null) {
     if (!body.level || !Array.isArray(body.level.objects) || body.level.objects.length > 300) return { error: "level must have an objects array." };
     const lvl = body.level.genre === "arena" ? normalizeArena(body.level) : normalizeLevel(body.level, { aspect: body.level.aspect });
     for (const k of ["checked", "fixes", "diff"]) if (body.level[k] !== undefined) lvl[k] = body.level[k];

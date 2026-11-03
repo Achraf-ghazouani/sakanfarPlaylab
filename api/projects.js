@@ -2,6 +2,7 @@
 //   GET    /api/projects                 -> { projects: [...] }                         (owner's list)
 //   GET    /api/projects?id=UUID         -> { project, messages, versions }
 //   POST   /api/projects {title?, level?, photo?, mode?}            -> { project }
+//   POST   /api/projects {claim: "u-<24 hex>"}                      -> { claimed }  (games made before accounts, from this browser's old id)
 //   PATCH  /api/projects {id, title?, level?, photo?, mode?, note?} -> { project, version? }  (a level change adds a version)
 //   DELETE /api/projects?id=UUID         -> { ok: true }
 // The caller must be logged in (Authorization: Bearer <Supabase access token>); rows are theirs through row-level security.
@@ -33,6 +34,12 @@ export default async function handler(req, res) {
       return res.status(200).json({ project, messages, versions });
     }
     if (req.method === "POST") {
+      if (typeof body.claim === "string") {   // first login: the browser's pre-accounts id hands its games to the account
+        if (!/^u-[0-9a-f]{24}$/.test(body.claim)) return res.status(400).json({ error: "Not an anonymous owner id." });
+        if (!db.serverConfigured()) return res.status(200).json({ claimed: 0 });
+        const claimed = await db.srv("srv_claim_projects", { p_owner: body.claim, p_user: owner.uid });
+        return res.status(200).json({ claimed: Number(claimed) || 0 });
+      }
       const fields = pickFields(body);
       if (fields.error) return res.status(400).json({ error: fields.error });
       const project = await db.createProject(owner, fields);

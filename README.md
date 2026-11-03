@@ -122,7 +122,7 @@ What works today (steps 1-4 of the Studio plan):
 - **Sketch pad in the chat** (pencil button): draw a level like on paper (pen sizes, eraser, undo, "Last picture" to draw over the game's previous picture), "Use drawing" sends it through the scanner. With an existing level the scan is a re-draw: the diff shows what changed.
 - **Camera in the chat**: on a phone the camera button takes a picture with the device camera and builds it. On a computer it opens the phone link: a QR code, the phone (`pad.html`) runs the live paper detection and auto-capture from the big-screen flow, the ink layer previews in the modal, and every scan lands in the chat as a version ("from phone camera", then "redrawn on paper"). Closing the modal keeps the link: the live video shrinks to a corner.
 - **Build and change the game by chat.** Muse Spark gets the brief (level format, jump physics, design rules), the last chat turns and the current level, and answers with a function tool: `create_level`, `edit_level` (full updated level, unchanged things keep their coordinates) or `playtest_level`. The server validates the objects, runs the instant reachability fix and the page saves the result as a version with the model's own note ("harder: two more spikes"). Per the Meta Model API docs, `tool_choice` is left on `auto` (the only accepted value) and `parallel_tool_calls:false` keeps it to one call per turn. If the Meta API fails, Muse Spark Open on Baseten gets the same brief and answers with a JSON object instead.
-- Projects are saved in Supabase (`projects`, `messages`, `versions`). Each browser gets an anonymous owner id (localStorage) sent as the `x-owner` header; row-level security keeps every owner to their own rows. Shared projects (later step) are readable by anyone with the link.
+- Projects are saved in Supabase (`projects`, `messages`, `versions`) and belong to the login: every call goes through `requireUser()` and row-level security keeps each account to its own rows, so "My games" is the same on every device. Games made before accounts existed (keyed by a browser id) move to the account on the first login (`db/007_claim.sql`); a deleted account takes its games with it. Published projects (`share_id`) are readable by anyone with the link.
 - "My games" drawer, auto-created project on the first message, rename by clicking the title. A reload keeps the game you are on; a new visit starts on the first screen with a Continue button.
 - Attach a picture or drawing: it goes through the existing `/api/scan` and lands in the preview as a new version.
 - **Pictures become a level, the player or an object.** Every attached picture has a toggle: **Auto**, **Level**, **Player** or **Object**. Words decide too ("use this as my player", "make this the enemy", "these are the coins"). On Auto, Muse Spark looks at the picture first (`api/art` classify, 1 credit): a level drawing goes to the scanner as before; a character or a single object is redrawn by **Muse Image 1.0** as a clean game sprite (`api/art` sprite, `POST /v1/images/edits` with the picture as the reference, 15 credits, refunded on failure). Muse Image has no transparent output, so it draws on flat white and `shared/cutout.js` cuts it out. A character becomes the player (`projects.art.player`); an object becomes the sprite every enemy, coin, goal, spike or decoration wears (`projects.art.sprites`). "As is" skips Muse Image and cuts out the original picture (free), and so does a failed Muse Image call. **Add your character** on the first screen does the player in one click; "use the default player" switches back.
@@ -130,7 +130,7 @@ What works today (steps 1-4 of the Studio plan):
 - Every level change is a version: History lists them, Undo restores the previous one (as a new version, nothing is lost).
 - Word-by-word streaming, typing indicator, quick chips, example prompts. On phones the chat is full screen with a Preview tab.
 
-Endpoints (all keyed by the `x-owner` header, keys stay on the server):
+Endpoints (login required, keys stay on the server):
 
 | Endpoint | What it does |
 | --- | --- |
@@ -168,7 +168,7 @@ PlayLab is invite-only. Visitors can join the waitlist on the landing page and p
 
 Models: Muse Spark 1.3 ×1 (default), 1.2 ×0.8, 1.1 ×0.6, Muse Spark Open on Baseten ×0.5 (live re-scans from the phone use it). Replies that need no AI are free. A short balance answers 402 before any AI call, and the Studio shows the price of each action next to its button. Prices and multipliers are edited in the admin panel; `GET /api/costs` is the public price list.
 
-Database: `db/schema.sql` (games), then `db/002_accounts.sql`, `db/003_server_users.sql`, `db/004_credits.sql`, `db/005_admin.sql` and `db/006_sprites.sql` in the Supabase SQL editor.
+Database: `db/schema.sql` (games), then `db/002_accounts.sql`, `db/003_server_users.sql`, `db/004_credits.sql`, `db/005_admin.sql`, `db/006_sprites.sql` and `db/007_claim.sql` in the Supabase SQL editor.
 
 ## Admin panel (`admin.html`)
 

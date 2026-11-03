@@ -1075,6 +1075,11 @@ $("logoutBtn").addEventListener("click", async (e) => { e.preventDefault(); try 
 (async () => {
   S.me = await PlayAuth.requireLogin();   // not logged in or blocked -> login page
   renderUser();
+  // Games made before accounts existed were keyed by a browser id: on the first login they move to this account.
+  try {
+    const old = localStorage.getItem("playlab.owner");
+    if (old) { const { claimed } = await api("api/projects", { method: "POST", body: { claim: old } }); localStorage.removeItem("playlab.owner"); if (claimed) toast(`${claimed} game${claimed > 1 ? "s" : ""} from this browser now belong${claimed > 1 ? "" : "s"} to your account`, 4000); }
+  } catch {}
   loadCosts();
   bindExamples();
   const projects = await loadProjects();

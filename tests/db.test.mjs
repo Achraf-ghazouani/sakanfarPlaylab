@@ -32,6 +32,14 @@ try {
   const v1 = await db.addVersion(owner, project.id, level, "created");
   check("first version is n=1", v1?.n === 1);
   check("owner sees the project in the list", (await db.listProjects(owner)).some((p) => p.id === project.id));
+  // a game from before accounts (keyed by the browser's old "u-" id) is claimed on login
+  const anon = "u-" + Array.from({ length: 24 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join("");
+  await db.srv("srv_set_project_owner", { p_id: project.id, p_owner: anon });
+  check("an anonymous game is not in the list", !(await db.listProjects(owner)).some((p) => p.id === project.id));
+  check("claiming with another id moves nothing", (await db.srv("srv_claim_projects", { p_owner: "u-" + "0".repeat(24), p_user: other.uid })) === 0);
+  check("claiming with the browser's id moves it to the account", (await db.srv("srv_claim_projects", { p_owner: anon, p_user: owner.uid })) === 1 && (await db.listProjects(owner)).some((p) => p.id === project.id));
+  let badClaim = null; try { await db.srv("srv_claim_projects", { p_owner: "not-an-id", p_user: owner.uid }); } catch (e) { badClaim = e; }
+  check("a malformed id is refused", !!badClaim);
   const foreign = await db.listProjects(other);
   check("another account cannot see it (RLS)", !foreign.some((p) => p.id === project.id), foreign.length);
   check("another account cannot fetch it by id", (await db.getProject(other, project.id)) === null);

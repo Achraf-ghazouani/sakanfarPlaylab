@@ -22,6 +22,7 @@
     "test:arena": "node tests/arena-play.test.mjs http://localhost:3000",
     "test:publish": "node tests/publish.test.mjs http://localhost:3000",
     "test:assets": "node tests/assets.test.mjs http://localhost:3000",
-    "samples": "node tests/make-samples.mjs"
+    "samples": "node tests/make-samples.mjs",
+    "test:kit": "node tests/kit.test.mjs http://localhost:3000"
   }
 }

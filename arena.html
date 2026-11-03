@@ -139,6 +139,8 @@ const THEMES = [
   { re: /castle|knight|medieval|court/, sky: 0x7fa6c9, fog: 0x7fa6c9, floor: ["#9a9a8c", "#8d8d80"], wall: 0x8c8c82, wallTop: 0xb0b0a6, prop: 0x8b5a2b, light: 0xfff7e0, sun: 1.3 },
 ];
 const DEFAULT_THEME = { sky: 0x6fa36b, fog: 0x6fa36b, floor: ["#6fbf63", "#63b058"], wall: 0x8b5a2b, wallTop: 0xa66f3a, prop: 0x7c3aed, light: 0xffffff, sun: 1.3 };
+/** An uploaded texture as the floor: repeated 12 times across the arena. */
+function floorFrom(img) { const t = new THREE.Texture(img); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(12, 12); t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true; return t; }
 function floorTexture(a, b) {
   const c = document.createElement("canvas"); c.width = c.height = 256; const g = c.getContext("2d");
   g.fillStyle = a; g.fillRect(0, 0, 256, 256); g.fillStyle = b;
@@ -154,6 +156,7 @@ const mat = (c, extra = {}) => new THREE.MeshStandardMaterial({ color: c, roughn
 const G = { level: null, name: null, view: "fps", theme: DEFAULT_THEME, scene: null, solids: [], spawners: [], pickups: [], zombies: [], player: null,
   wave: 0, pending: 0, nextSpawn: 0, kills: 0, total: 0, state: "none", nextWaveAt: 0, lastShot: 0, firing: false, yaw: 0, pitch: -0.08, aim: new THREE.Vector3(0, 0, -1), mouse: { x: 0, y: 0 }, keys: {}, tracer: null, tracerUntil: 0, hurtUntil: 0 };
 let playerSkin = null, enemySkin = null;   // <img> from the Studio: the player picture and the enemy sprite
+let bgImg = null, texImg = null;            // <img> from the Studio's assets: a background (sky dome) and a texture (the floor)
 // Sticks: from the phone pad through the Studio (playlab:stick / playlab:fire) or from the on-screen sticks on a touch
 // device. m = move (x right, y forward), a = aim / turn, fire = hold. turn = the old left/right pad buttons.
 const R = { m: [0, 0], a: [0, 0], fire: false, turn: 0 };
@@ -201,12 +204,18 @@ function build(level, name) {
   G.theme = THEMES.find((t) => t.re.test(String(level.theme || "").toLowerCase())) || DEFAULT_THEME;
   const T = G.theme, S = (G.scene = new THREE.Scene());
   S.background = new THREE.Color(T.sky); S.fog = new THREE.Fog(T.fog, 700, 2600);
+  if (bgImg) {   // an uploaded background: a sky dome around the arena, out of the fog
+    const t = new THREE.Texture(bgImg); t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true;
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(4000, 32, 16), new THREE.MeshBasicMaterial({ map: t, side: THREE.BackSide, fog: false }));
+    dome.position.set(500, 0, 500); dome.scale.y = 0.6; S.add(dome); G.dome = dome;
+  } else G.dome = null;
   S.add(new THREE.HemisphereLight(T.light, 0x3a3a3a, 0.9));
   const sun = new THREE.DirectionalLight(0xffffff, T.sun); sun.position.set(-400, 900, 300); sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -800, right: 800, top: 800, bottom: -800, near: 10, far: 3000 }); sun.shadow.bias = -0.0006;
   S.add(sun, sun.target); sun.target.position.set(500, 0, 500);
   G.sun = sun;
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ map: floorTexture(T.floor[0], T.floor[1]), roughness: 1 }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ map: texImg ? floorFrom(texImg) : floorTexture(T.floor[0], T.floor[1]), roughness: 1 }));
+  G.floor = floor;
   floor.rotation.x = -Math.PI / 2; floor.position.set(500, 0, 500); floor.receiveShadow = true; S.add(floor);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), mat(T.sky, { roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.position.set(500, -1, 500); S.add(ground);
 
@@ -518,8 +527,13 @@ function stateSnapshot() {
 let lastState = null;
 function publishState() { lastState = stateSnapshot(); if (isEmbed) { try { parent.postMessage({ type: "playlab:state", state: lastState }, "*"); } catch {} } }
 const loadImg = (src) => new Promise((resolve) => { if (!src || !/^data:image\/(png|webp|jpeg);base64,/.test(src)) return resolve(null); const i = new Image(); i.onload = () => resolve(i); i.onerror = () => resolve(null); i.src = src; });
-async function setSkins({ player, sprites } = {}) {
+async function setSkins({ player, sprites, assets } = {}) {
   let changed = false;
+  if (assets !== undefined) {
+    const list = Array.isArray(assets) ? assets : [], bg = list.find((a) => a?.role === "background"), tx = list.find((a) => a?.role === "texture");
+    const [bi, ti] = await Promise.all([loadImg(bg?.src), loadImg(tx?.src)]);
+    if ((bi?.src || null) !== (bgImg?.src || null) || (ti?.src || null) !== (texImg?.src || null)) { bgImg = bi; texImg = ti; changed = true; }
+  }
   if (player !== undefined) { const i = await loadImg(player); if ((i?.src || null) !== (playerSkin?.src || null)) { playerSkin = i; changed = true; } }
   if (sprites !== undefined) { const i = await loadImg(sprites?.enemy); if ((i?.src || null) !== (enemySkin?.src || null)) { enemySkin = i; changed = true; } }
   return changed;
@@ -532,7 +546,7 @@ if (isEmbed) {
   addEventListener("message", async (e) => {
     const m = e.data; if (!m || typeof m !== "object" || typeof m.type !== "string") return;
     if (m.type === "playlab:level" && m.level && Array.isArray(m.level.objects)) {
-      await setSkins({ player: m.player, sprites: m.sprites });
+      await setSkins({ player: m.player, sprites: m.sprites, assets: m.assets });
       startLevel(m.level, m.name || "studio");
       if (m.toast) showToastMsg(String(m.toast).replace(/<[^>]+>/g, ""));
     } else if (m.type === "playlab:snapshot") {
@@ -546,6 +560,7 @@ if (isEmbed) {
     else if (m.type === "playlab:input") R.turn = (m.r ? 1 : 0) - (m.l ? 1 : 0);          // the platformer pad's arrows turn
     else if (m.type === "playlab:jump") { R.fire = !!m.down; if (R.fire && G.state === "ready") startPlay(); }   // and JUMP shoots
     else if (m.type === "playlab:players") { if (!(m.players || []).length) { R.m = [0, 0]; R.a = [0, 0]; R.fire = false; R.turn = 0; } }
+    else if (m.type === "playlab:assets") { if (await setSkins({ assets: m.assets || [] })) restart(); }
     else if (m.type === "playlab:player" || m.type === "playlab:sprites") { if (await setSkins(m.type === "playlab:player" ? { player: m.image ?? null } : { sprites: m.sprites || {} })) restart(); }
     else if (m.type === "playlab:menu") { if (m.action === "restart") restart(); else if (m.action === "pause") { if (G.state === "play") togglePause(); } else if (m.action === "resume") { if (G.state === "paused") startPlay(); } else if (m.action === "toggle-pause") togglePause(); else if (m.action === "mute") SFX.setMuted(!SFX.muted); }
     else if (m.type === "playlab:state") publishState();

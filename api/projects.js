@@ -139,6 +139,7 @@ function pickFields(body) {
       art.assets = art.assets.map((a) => a && typeof a === "object" ? {
         id: String(a.id || "").slice(0, 40), role: String(a.role || ""), name: String(a.name || "").slice(0, 60), hint: String(a.hint || "").slice(0, 40),
         src: a.src, w: Number(a.w) || 0, h: Number(a.h) || 0,
+        grid: a.grid && Number(a.grid.cols) >= 1 ? { cols: Math.min(64, Math.round(Number(a.grid.cols))), rows: Math.max(1, Math.min(64, Math.round(Number(a.grid.rows)) || 1)) } : null,   // a sprite sheet's or tileset's cells
       } : null);
       for (const a of art.assets) {
         if (!a || !a.id || !ASSET_ROLES.includes(a.role)) return { error: "Each asset needs an id and a known role." };

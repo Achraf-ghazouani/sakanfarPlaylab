@@ -54,6 +54,9 @@
   #fire { right:calc(max(26px, env(safe-area-inset-right)) + 150px); bottom:62px; }
   .btn { position:absolute; bottom:max(18px, env(safe-area-inset-bottom)); width:min(26vh, 120px); height:min(26vh, 120px); border-radius:50%; background:#fff; border:3px solid var(--lav-2); box-shadow:0 10px 24px rgba(91,33,182,.15); display:flex; align-items:center; justify-content:center; font-size:40px; color:var(--purple-deep); touch-action:none; transition:transform .05s, background .05s; }
   .btn.pressed { background:var(--purple); color:#fff; transform:scale(.94); border-color:var(--purple); }
+  /* the game's UI kit: the uploaded button on every pad button, its colour on the sticks and pills */
+  body.kit .btn, body.kit #fire { background-image:var(--pad-btn); background-size:100% 100%; background-color:transparent; border-radius:18px; border-color:transparent; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+  body.kit .btn.pressed, body.kit #fire.pressed { filter:brightness(.8); transform:scale(.94); }
   #left { left:max(18px, env(safe-area-inset-left)); }
   #right { left:calc(max(18px, env(safe-area-inset-left)) + min(26vh, 120px) + 16px); }
   #jump { right:max(18px, env(safe-area-inset-right)); width:min(34vh, 150px); height:min(34vh, 150px); font-size:22px; font-family:"Fredoka", system-ui, sans-serif; font-weight:700; letter-spacing:.04em; border-color:var(--player); color:var(--player); }
@@ -454,6 +457,15 @@ function showState(s) {
   $("mPause").classList.toggle("on", s.state === "paused");
   $("mMute").textContent = s.muted ? "\uD83D\uDD07 Muted" : "\uD83D\uDD0A Sound";
   $("mMute").classList.toggle("on", !!s.muted);
+  if (s.kit !== undefined) applyKit(s.kit);
+}
+/** The game's UI kit on the pad: the uploaded button as the buttons' face, its colour for the rest. */
+function applyKit(kit) {
+  const on = !!(kit && typeof kit.button === "string" && /^data:image\//.test(kit.button));
+  document.body.classList.toggle("kit", on);
+  const root = document.documentElement.style;
+  if (on) { root.setProperty("--pad-btn", `url(${kit.button})`); if (/^#[0-9a-f]{6}$/i.test(kit.color || "")) { root.setProperty("--purple", kit.color); root.setProperty("--purple-deep", kit.color); } }
+  else { root.removeProperty("--pad-btn"); root.removeProperty("--purple"); root.removeProperty("--purple-deep"); }
 }
 
 // Keyboard too (handy on a laptop for testing)

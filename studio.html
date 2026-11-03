@@ -501,7 +501,7 @@ function pushLevel(level, { name = "studio", thumb = null, keepPlayer = false, t
   const want = isArena(level) ? "arena.html?embed=1" : "game.html?embed=1";
   if ($("preview").getAttribute("src") !== want) { S.previewReady = false; $("preview").setAttribute("src", want); }
   $("previewStatus").textContent = `${n} objects${S.versions[0] ? ` · v${S.versions[0].n}` : ""}${level?.theme ? ` · ${level.theme}` : ""}${isArena(level) ? ` · ${VIEW_NAME[level.view] || level.view} shooter · ${level.waves} waves` : S.mode === "3d" ? " · 3D" : ""}`;
-  if (S.previewReady) preview().postMessage({ type: "playlab:level", level, name, thumb: thumb || S.project?.photo || null, player: S.project?.art?.player || null, sprites: S.project?.art?.sprites || null, mode: S.mode, keepPlayer, toast: quiet ? null : toastText }, "*");
+  if (S.previewReady) preview().postMessage({ type: "playlab:level", level, name, thumb: thumb || S.project?.photo || null, player: S.project?.art?.player || null, sprites: S.project?.art?.sprites || null, assets: S.project?.art?.assets || [], mode: S.mode, keepPlayer, toast: quiet ? null : toastText }, "*");
 }
 
 // ---------------------------------------------------------------------------
@@ -1016,13 +1016,17 @@ async function askRole(img, text, plan, c) {
 /** A background, tileset, sprite sheet, texture or UI piece: kept on the game with its role (the engines pick it up from there). */
 async function saveAsset(img, plan) {
   showTyping();
-  const asset = { id: Math.random().toString(36).slice(2, 10), role: plan.role, name: (plan.name || ROLE_WORDS[plan.role] || plan.role).slice(0, 60), hint: plan.hint || "", src: img.raw || img.upload, w: img.check?.width || 0, h: img.check?.height || 0 };
+  const g = img.check?.grid, asset = { id: Math.random().toString(36).slice(2, 10), role: plan.role, name: (plan.name || ROLE_WORDS[plan.role] || plan.role).slice(0, 60), hint: plan.hint || "", src: img.raw || img.upload, w: img.check?.width || 0, h: img.check?.height || 0, grid: g && g.cols * g.rows > 1 ? { cols: g.cols, rows: g.rows } : null };
   const assets = [...(S.project?.art?.assets || []).filter((a) => !(a.role === asset.role && a.hint === asset.hint && /^ui_/.test(asset.role) && asset.hint)), asset];   // a new pause button replaces the old one
   await saveArt({ ...(S.project?.art || {}), assets });
+  toPreview({ type: "playlab:assets", assets });
   hideTyping();
   const what = planWords(plan), ui = /^ui_/.test(plan.role);
-  await addCard({ icon: ui ? "&#128433;&#65039;" : "&#127912;", title: ui ? "Saved to the UI kit" : "Saved as a game asset", text: `${what}${asset.w ? ` · ${asset.w} x ${asset.h}` : ""}` });
-  await streamAssistant(ui ? `Got it: a ${what}. It is in your game's UI kit; the next update puts the kit into the game's menus and HUD.` : `Got it: a ${what}. It is in your game's assets; the next update puts backgrounds, tilesets and sprite sheets into the game.`);
+  const frames = asset.grid ? ` · ${asset.grid.cols} x ${asset.grid.rows} ${plan.role === "spritesheet" ? "frames → " + (asset.grid.rows >= 3 ? "idle, run, jump" : asset.grid.rows === 2 ? "idle, run" : "run") : "cells"}` : asset.w ? ` · ${asset.w} x ${asset.h}` : "";
+  await addCard({ icon: ui ? "&#128433;&#65039;" : "&#127912;", title: ui ? "Saved to the UI kit" : "Saved as a game asset", text: what + frames });
+  const used = { background: "It is behind your game now, scrolling a little slower than the level.", texture: "The platforms wear it now.", tileset: "The platforms wear its first tile now.", spritesheet: "The player is animated with it now: the rows are idle, run and jump." }[plan.role]
+    || (ui ? "It is in your game's UI kit now: the restart button, the message panel, the coin counter and the phones' pad wear what you give them." : "It is in your game's assets.");
+  await streamAssistant(`Got it: a ${what}. ${used}`);
   await saveMessage("assistant", `Saved a ${what}.`);
 }
 /** "Detected: 1 player character, 3 UI buttons (pause, restart, menu), 1 background. Game is 2D." */

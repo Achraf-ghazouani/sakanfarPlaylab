@@ -144,12 +144,13 @@ function page(res, card, req) {
   <button class="tb" id="likeBtn" title="Like"><span id="likeIcon">&#9825;</span> <span id="likes">0</span></button>
   <span class="tb stat" title="Plays">&#9654; <span id="plays">0</span></span>
   <button class="tb" id="phonesBtn" title="Play with your phones">&#128241; <span class="lbl">Phones</span></button>
+  <button class="tb" id="fullBtn" title="Full screen" aria-label="Full screen">&#9974;</button>
   <button class="tb primary" id="shareBtn">&#128279; <span class="lbl">Share</span></button>
   <a class="tb" id="remixBtn" href="/login.html?next=${card ? esc(encodeURIComponent("studio.html?remix=" + card.id)) : "studio.html"}">&#127922; <span class="lbl">Remix in Studio</span></a>
   <a class="tb ghost" href="/explore.html">Explore</a>
 </header>
 <main id="stage">
-  ${card ? `<iframe id="game" title="${esc(card.title)}" allow="autoplay; pointer-lock"></iframe><div id="loading">Loading the game...</div>` : `<div class="gone"><h1>This game is not here</h1><p>${esc(desc)}</p><a class="tb primary" href="/explore.html">Explore games</a></div>`}
+  ${card ? `<iframe id="game" title="${esc(card.title)}" allow="autoplay; pointer-lock; fullscreen"></iframe><div id="loading">Loading the game...</div><button id="startCover" hidden><span class="play"></span><b id="startText">Play</b></button><button id="fsExit" title="Exit full screen" aria-label="Exit full screen">&times;</button>` : `<div class="gone"><h1>This game is not here</h1><p>${esc(desc)}</p><a class="tb primary" href="/explore.html">Explore games</a></div>`}
 </main>
 <p id="desc" class="desc">${esc(card?.description || "")}</p>
 <footer class="foot"><button class="link" id="reportBtn">Report this game</button> &middot; <a href="/">Make your own in PlayLab</a></footer>

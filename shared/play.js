@@ -30,6 +30,7 @@
   /** A game written as code: its HTML runs in the sandbox (shared/coderun.mjs, no origin, strict policy), the SDK inside talks back. */
   function mountCode() {
     if (!window.CodeRun) { setTimeout(mountCode, 100); return; }   // the module scripts run after this one
+    showCover();
     code = CodeRun.mount(iframe, game.level.html, { assets: codeAssets(game.art || {}), on: (m) => {
       if (m.type === "playlab:ready") { ready = true; countPlay(); if (host) syncPlayers(); }
       else if (m.type === "playlab:state" && m.state) { window.__playState = m.state; host?.broadcast(m.state); $("codePause").textContent = m.state.state === "paused" ? "\u25B6 Resume" : "\u275A\u275A Pause"; }
@@ -54,6 +55,44 @@
     else if (m.type === "playlab:state" && m.state) host?.broadcast(m.state);
     else if (m.type === "playlab:event") host?.event(m.name, m.slot);
   });
+  // ---- full screen. Browsers open full screen and turn the screen only after a tap or a key, so the page asks for one tap:
+  // the game fills the screen, a phone held upright locks to landscape (Android) or the game is turned sideways with CSS (iPhone,
+  // which has no full screen for pages). Input still lands right: an iframe gets its taps in its own, turned coordinates.
+  const stage = $("stage"), cover = $("startCover");
+  const touch = matchMedia("(pointer: coarse)").matches;
+  let locked = false, realFull = false;
+  const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+  function fit() { document.body.classList.toggle("rot", document.body.classList.contains("full") && touch && !locked && innerHeight > innerWidth); }
+  function showCover() { if (!cover) return; $("startText").textContent = touch ? "Tap to play" : "Play full screen"; cover.hidden = false; }
+  async function enterFull() {
+    document.body.classList.add("full"); locked = false; realFull = false;
+    const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+    if (req) { try { await req.call(stage, { navigationUI: "hide" }); realFull = !!fsElement(); } catch {} }
+    if (touch && realFull && screen.orientation?.lock) { try { await screen.orientation.lock("landscape"); locked = true; } catch {} }
+    fit(); try { iframe.focus(); } catch {}
+  }
+  async function exitFull() {
+    document.body.classList.remove("full", "rot"); locked = false;
+    try { screen.orientation?.unlock?.(); } catch {}
+    if (fsElement()) { try { await (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch {} }
+    realFull = false;
+  }
+  function start() {
+    if (!cover || cover.hidden) return;
+    cover.hidden = true;
+    enterFull();
+    if (ready) toGame({ type: "playlab:menu", action: "restart" });   // a fresh round now that the player is looking
+  }
+  if (cover) {
+    cover.addEventListener("click", start);
+    window.addEventListener("keydown", (e) => { if (!cover.hidden && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); start(); } });
+    $("fsExit").addEventListener("click", exitFull);
+    $("fullBtn").addEventListener("click", enterFull);
+    const changed = () => { if (realFull && !fsElement()) exitFull(); };   // Esc or the back gesture left full screen
+    document.addEventListener("fullscreenchange", changed); document.addEventListener("webkitfullscreenchange", changed);
+    window.addEventListener("resize", fit); window.addEventListener("orientationchange", () => setTimeout(fit, 150));
+  } else $("fullBtn")?.remove();
+
   (async () => {
     try { ({ game } = await api(`/api/play?id=${encodeURIComponent(P.id)}&format=json`)); }
     catch (err) { $("loading").textContent = "Could not load this game: " + err.message; return; }
@@ -61,7 +100,7 @@
     if (isCode()) mountCode();
     else { $("loading").textContent = "This game was made with PlayLab's classic engine, which is retired. Remix it in the Studio to rebuild it with AI code."; }
     try { setLiked((await api(`/api/play?id=${encodeURIComponent(P.id)}&liked=${encodeURIComponent(voter)}`)).liked); } catch {}
-    window.__play = { game: () => game, ready: () => ready, host: () => host, code: () => code, toGame };
+    window.__play = { game: () => game, ready: () => ready, host: () => host, code: () => code, toGame, start, exitFull };
   })();
 
   // like

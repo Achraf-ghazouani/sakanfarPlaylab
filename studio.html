@@ -1023,8 +1023,13 @@ async function send() {
     await saveMessage("user", text, { attachments: attMeta });
     const img = atts.find((a) => a.upload);
     const model3d = atts.find((a) => /gltf|glb/i.test(a.type) || /\.(glb|gltf)$/i.test(a.name));
+    const codeContext = S.codeMode || !!S.pendingPlan || isCode(S.level);
     if (!img && resetsPlayer(text) && S.project?.art?.player) await setPlayerArt(null, "Back to the default player.");
-    else if (img && await handlePicture(img, text)) { /* the picture became the player or an object sprite */ }
+    else if (img && await handlePicture(img, text)) { if (isCode(S.level)) await offerAssetInGame(text); }   // the picture became the player, a sprite or an asset
+    else if (img && codeContext) {   // a drawing or a photo: Muse Spark reads it into a plan (on a game written as code, a plan for a new one)
+      if (isCode(S.level)) await addCard({ icon: "&#128203;", title: "A drawing makes a new plan", text: "Go builds a new game from it (the current one stays in History). To put a character or an object in this game, attach it with words like player or enemy." });
+      await planCode(text, { image: img.upload, change: S.pendingPlan ? text || "use this picture" : null, previous: S.pendingPlan?.plan || null, history });
+    }
     else {
       if (img) await runScan(img);                                   // a picture goes through the scanner, like the phone flow
       if (model3d && !img) await handleModel(model3d, text);          // a 3D model: the game goes 3D and the model is the player
@@ -1516,7 +1521,7 @@ const GO_RE = /^\s*(go|go!|build( it)?|go,? build it|ok|okay|yes|yes!|do it|let'
 const DROP_RE = /^\s*(cancel|stop|never ?mind|forget it|drop it|annule|annuler|laisse tomber|إلغاء|ألغ)[\s.!]*$/i;
 function describePlan(p) {
   return [`${p.title} · ${p.genre} · ${ENGINE_NAME[p.engine] || p.engine}${p.players > 1 ? ` · ${p.players} players` : ""}`, `Goal: ${p.goal}`, `Controls: ${p.controls}`, `Win: ${p.win} · Lose: ${p.lose}`,
-    p.entities?.length ? `In the game: ${p.entities.join(", ")}` : "", p.opponents && p.opponents !== "none" ? `Opponents: ${p.opponents}` : "", p.levels ? `Levels: ${p.levels}` : "", p.notes ? `Kept simple: ${p.notes}` : ""].filter(Boolean);
+    p.entities?.length ? `In the game: ${p.entities.join(", ")}` : "", p.opponents && p.opponents !== "none" ? `Opponents: ${p.opponents}` : "", p.levels ? `Levels: ${p.levels}` : "", p.notes ? `Kept simple: ${p.notes}` : "", p.picture ? `From your picture: ${p.picture}` : ""].filter(Boolean);
 }
 const codePrice = (plan) => price(plan?.engine === "three" ? "code_create_3d" : "code_create_2d");
 const creditWord = (n) => I18N.t(n === 1 ? "credit.one" : "credit.many");
@@ -1531,6 +1536,16 @@ async function routeWords(text, history) {
   if (isCode(S.level)) return buildCode({ plan: S.level.plan, prompt: S.level.prompt || text }, { change: text });
   if (S.codeMode) return planCode(text, { history });
   return askAgent(text, history);
+}
+/** A picture saved on a generated game (player, sprite, asset, model): the game is mounted again with it in PlayLab.assets,
+ *  and a chip asks Muse Wonder to use it where it belongs (a patch, charged as a change). */
+async function offerAssetInGame(text) {
+  mountCode(S.level.html);
+  const roles = Object.keys(codeAssets());
+  if (!roles.length) return;
+  const uses = /PlayLab\.assets\.get\(/.test(S.level.html);
+  await addCard({ icon: "&#127912;", title: "Saved for the game", text: `PlayLab.assets now has: ${roles.join(", ")}${uses ? "" : ". This game does not read pictures yet."}` });
+  suggestChips([{ label: "Put it in the game", run: () => buildCode({ plan: S.level.plan, prompt: S.level.prompt || "" }, { change: `use the pictures I uploaded (PlayLab.assets: ${roles.join(", ")}) for those roles, scaled to fit, with the drawn shapes as the fallback${text ? ". " + text : ""}` }) }]);
 }
 function renderCodeMode() {
   const on = S.codeMode || !!S.pendingPlan || isCode(S.level), b = $("codeBtn");
@@ -1551,12 +1566,12 @@ $("codeBtn").addEventListener("click", () => {
   toast(S.codeMode ? "AI code: describe any kind of game and Muse Wonder writes it as code" : "Back to the built-in engines: platformers and arena shooters", 3000);
   $("composer").focus();
 });
-async function planCode(prompt, { change = null, previous = null, history = [] } = {}) {
+async function planCode(prompt, { change = null, previous = null, history = [], image = null } = {}) {
   showTyping();
   const th = startThinking(previous ? "Changing the plan" : "Planning your game");
-  const step = th.add(previous ? "Rewriting the plan with your change" : "Designing a plan from your words", "Muse Spark 1.3");
+  const step = th.add(image ? "Reading your picture into the plan" : previous ? "Rewriting the plan with your change" : "Designing a plan from your words", "Muse Spark 1.3");
   let res;
-  try { res = await api("api/agent", { method: "POST", body: { task: "plan", project_id: S.project?.id, message: change || prompt, plan: previous, history } }); }
+  try { res = await api("api/agent", { method: "POST", body: { task: "plan", project_id: S.project?.id, message: change || prompt, plan: previous, history, image } }); }
   catch (err) { hideTyping(); th.fail("Could not plan: " + err.message); await streamAssistant("I could not write a plan: " + err.message); return; }
   hideTyping();
   th.set(step, { state: "done", model: modelName(res.meta?.model) });
@@ -1804,7 +1819,6 @@ function pubCoverOptions() {
 }
 async function openPublish() {
   if (!S.level || !S.project) return toast("Build a game first");
-  if (isCode(S.level)) return toast("Sharing games written as code arrives in a later step", 3000);
   $("pubTitle").value = S.project.title; $("pubDesc").value = S.project.description || "";
   const vis = S.project.visibility && S.project.visibility !== "private" ? S.project.visibility : "public";
   $("pubVis").querySelectorAll("input").forEach((r) => { r.checked = r.value === vis; r.parentElement.classList.toggle("on", r.checked); });

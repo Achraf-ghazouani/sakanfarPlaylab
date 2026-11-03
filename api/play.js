@@ -15,7 +15,7 @@ import { paid } from "../lib/credits.mjs";
 
 const ID = /^[a-z0-9]{6,12}$/;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const KIND_NAME = { "2d": "2D platformer", "3d": "3D platformer", arena: "3D arena shooter" };
+const KIND_NAME = { "2d": "2D platformer", "3d": "3D platformer", arena: "3D arena shooter", code: "custom game (AI code)" };
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       if (q.action === "explore") {
         const sort = ["trending", "newest", "featured"].includes(q.sort) ? q.sort : "trending";
-        const kind = ["2d", "3d", "arena"].includes(q.kind) ? q.kind : null;
+        const kind = ["2d", "3d", "arena", "code"].includes(q.kind) ? q.kind : null;
         const games = await rpc("explore_games", { p_sort: sort, p_kind: kind, p_q: String(q.q || "").slice(0, 60) || null, p_limit: 60, p_offset: Math.max(0, Number(q.offset) || 0) });
         return res.status(200).json({ games });
       }
@@ -130,6 +130,8 @@ function page(res, card, req) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js" defer></script>
 <script src="/shared/phonelink.js" defer></script>
+<script type="module" src="/shared/coderun.mjs"></script>
+<script type="module" src="/shared/padroute.mjs"></script>
 <script src="/shared/auth.js" defer></script>
 <script src="/shared/play.js" defer></script>
 </head>

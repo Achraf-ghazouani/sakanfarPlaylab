@@ -2,7 +2,7 @@
 // allows 12 functions and api/ has 12):
 //   POST { message, level?, history?: [{role, content}], attachments?: [{name, type}] }          the chat agent (platformers, arenas)
 //   -> 200 { reply, actions, level?, kind?: "create"|"edit", note?, diff?, playtest?, meta?, credits? }
-//   POST { task: "plan", message, plan?, history? }                                                a plan for a game written as code (free)
+//   POST { task: "plan", message, plan?, history?, image? }                                        a plan for a game written as code (free; a picture is read into it)
 //   -> 200 { plan, meta: { model, ms } }
 //   POST { task: "code", plan, prompt, project_id?, change?, previous_html? }   (also POST /api/build-code, a rewrite)
 //   -> 200 text/event-stream: data: {e:"start"} ... {e:"progress", chars, lines, rewrite?} ... {e:"done", html, notes, scan, engine, patch, credits, fix} | {e:"error", error}
@@ -65,9 +65,12 @@ export default async function handler(req, res) {
 /** A plan for a game the code builder will write: Muse Spark, a few seconds, not charged. */
 async function plan(res, user, body) {
   const message = String(body.message || "").slice(0, 2000).trim();
-  if (!message) return res.status(400).json({ error: "Say what game to plan." });
+  let image = typeof body.image === "string" && body.image ? body.image : null;
+  if (image && !image.startsWith("data:")) image = "data:image/jpeg;base64," + image;
+  if (image && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image) || image.length > 2_000_000)) return res.status(400).json({ error: "The picture must be a JPEG, PNG or WebP under 1.5 MB." });
+  if (!message && !image) return res.status(400).json({ error: "Say what game to plan." });
   try {
-    const out = await planGame({ message, previousPlan: body.plan && typeof body.plan === "object" ? body.plan : null, history: cleanHistory(body.history, 8) }, { timeoutMs: 45_000 });
+    const out = await planGame({ message, image, previousPlan: body.plan && typeof body.plan === "object" ? body.plan : null, history: cleanHistory(body.history, 8) }, { timeoutMs: 50_000 });
     return res.status(200).json({ plan: out.plan, meta: { model: out.model, ms: out.ms } });
   } catch (err) {
     console.error("plan failed:", err.message);

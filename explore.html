@@ -25,7 +25,7 @@
   <p class="sub">Games made in PlayLab. Tap one to play, no account needed.</p>
   <div class="filters">
     <span class="seg" id="sortSeg"><button data-sort="trending" class="on">Trending</button><button data-sort="newest">Newest</button><button data-sort="featured">Featured</button></span>
-    <span class="seg" id="kindSeg"><button data-kind="" class="on">All</button><button data-kind="2d">2D</button><button data-kind="3d">3D</button><button data-kind="arena">Arena</button></span>
+    <span class="seg" id="kindSeg"><button data-kind="" class="on">All</button><button data-kind="2d">2D</button><button data-kind="3d">3D</button><button data-kind="arena">Arena</button><button data-kind="code">AI code</button></span>
     <input type="search" id="q" placeholder="Search titles, makers...">
   </div>
   <div class="grid" id="grid"></div>
@@ -34,9 +34,9 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const KIND = { "2d": ["2D", "&#127918;"], "3d": ["3D", "&#129513;"], arena: ["ARENA", "&#127919;"] };
+const KIND = { "2d": ["2D", "&#127918;"], "3d": ["3D", "&#129513;"], arena: ["ARENA", "&#127919;"], code: ["AI CODE", "&#128187;"] };
 const state = { sort: "trending", kind: "", q: "" };
-function readUrl() { const u = new URLSearchParams(location.search); if (["trending", "newest", "featured"].includes(u.get("sort"))) state.sort = u.get("sort"); if (["2d", "3d", "arena"].includes(u.get("kind"))) state.kind = u.get("kind"); state.q = u.get("q") || ""; }
+function readUrl() { const u = new URLSearchParams(location.search); if (["trending", "newest", "featured"].includes(u.get("sort"))) state.sort = u.get("sort"); if (["2d", "3d", "arena", "code"].includes(u.get("kind"))) state.kind = u.get("kind"); state.q = u.get("q") || ""; }
 function writeUrl() { const u = new URLSearchParams(); if (state.sort !== "trending") u.set("sort", state.sort); if (state.kind) u.set("kind", state.kind); if (state.q) u.set("q", state.q); history.replaceState(null, "", location.pathname + (u.toString() ? "?" + u : "")); }
 function paint() {
   $("sortSeg").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.sort === state.sort));

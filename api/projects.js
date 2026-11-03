@@ -81,10 +81,16 @@ export default async function handler(req, res) {
         const current = await db.getProject(owner, id);
         if (!current) return res.status(404).json({ error: "Project not found." });
         if (!current.level) return res.status(400).json({ error: "Build a game first: there is nothing to publish yet." });
-        fields.kind = current.mode === "3d-world" ? "arena" : current.mode === "3d-side" ? "3d" : "2d";
+        const modeKind = current.mode === "3d-world" ? "arena" : current.mode === "3d-side" ? "3d" : "2d";
+        fields.kind = current.level?.genre === "code" ? "code" : modeKind;   // a game written as code: the play page runs it in the sandbox
         if (!current.share_id) fields.share_id = shortId();
         if (!current.published_at) fields.published_at = new Date().toISOString();
-        const project = await db.updateProject(owner, id, fields);
+        let project;
+        try { project = await db.updateProject(owner, id, fields); }
+        catch (err) {   // before db/012_code_kind.sql the kind "code" breaks a check: publish with the mode's kind (the play page reads level.genre anyway)
+          if (fields.kind !== "code" || !/kind_check|23514/.test(err.message)) throw err;
+          project = await db.updateProject(owner, id, { ...fields, kind: modeKind });
+        }
         return res.status(200).json({ project });
       }
       const fields = pickFields(body);

@@ -186,7 +186,7 @@ export function generateArena(text = "", seed) {
   const objects = [{ type: "start", label: "you", x: 480, y: 480, w: 40, h: 40 }];
   const spots = [[40, 40], [920, 40], [40, 920], [920, 920], [480, 20], [480, 940], [20, 480], [940, 480]];
   const nSpawn = 3 + Math.floor(rnd() * 2);
-  for (let i = 0; i < nSpawn; i++) { const [x, y] = spots[(i * 2 + Math.floor(rnd() * 2)) % spots.length]; objects.push({ type: "spawner", label: `${th[2]} gate`, x, y, w: 40, h: 40 }); }
+  for (let i = 0; i < nSpawn; i++) { const [x, y] = spots[(i * 2 + Math.floor(rnd() * 2)) % spots.length]; const kind = i === 1 ? "runner " : i === 3 ? "brute " : ""; objects.push({ type: "spawner", label: `${kind}${th[2]} gate`, x, y, w: 40, h: 40 }); }
   const taken = (x, y, w, h) => objects.some((o) => x < o.x + o.w + 60 && x + w + 60 > o.x && y < o.y + o.h + 60 && y + h + 60 > o.y) || (x < 640 && x + w > 320 && y < 640 && y + h > 320);
   const place = (type, label, w, h, tries = 30) => {
     for (let i = 0; i < tries; i++) {
@@ -205,6 +205,19 @@ export function generateArena(text = "", seed) {
   for (let i = 0; i < 2; i++) place("health", "medkit", 30, 30);
   const level = normalizeArena({ genre: "arena", view, theme: th[1], waves, objects });
   return playtestArena(level).level;
+}
+
+/** The kind of enemy a gate sends, from its label: runner (fast, fragile), brute (slow, tough) or walker. */
+export const ENEMY_KINDS = {
+  walker: { hp: 2, speed: 1, size: 1, color: [0x4d7c0f, 0x65a30d, 0x3f6212] },
+  runner: { hp: 1, speed: 1.7, size: 0.8, color: [0xca8a04, 0xeab308, 0xa16207] },
+  brute: { hp: 4, speed: 0.55, size: 1.35, color: [0x7f1d1d, 0x991b1b, 0x6b1a1a] },
+};
+export function enemyKind(label) {
+  const l = String(label || "").toLowerCase();
+  if (/\b(runner|fast|sprinter|quick|dog|hound|swarm)\b/.test(l)) return "runner";
+  if (/\b(brute|tank|heavy|giant|boss|big|ogre|golem)\b/.test(l)) return "brute";
+  return "walker";
 }
 
 /** A few words about what changed between two arenas. */

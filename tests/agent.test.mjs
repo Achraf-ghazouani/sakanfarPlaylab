@@ -114,6 +114,7 @@ const arena = await runAgent({ message: "create a first person shooter with zomb
 check("create_arena returns an arena", arena.kind === "create" && arena.level?.genre === "arena" && arena.level.view === "fps" && arena.level.waves === 5 && arena.level.objects.length === 7 && arena.level.checked === true, { genre: arena.level?.genre, view: arena.level?.view, n: arena.level?.objects?.length });
 check("arena reply and note", arena.reply.startsWith("Zombies incoming!") && arena.note === "graveyard, 5 waves");
 check("the brief names both kinds and when to pick them", /ARENA SHOOTER/.test(calls[0].messages[0].content) && /never a platformer/.test(calls[0].messages[0].content));
+check("the brief carries the game design knowledge (teach-test-twist, enemy kinds, honest about missing features)", /GAME DESIGN KNOWLEDGE/.test(calls[0].messages[0].content) && /Teach, then test, then twist/.test(calls[0].messages[0].content) && /"brute" gate/.test(calls[0].messages[0].content) && /Never promise a feature/.test(calls[0].messages[0].content));
 
 // 10. the genre guard: the model answered a shooter request with a platformer -> an arena is generated from the words
 calls = [];

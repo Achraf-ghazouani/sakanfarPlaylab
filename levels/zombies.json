@@ -22,7 +22,7 @@
     },
     {
       "type": "spawner",
-      "label": "zombie gate",
+      "label": "runner zombie gate",
       "x": 920,
       "y": 920,
       "w": 40,
@@ -38,7 +38,7 @@
     },
     {
       "type": "spawner",
-      "label": "zombie gate",
+      "label": "brute zombie gate",
       "x": 20,
       "y": 480,
       "w": 40,

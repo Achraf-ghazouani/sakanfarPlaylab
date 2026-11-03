@@ -74,6 +74,9 @@ The Studio and the phone save the picture at 720 px for this (chat thumbnails st
 
 ## Two kinds of game: platformer or arena shooter
 
+**What Muse Spark knows about game design** lives in `lib/game-knowledge.mjs` and rides along with the brief on every turn: how a good level teaches, tests and twists; rhythm, readability and fairness; what "easy", "hard", "speedrun", "parkour", "boss" or "endless" should mean; platformer craft (heights, gaps, enemy placement, coins as the path); arena craft (lanes and cover, gate spread, enemy kinds, pickups, waves); the theme words the engines can draw; and the features the engines do not have, so the model builds the closest thing and says so instead of promising it. Edit that file to teach it more.
+
+
 The chat reads what you ask for and builds that kind of game. "A first-person shooter with zombie waves" is a shooter, "a lava castle with moving platforms" is a platformer. Muse Spark picks with two tool pairs (`create_level` / `edit_level` and `create_arena` / `edit_arena`, `lib/agent.mjs`), and a guard makes sure a shooter request never comes back as a platformer: if the model picks the wrong kind, `generateArena()` builds the arena from the words instead.
 
 **Arena shooter** (`arena.html`, three.js): the player stands in a fenced arena and shoots waves of enemies that walk out of spawner gates. Three cameras, switched in the game (FPS / TPS / Top buttons, keys 1 2 3) or by chat ("switch to top-down", free): first person with mouse look, third person behind the player, top-down aiming at the mouse. WASD to move, click or space to shoot, ammo and medkits on the ground, waves grow (wave n has 3 + 2n enemies), win when the last wave is cleared. Themes from the words (graveyard, alien outpost, robot factory, desert, snow, city, castle). The player picture and an enemy sprite from the Studio appear as billboards.

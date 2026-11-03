@@ -1,5 +1,5 @@
 // Unit checks for shared/arena.mjs (no network): the format, the reachability check and fix, the generator, the word parsing.
-import { normalizeArena, checkArena, autoFixArena, playtestArena, generateArena, genreWanted, viewWanted, diffArena, ARENA_TYPES } from "../shared/arena.mjs";
+import { normalizeArena, checkArena, autoFixArena, playtestArena, generateArena, genreWanted, viewWanted, diffArena, ARENA_TYPES, enemyKind, ENEMY_KINDS } from "../shared/arena.mjs";
 
 let fails = 0;
 function check(name, cond, extra) { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${extra !== undefined ? "  -> " + JSON.stringify(extra).slice(0, 220) : ""}`); if (!cond) fails++; }
@@ -50,6 +50,11 @@ const g2 = generateArena("top down alien survival, 8 waves");
 check("top-down alien arena with 8 waves", g2.view === "top" && /alien/.test(g2.theme) && g2.waves === 8, { view: g2.view, theme: g2.theme, waves: g2.waves });
 check("same words, same arena; other words, another one", JSON.stringify(generateArena("zombies fps")) === JSON.stringify(generateArena("zombies fps")) && JSON.stringify(generateArena("zombies fps")) !== JSON.stringify(generateArena("robots tps")));
 check("labels fit the theme", g1.objects.some((o) => /zombie gate/.test(o.label)) && g1.objects.some((o) => /tombstone|coffin|dead tree|crypt|fence|mausoleum/.test(o.label)));
+
+// enemy kinds from the gate's label
+check("gate labels pick the enemy kind", enemyKind("runner zombie gate") === "runner" && enemyKind("brute gate") === "brute" && enemyKind("zombie gate") === "walker" && enemyKind("boss door") === "brute" && enemyKind("hound pen") === "runner");
+check("runners are fast and fragile, brutes slow and tough", ENEMY_KINDS.runner.hp === 1 && ENEMY_KINDS.runner.speed > 1.4 && ENEMY_KINDS.brute.hp === 4 && ENEMY_KINDS.brute.speed < 0.7);
+check("the generator mixes a runner gate and a brute gate in a 4-gate arena", (() => { const g = generateArena("zombie fps 4 gates please"); const kinds = g.objects.filter((o) => o.type === "spawner").map((o) => enemyKind(o.label)); return kinds.includes("runner") && (kinds.length < 4 || kinds.includes("brute")); })());
 
 // diff
 const d = diffArena(g1, { ...g1, view: "top", waves: 7, objects: [...g1.objects, { type: "health", label: "m", x: 1, y: 1, w: 30, h: 30 }] });

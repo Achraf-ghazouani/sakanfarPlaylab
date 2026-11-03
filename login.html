@@ -3,62 +3,52 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#fbfaff">
-<title>Log in · Sakanfar PlayLab</title>
+<meta name="theme-color" content="#ffffff">
+<title>Log in, PlayLab</title>
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/ui.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js"></script>
 <script src="shared/auth.js"></script>
 <style>
-  :root { --bg:#fbfaff; --lav:#efeaff; --lav-2:#e2d9ff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --line:#ebe6f7; --red:#b91c1c; --green:#15803d; }
-  * { box-sizing:border-box; }
-  body { margin:0; min-height:100vh; background:radial-gradient(1200px 600px at 20% -10%, #efe7ff 0, transparent 60%), radial-gradient(900px 500px at 110% 110%, #f3edff 0, transparent 60%), var(--bg); color:var(--ink); font-family:Inter, system-ui, sans-serif; display:flex; align-items:center; justify-content:center; padding:20px 16px; }
-  .card { width:min(420px, 100%); background:#fff; border:1px solid var(--line); border-radius:22px; box-shadow:0 20px 50px rgba(91,33,182,.10); padding:26px 24px; animation:rise .35s ease-out; }
-  @keyframes rise { from { opacity:0; transform:translateY(12px); } }
-  .brand { display:flex; align-items:center; gap:10px; font-family:Fredoka, system-ui, sans-serif; font-weight:700; font-size:20px; color:var(--purple-deep); text-decoration:none; margin-bottom:18px; }
-  .brand .logo { width:34px; height:34px; display:grid; place-items:center; }
-  .brand .logo img { width:100%; height:100%; object-fit:contain; }
-  h1 { font-family:Fredoka, system-ui, sans-serif; font-size:26px; margin:0 0 4px; }
-  p.sub { color:var(--muted); margin:0 0 18px; font-size:14px; }
-  .tabs { display:flex; background:var(--lav); border-radius:12px; padding:4px; margin-bottom:16px; }
-  .tabs button { flex:1; border:0; background:transparent; border-radius:9px; padding:9px; font:600 14px Inter, sans-serif; color:var(--muted); cursor:pointer; }
-  .tabs button.on { background:#fff; color:var(--purple-deep); box-shadow:0 2px 8px rgba(91,33,182,.10); }
-  form { display:none; flex-direction:column; gap:10px; }
+  body { min-height:100vh; display:flex; flex-direction:column; }
+  .top { display:flex; align-items:center; min-height:56px; padding:0 var(--s4); }
+  .card { width:min(400px, 100%); margin:auto; padding:var(--s6) var(--s4) var(--s7); }
+  h1 { font-size:clamp(32px, 5vw, 44px); letter-spacing:-0.035em; margin-bottom:var(--s3); }
+  p.sub { color:var(--graphite); margin:0 0 var(--s5); }
+  .tabs { display:flex; gap:var(--s4); margin-bottom:var(--s5); border-bottom:1px solid var(--hair); }
+  .tabs button { border:0; background:none; padding:var(--s2) 0; color:var(--graphite); font-weight:500; font-size:var(--t-s); margin-bottom:-1px; }
+  .tabs button.on { color:var(--ink); box-shadow:inset 0 -1px 0 var(--ink); }
+  form { display:none; flex-direction:column; gap:var(--s2); }
   form.on { display:flex; }
-  label { font-size:13px; font-weight:600; color:var(--ink); }
-  input { width:100%; font:15px Inter, sans-serif; border:1px solid var(--lav-2); border-radius:12px; padding:11px 13px; outline:none; background:#fff; color:var(--ink); }
-  input:focus { border-color:var(--purple); box-shadow:0 0 0 3px rgba(124,58,237,.12); }
-  .btn { border:0; border-radius:12px; padding:12px 14px; font:700 15px Inter, sans-serif; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:9px; width:100%; }
-  .btn.primary { background:var(--purple); color:#fff; }
-  .btn.primary:hover { background:var(--purple-deep); }
-  .btn.ghost { background:#fff; color:var(--ink); border:1px solid var(--lav-2); }
-  .btn.ghost:hover { background:var(--lav); }
-  .btn:disabled { opacity:.6; cursor:default; }
-  .or { display:flex; align-items:center; gap:10px; color:var(--muted); font-size:12px; margin:16px 0; }
-  .or::before, .or::after { content:""; flex:1; height:1px; background:var(--line); }
-  #msg { display:none; border-radius:12px; padding:11px 13px; font-size:14px; margin-bottom:14px; line-height:1.45; }
+  label { font-size:var(--t-s); color:var(--graphite); margin-top:var(--s2); }
+  input { width:100%; min-height:44px; border:1px solid var(--hair); border-radius:var(--r); padding:0 var(--s3); background:var(--paper); outline:none; }
+  input:focus { border-color:var(--ink); }
+  .btn { width:100%; min-height:44px; margin-top:var(--s3); }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .or { color:var(--graphite); font-size:var(--t-s); margin:var(--s4) 0 0; text-align:center; }
+  #googleBox .btn { margin-top:var(--s2); }
+  #msg { display:none; padding:0 0 0 var(--s3); border-left:2px solid var(--ink); font-size:var(--t-s); margin-bottom:var(--s5); }
   #msg.show { display:block; }
-  #msg.err { background:#fef2f2; color:var(--red); border:1px solid #fecaca; }
-  #msg.ok { background:#f0fdf4; color:var(--green); border:1px solid #bbf7d0; }
-  #msg.info { background:var(--lav); color:var(--purple-deep); border:1px solid var(--lav-2); }
-  .foot { margin-top:18px; font-size:13px; color:var(--muted); text-align:center; }
-  .foot a { color:var(--purple-deep); font-weight:600; }
-  .spin { width:15px; height:15px; border:2px solid rgba(255,255,255,.5); border-top-color:#fff; border-radius:50%; animation:spin .8s linear infinite; display:none; }
+  #msg.err { border-color:var(--danger); color:var(--danger); }
+  #msg.ok { border-color:var(--ok); }
+  .foot { margin-top:var(--s6); font-size:var(--t-s); color:var(--graphite); }
+  .spin { width:14px; height:14px; border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation:spin .8s linear infinite; display:none; }
   .busy .spin { display:inline-block; }
   @keyframes spin { to { transform:rotate(360deg); } }
 </style>
 </head>
 <body>
+<header class="top"><a class="wordmark" href="index.html">PlayLab<span class="caret" aria-hidden="true"></span></a></header>
 <main class="card">
-  <a class="brand" href="index.html"><span class="logo"><img src="assets/mark-256.webp" alt=""></span>Sakanfar PlayLab</a>
-  <h1>Welcome back</h1>
+  <h1>Log in</h1>
   <p class="sub">PlayLab is in private beta. Log in with the email you joined the waitlist with.</p>
   <div id="msg" role="status"></div>
-  <div class="tabs" role="tablist"><button class="on" data-tab="email" role="tab">Email link</button><button data-tab="password" role="tab">Username</button></div>
+  <div class="tabs" role="tablist"><button class="on" data-tab="email" role="tab">Email link</button><button data-tab="password" role="tab">Username and password</button></div>
 
   <form id="emailForm" class="on" novalidate>
     <label for="email">Email</label>
@@ -75,8 +65,8 @@
   </form>
 
   <div id="googleBox" style="display:none">
-    <div class="or">or</div>
-    <button class="btn ghost" id="googleBtn" type="button"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Continue with Google</button>
+    <p class="or">or</p>
+    <button class="btn" id="googleBtn" type="button"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Continue with Google</button>
   </div>
 
   <div class="foot">No access yet? <a href="index.html#waitlist">Join the waitlist</a></div>

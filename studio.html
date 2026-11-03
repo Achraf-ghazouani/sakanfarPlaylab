@@ -43,7 +43,8 @@
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/ui.css">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet"></noscript>
 <script src="shared/i18n.js"></script>
 <script src="shared/photo.js"></script>
@@ -58,7 +59,7 @@
 <script src="shared/phonelink.js" defer></script>
 <script src="shared/auth.js"></script>
 <style>
-  :root { --bg:#fbfaff; --panel:#ffffff; --lav:#efeaff; --lav-2:#e2d9ff; --lav-3:#cdbdff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --line:#ebe6f7; --green:#22c55e; --shadow:0 10px 30px rgba(91,33,182,.08); }
+  :root { --bg:#ffffff; --panel:#ffffff; --lav:#f4f4f5; --lav-2:#e4e4e7; --lav-3:#d4d4d8; --purple:#2b3bff; --purple-deep:#000000; --ink:#000000; --muted:#6b6b70; --line:#e4e4e7; --green:#0a7d3c; --shadow:none; }
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
   html, body { margin:0; height:100%; }
@@ -366,14 +367,161 @@
     .welcome .starts i { margin:0; }
     .welcome .starts small { margin-inline-start:auto; text-align:end; }
   }
+
+  /* ---- minimal: one quiet layer over everything above (shared/ui.css holds the tokens) ---- */
+  body { font-family:var(--font); }
+  .brand, #title, .welcome h2, #building b, .drop-hint, .sheet header b, .cam-grid .code, #noCredits .big, #previewEmpty b, #retired b { font-family:var(--font); }
+  #boot { background:#fff; color:#000; gap:10px; }
+  #boot .boot-mark { font-size:28px; }
+  #boot .t { font-weight:500; font-size:15px; } #boot .s { color:var(--muted); }
+  #boot .bar { height:2px; border-radius:0; background:var(--line); } #boot .bar i { border-radius:0; background:var(--purple); }
+  #boot .err { background:#fff; border-color:var(--danger); color:var(--danger); border-radius:var(--r); }
+  aside.open { box-shadow:none; border-right:1px solid var(--line); }
+  .brand { padding:20px 20px 12px; font-size:17px; }
+  .newbtn { margin:4px 16px 12px; background:#fff; color:#000; border:1px solid var(--line); border-radius:var(--r); justify-content:flex-start; font-weight:500; }
+  .newbtn:hover { background:#fff; border-color:#000; }
+  .side-h { text-transform:none; letter-spacing:0; font-size:13px; font-weight:500; padding:8px 20px 4px; }
+  .proj { border-radius:var(--r); }
+  .proj.active { background:var(--lav); }
+  .proj img, .proj .ph { border-radius:4px; }
+  .top { padding:0 16px; height:56px; gap:8px; }
+  .top .menu { color:#000; border-radius:var(--r); }
+  .mini-brand { margin-inline-end:8px; }
+  #title { font-weight:500; font-size:16px; border-radius:var(--r); }
+  #title:hover, #title:focus { background:#fff; border-color:var(--line); }
+  .tb { border-radius:var(--r); color:#000; font-weight:500; }
+  .tb:hover { background:#fff; border-color:#000; }
+  .tb.primary { border-radius:999px; background:var(--purple); border-color:var(--purple); color:#fff; }
+  .tb.primary:hover { background:var(--purple); filter:brightness(1.12); }
+  #publishBtn.live { background:#000; border-color:#000; }
+  .pop { border-radius:8px; border-color:var(--line); box-shadow:0 12px 32px rgba(0,0,0,.08); }
+  .pop .v:hover { background:var(--lav); }
+  .pop .v .n { background:var(--lav); color:#000; } .pop .v.cur .n { background:#000; color:#fff; }
+  .seg, .dim { border-radius:var(--r); border-color:var(--line); background:#fff; padding:2px; }
+  .dim button, .seg button { border-radius:4px; font-weight:500; letter-spacing:0; color:var(--muted); }
+  .dim button.on, .seg button.on { background:#000; color:#fff; box-shadow:none; }
+  .box .code, .box .code.on { background:transparent; border-color:transparent; color:var(--purple); box-shadow:none; font-weight:600; letter-spacing:0; padding:6px 4px; cursor:default; }
+  .box .code.on::after { content:""; display:inline-block; width:.45em; height:1em; background:var(--purple); margin-inline-start:2px; vertical-align:-0.15em; animation:caret 1.1s steps(1) infinite; }
+  .box .code:not(.on) { color:var(--muted); }
+
+  .chat { background:#fff; }
+  .chat-h { color:#000; font-weight:500; }
+  #messages { gap:16px; padding:20px; }
+  .msg { animation:none; max-width:100%; }
+  .msg .av { display:none; }
+  .bubble { border:0; box-shadow:none; background:transparent; padding:0; border-radius:0; line-height:1.55; }
+  .msg.user .bubble { background:var(--lav); color:#000; padding:10px 14px; border-radius:14px; }
+  .bubble .att img { border:0; border-radius:4px; }
+  .bubble .att span { background:#fff; }
+  .card { background:transparent; border:0; border-left:2px solid var(--line); border-radius:0; padding:2px 0 2px 12px; font-size:13px; color:var(--muted); animation:none; }
+  .card b { color:#000; font-weight:500; }
+  .card .ic { display:none; }
+  .card > div { white-space:pre-line; }
+  .card.think { border-left-color:var(--line); }
+  .card.think .th .ic { display:none; }
+  .card.think .steps .dot { width:6px; height:6px; background:var(--line); }
+  .card.think .steps .s-run .dot { background:var(--purple); }
+  .card.think .steps .s-done .dot { background:#000; }
+  .card.think .steps .s-fail .dot { background:var(--danger); }
+  .card.think .steps .s-fail .lbl { color:var(--danger); }
+  .card.think .steps .who { background:none; padding:0; color:var(--muted); }
+  .card .choices button { border-radius:var(--r); color:#000; font-weight:500; border-color:var(--line); }
+  .card .choices button:hover { background:#fff; border-color:#000; }
+  .typing i { background:var(--muted); }
+  .composer { border-top:1px solid var(--line); padding:12px 16px 14px; }
+  .box { border-radius:12px; border-color:var(--line); }
+  .box:focus-within { border-color:#000; box-shadow:none; }
+  body.fresh .box { box-shadow:none; border:1px solid #000; border-radius:14px; padding:12px 12px 12px 18px; }
+  body.fresh #composer { font-size:18px; }
+  .ib { color:#000; border-radius:var(--r); }
+  .ib:hover { background:var(--lav); color:#000; }
+  #sendBtn { background:var(--purple); color:#fff; border-radius:50%; }
+  #sendBtn:hover { background:var(--purple); filter:brightness(1.12); }
+  #sendBtn:disabled { background:var(--line); }
+  .chips { margin-top:12px; }
+  .chip { border-radius:var(--r); color:#000; font-weight:500; border-color:var(--line); }
+  .chip:hover { background:#fff; border-color:#000; }
+  .cost { background:none; color:var(--muted); font-weight:400; font-size:11px; padding:0; margin-left:6px; }
+  .cost.free { background:none; color:var(--ok); } .cost.soon { background:none; }
+  #sendCost { color:var(--muted); }
+  #capNote { background:var(--lav); border:0; color:#000; border-radius:var(--r); }
+  .attach { border-radius:var(--r); border-color:var(--line); }
+  .attach img { border-radius:4px; }
+  .attach .role, .attach .role.object, .attach .role.ui, .attach .role.asset { background:#fff; border-color:var(--line); color:#000; border-radius:4px; font-weight:500; }
+  .attach .role.player { background:#000; border-color:#000; color:#fff; }
+  .attach .x { background:var(--lav); }
+
+  /* the stage: black when a game runs, the page itself before */
+  .preview { background:var(--stage); }
+  body.fresh .preview { background:#fff; }
+  #previewStatus { background:transparent; color:#a1a1aa; font-weight:400; padding:0; left:16px; bottom:12px; border-radius:0; }
+  #previewEmpty { color:#a1a1aa; } #previewEmpty b { color:#fff; font-weight:500; font-size:24px; }
+  body.fresh #previewEmpty { display:none; }   /* the welcome speaks on the first screen */
+  #retired { background:var(--stage); color:#a1a1aa; } #retired b { color:#fff; font-weight:500; }
+  #codeBar button { background:rgba(255,255,255,.12); border-radius:var(--r); font-weight:500; backdrop-filter:none; }
+  #codeBar button.on { background:var(--purple); }
+  #building { background:var(--stage); }
+  #building b { font-weight:500; font-size:22px; }
+  #building small { color:#a1a1aa; }
+  #building .spin { width:28px; height:28px; border-width:2px; border-color:rgba(255,255,255,.18); border-top-color:#fff; }
+  .drop-hint { border:1px dashed #000; border-radius:var(--r); background:rgba(255,255,255,.94); color:#000; font-weight:500; }
+
+  /* the first screen: the question, the composer, quiet text starts */
+  .welcome h2 { font-size:clamp(34px, 5vw, 56px); font-weight:500; letter-spacing:-0.035em; margin-bottom:12px; }
+  .welcome p { color:var(--muted); margin-bottom:28px; }
+  .welcome .starts { display:flex; flex-wrap:wrap; justify-content:center; gap:4px 20px; margin-bottom:20px; }
+  .starts button { flex-direction:row; padding:4px 0; border:0; border-radius:0; background:transparent; color:#000; transition:none; }
+  .starts button:hover { border:0; box-shadow:none; transform:none; text-decoration:underline; text-underline-offset:4px; }
+  .starts i, .starts small { display:none; }
+  .starts b { font-weight:500; font-size:15px; }
+  .welcome .examples { gap:6px 18px; }
+  .examples button, .welcome .examples button { border:0; background:transparent; border-radius:0; padding:2px 0; color:var(--muted); font-size:14px; }
+  .examples button:hover, .welcome .examples button:hover { background:transparent; color:#000; text-decoration:underline; text-underline-offset:4px; }
+  .welcome .continue { color:#000; border-radius:var(--r); }
+  .welcome .continue:hover { background:transparent; text-decoration:underline; }
+
+  /* sheets: hairlines, no shadow */
+  .modal { background:rgba(0,0,0,.4); }
+  .overlay { background:rgba(0,0,0,.25); }
+  .sheet { border-radius:10px; box-shadow:none; }
+  .sheet header b { font-weight:500; }
+  .tool { border-radius:var(--r); color:#000; font-weight:500; border-color:var(--line); }
+  .tool.on { background:#000; border-color:#000; }
+  .pen-sizes button { border-color:var(--line); } .pen-sizes button.on { border-color:#000; background:#fff; }
+  #sketchCanvas { background:#fff; border-color:var(--line); border-radius:var(--r); }
+  .cam-grid .code { font-weight:500; color:#000; letter-spacing:.3em; }
+  .cam-view, #camPip { background:var(--stage); border-radius:var(--r); }
+  .cam-view .tag { background:rgba(255,255,255,.92); color:#000; border-radius:4px; font-weight:500; }
+  #camPip { border:1px solid var(--line); box-shadow:none; }
+  .covers label, .vis label, .rcard { border:1px solid var(--line); border-radius:var(--r); }
+  .covers label.on, .vis label.on { border-color:#000; background:#fff; color:#000; }
+  .covers img, .covers .ph { border-radius:4px; background:var(--lav); }
+  .rcard .pic { border-radius:4px; }
+  .rcard.model { background:#fff; border-color:#000; }
+  .rcard select { font-family:var(--font); border-color:var(--line); border-radius:4px; }
+  .pub-link input { font-family:var(--font); border-color:var(--line); border-radius:var(--r); }
+  #noCredits .big { font-weight:500; color:#000; }
+  .user .av { background:#000; }
+  .user .credits { background:none; color:#000; padding:0; }
+  .demo-badge { background:none; border:1px solid var(--line); color:var(--muted); border-radius:4px; font-weight:500; }
+  .pop .langs { border-top-color:var(--line); }
+  .pop .langs button { border-radius:4px; border-color:var(--line); color:#000; font-weight:500; }
+  .pop .langs button.on { background:#000; border-color:#000; }
+  .mtabs button { font-weight:500; }
+  .mtabs button.on { color:#000; box-shadow:inset 0 -2px 0 #000; }
+  #toast { background:#000; border-radius:var(--r); }
+  #phoneBtn.live { border-color:var(--ok); box-shadow:none; }
+  #cameraBtn.live::after { background:var(--ok); }
+
+  @media (max-width: 980px) { .welcome .starts { flex-direction:column; align-items:center; } .welcome .starts button { padding:4px 0; } }
 </style>
 </head>
 <body>
-<div id="boot" role="status" aria-live="polite"><img src="assets/mark-256.webp" alt=""><div class="t"></div><div class="s"></div><div class="bar"><i></i></div><div class="err"></div></div>
+<div id="boot" role="status" aria-live="polite"><span class="wordmark boot-mark">PlayLab<span class="caret" aria-hidden="true"></span></span><div class="t"></div><div class="s"></div><div class="bar"><i></i></div><div class="err"></div></div>
 <script>(function () { var T = window.__bootWords; document.querySelector("#boot .t").textContent = T[0]; document.querySelector("#boot .s").textContent = T[1]; })();</script>
 <div class="app">
   <aside id="sidebar">
-    <a class="brand" href="index.html"><span class="logo"><img src="assets/mark-256.webp" alt=""></span>PlayLab Studio</a>
+    <a class="brand wordmark" href="index.html">PlayLab<span class="caret" aria-hidden="true"></span></a>
     <button class="newbtn" id="newGameBtn" data-i18n="studio.newGame">&#10010; New game</button>
     <div class="side-h" data-i18n="studio.myGames">My games</div>
     <div id="projectsList"></div>
@@ -383,7 +531,7 @@
   <main>
     <header class="top">
       <button class="menu" id="menuBtn" aria-label="My games" title="My games">&#9776;</button>
-      <a class="mini-brand" href="index.html" title="PlayLab home"><span class="logo"><img src="assets/mark-256.webp" alt=""></span></a>
+      <a class="mini-brand wordmark" href="index.html" title="PlayLab home">PlayLab<span class="caret" aria-hidden="true"></span></a>
       <input id="title" value="Untitled game" aria-label="Project name" maxlength="80">
       <div class="seg" id="modeSeg" hidden><button class="on" data-mode="2d">2D</button><button data-mode="3d" disabled title="3D arrives in a later step">3D</button></div>
       <span class="spacer"></span>
@@ -399,7 +547,7 @@
 
     <div class="split">
       <section class="chat">
-        <div class="chat-h"><span data-i18n="studio.chat">Chat</span> <small data-i18n="studio.chatSub">ask for changes, or redraw</small></div>
+        <div class="chat-h"><span data-i18n="studio.chat">Chat</span> <small data-i18n="studio.chatSub">ask for any change</small></div>
         <div id="messages"></div>
         <div class="composer">
           <div id="attachments"></div>
@@ -416,7 +564,7 @@
           <div id="capNote" hidden></div>
           <div id="sendCost"></div>
           <div class="chips" id="chips">
-            <button class="chip" data-chip-cost="code_edit" data-i18n="chip.harder">Make it harder</button><button class="chip" data-chip-cost="code_edit" data-i18n="chip.coins">Add more coins</button><button class="chip" data-chip-cost="code_edit" data-i18n="chip.theme">Change theme</button>
+            <button class="chip" data-chip-cost="code_edit" data-i18n="chip.harder">Make it harder</button><button class="chip" data-chip-cost="code_edit" data-i18n="chip.coins">Add a second player</button><button class="chip" data-chip-cost="code_edit" data-i18n="chip.theme">Change theme</button>
           </div>
         </div>
       </section>
@@ -437,11 +585,11 @@
             <button data-start="player"><i>&#129497;</i><b data-i18n="start.player">Add your character</b><small data-i18n="start.playerSub">A picture becomes the player</small></button>
           </div>
           <div class="examples">
-            <button data-prompt="A lava castle with moving platforms" data-i18n="ex.lava" data-i18n-data-prompt="ex.lavaPrompt">&#127969; A lava castle with moving platforms</button>
-            <button data-prompt="A space level with floating platforms and lots of coins" data-i18n="ex.space" data-i18n-data-prompt="ex.spacePrompt">&#128640; A space level with floating platforms</button>
-            <button data-prompt="A jungle level for kids, easy" data-i18n="ex.jungle" data-i18n-data-prompt="ex.junglePrompt">&#127796; A jungle level for kids, easy</button>
-            <button data-prompt="A first-person shooter with 5 waves of zombies" data-i18n="ex.fps" data-i18n-data-prompt="ex.fpsPrompt">&#129503; First-person shooter, zombie waves</button>
-            <button data-prompt="A car race with 3 laps and 4 AI cars" data-i18n="ex.race" data-i18n-data-prompt="ex.racePrompt">&#127950; A car race with 3 laps and 4 AI cars</button>
+            <button data-prompt="A match-3 puzzle with gems and combos" data-i18n="ex.lava" data-i18n-data-prompt="ex.lavaPrompt">A match-3 puzzle with gems and combos</button>
+            <button data-prompt="A space level with floating platforms and lots of coins" data-i18n="ex.space" data-i18n-data-prompt="ex.spacePrompt">A space level with floating platforms</button>
+            <button data-prompt="A jungle level for kids, easy" data-i18n="ex.jungle" data-i18n-data-prompt="ex.junglePrompt">A jungle level for kids, easy</button>
+            <button data-prompt="A first-person shooter with 5 waves of zombies" data-i18n="ex.fps" data-i18n-data-prompt="ex.fpsPrompt">First-person shooter, zombie waves</button>
+            <button data-prompt="A car race with 3 laps and 4 AI cars" data-i18n="ex.race" data-i18n-data-prompt="ex.racePrompt">A car race with 3 laps and 4 AI cars</button>
           </div>
           <button class="continue" id="continueBtn" hidden><span data-i18n="welcome.continue">Continue</span> <b></b> &rarr;</button>
         </div>
@@ -569,7 +717,7 @@ function pushLevel(level) {
   $("retired").hidden = true; $("previewEmpty").hidden = !!level;
   if (isCode(level)) {   // a game written as code runs in the sandbox (shared/coderun.mjs): no origin, strict policy, the SDK inside
     if (!S.code || S.codeRun?.html !== level.html) mountCode(level.html);   // the build loop already mounted and tested this very file
-    $("previewStatus").textContent = `${levelSummary(level)}${S.versions[0] ? ` · v${S.versions[0].n}` : ""}`;
+    $("previewStatus").textContent = `${levelSummary(level)}${S.versions[0] ? `, version ${S.versions[0].n}` : ""}`;
     return;
   }
   // an older game made with the classic engine (retired): no engine to run it, a rebuild with AI code is offered
@@ -1341,7 +1489,7 @@ const patchWords = (p) => !p ? "Rewrote the file" : p.mode === "patch" ? `Patche
 const ENGINE_NAME = { canvas: "canvas", phaser: "Phaser 3", three: "three.js" };
 const MAX_FIXES = 3;   // free fix attempts after a paid build (the server enforces it through the build token)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const levelSummary = (l) => (isCode(l) ? `${l.title || "custom game"} · AI code · ${ENGINE_NAME[l.engine] || l.engine}` : `${l?.objects?.length || 0} objects`);
+const levelSummary = (l) => (isCode(l) ? `${l.title || "Custom game"}, AI code in ${ENGINE_NAME[l.engine] || l.engine}` : `${l?.objects?.length || 0} objects`);
 const GO_RE = /^\s*(go|go!|build( it)?|go,? build it|ok|okay|yes|yes!|do it|let'?s go|start|make it|allez|vas-y|construis(-le)?|oui|c'?est parti|هيا|ابدأ|نعم|ابنها)[\s.!]*$/i;
 const DROP_RE = /^\s*(cancel|stop|never ?mind|forget it|drop it|annule|annuler|laisse tomber|إلغاء|ألغ)[\s.!]*$/i;
 function describePlan(p) {
@@ -1430,7 +1578,7 @@ async function planCode(prompt, { change = null, previous = null, history = [], 
   const plan = res.plan;
   S.pendingPlan = { plan, prompt: previous ? `${S.pendingPlan?.prompt || prompt}. ${change}` : prompt };
   S.codeMode = true; renderCodeMode(); updateCosts();
-  await addCard({ icon: "&#128203;", title: `${I18N.t("code.planTitle")}: ${plan.title}`, text: describePlan(plan).join(" · ") });
+  await addCard({ icon: "&#128203;", title: `${I18N.t("code.planTitle")}: ${plan.title}`, text: describePlan(plan).join("\n") });
   const n = codePrice(plan);
   const reply = I18N.t("code.planReply", { title: plan.title, n: n ?? "?", credits: creditWord(n) });
   await streamAssistant(reply);

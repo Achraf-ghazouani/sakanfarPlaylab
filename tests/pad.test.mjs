@@ -60,7 +60,7 @@ try {
   check("the down arrow sends input with d = 1", down.some((m) => m.t === "input" && m.d === 1), down);
   const a = await press("btnA");
   check("JUMP sends jump down then up (the host makes it A)", a[0]?.t === "jump" && a[0].down === true && a.slice(-1)[0].down === false, a);
-  check("the state line of a generated game: title, score, lap, timer, playing", /Lap Dash · score 3 · lap 2 · 1:15 · playing/.test(await evalJS(`document.getElementById("gameState").textContent`)), await evalJS(`document.getElementById("gameState").textContent`));
+  check("the state line of a generated game: title, score, lap, timer, playing", /Lap Dash, score 3, lap 2, 1:15, playing/.test(await evalJS(`document.getElementById("gameState").textContent`)), await evalJS(`document.getElementById("gameState").textContent`));
 
   // dpad+2buttons
   await state("dpad+2buttons");

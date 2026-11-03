@@ -92,6 +92,7 @@
   #join input { font-size:28px; letter-spacing:.3em; text-transform:uppercase; width:200px; text-align:center; border:2px solid var(--lav-2); border-radius:12px; padding:10px; font-family:"Fredoka", monospace; }
   #join button { border:0; background:var(--purple); color:#fff; font-size:18px; font-weight:700; border-radius:14px; padding:12px 22px; }
 </style>
+<script src="shared/i18n.js"></script>
 </head>
 <body class="mode-pad">
 <div class="top">
@@ -113,18 +114,18 @@
 </div>
 
 <div id="pad" class="mode">
-  <div class="menu"><button id="mRestart">&#8635; Restart</button><button id="mPause">&#10074;&#10074; Pause</button><button id="mMute">&#128266; Sound</button><span id="gameState">no level yet</span></div>
-  <div class="hint" id="hint"><b>Room <span id="roomCode">----</span></b>Keep the game open on the computer.</div>
+  <div class="menu"><button id="mRestart" data-i18n="pad.restart">&#8635; Restart</button><button id="mPause" data-i18n="pad.pause">&#10074;&#10074; Pause</button><button id="mMute" data-i18n="pad.sound">&#128266; Sound</button><span id="gameState" data-i18n="pad.noLevel">no level yet</span></div>
+  <div class="hint" id="hint"><b><span data-i18n="pad.room">Room</span> <span id="roomCode">----</span></b><span data-i18n="pad.keepOpen">Keep the game open on the computer.</span></div>
   <div class="btn" id="left">&#9664;</div>
   <div class="btn" id="right">&#9654;</div>
-  <div class="btn" id="jump">JUMP</div>
+  <div class="btn" id="jump" data-i18n="pad.jump">JUMP</div>
   <!-- shooter layout (an arena on the computer): move with the left thumb, aim with the right, FIRE -->
-  <div class="stick" id="stickMove"><span class="lbl">MOVE</span></div>
-  <div class="stick" id="stickAim"><span class="lbl">AIM</span></div>
-  <div class="hold" id="fire">FIRE</div>
+  <div class="stick" id="stickMove"><span class="lbl" data-i18n="pad.move">MOVE</span></div>
+  <div class="stick" id="stickAim"><span class="lbl" data-i18n="pad.aim">AIM</span></div>
+  <div class="hold" id="fire" data-i18n="pad.fire">FIRE</div>
 </div>
 
-<div id="rotate"><div><span class="icon">&#128241;</span>Rotate your phone</div></div>
+<div id="rotate"><div><span class="icon">&#128241;</span><span data-i18n="pad.rotate">Rotate your phone</span></div></div>
 
 <div id="join">
   <div class="brand" style="font-size:26px">PlayLab Pad</div>
@@ -453,9 +454,9 @@ function showState(s) {
   $("gameState").textContent = arena
     ? (s.theme || "arena") + " \u00B7 wave " + s.wave + "/" + s.waves + " \u00B7 \u2764 " + s.hp + " \u00B7 \uD83D\uDD2B " + s.ammo + " \u00B7 " + label
     : s.level || s.theme ? (s.level || s.theme) + " \u00B7 coins " + s.coins + "/" + s.total + " \u00B7 " + label : label;
-  $("mPause").textContent = s.state === "paused" ? "\u25B6 Resume" : "\u2759\u2759 Pause";
+  $("mPause").innerHTML = I18N.t(s.state === "paused" ? "pad.resume" : "pad.pause");
   $("mPause").classList.toggle("on", s.state === "paused");
-  $("mMute").textContent = s.muted ? "\uD83D\uDD07 Muted" : "\uD83D\uDD0A Sound";
+  $("mMute").innerHTML = I18N.t(s.muted ? "pad.muted" : "pad.sound");
   $("mMute").classList.toggle("on", !!s.muted);
   if (s.kit !== undefined) applyKit(s.kit);
 }

@@ -1,5 +1,6 @@
 // Unit checks for lib/agent.mjs with a fake model (no network).  Run: npm test
-import { runAgent, TOOLS, cleanHistory, systemPrompt, quickReply } from "../lib/agent.mjs";
+import { runAgent, TOOLS, cleanHistory, systemPrompt, quickReply, BRIEF } from "../lib/agent.mjs";
+check("the brief asks for the person's language and keeps the level JSON in English", /language the person writes in/.test(BRIEF) && /French in, French out/.test(BRIEF) && /stay in English/.test(BRIEF));
 
 let fails = 0;
 function check(name, cond, extra) {

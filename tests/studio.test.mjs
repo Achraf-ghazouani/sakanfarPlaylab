@@ -171,6 +171,17 @@ try {
   check("preview shows no-game message", ctx && /Your game appears here/.test(await evalJS(`document.getElementById("msgText").textContent`, ctx)));
   check("the old 3D toggle is a disabled placeholder", await evalJS(`document.querySelector('[data-mode="3d"]').disabled`));
 
+  // 0b. languages: the chrome switches to French and Arabic (right-to-left) and back, the chips keep their price tags
+  await evalJS(`I18N.set("fr"); true`);
+  check("French: the welcome, the chips and the chat box follow", await evalJS(`document.querySelector(".welcome h2").textContent === "Qu'est-ce qu'on construit aujourd'hui ?" && document.querySelector("#chips .chip").dataset.label === "Plus difficile" && document.getElementById("composer").placeholder.startsWith("Décrivez") && document.documentElement.lang === "fr"`), await evalJS(`({ h2: document.querySelector(".welcome h2").textContent, chip: document.querySelector("#chips .chip").dataset.label, ph: document.getElementById("composer").placeholder })`));
+  await evalJS(`I18N.set("ar"); true`);
+  check("Arabic: right-to-left, the pad's words in Arabic, the example prompts translated", await evalJS(`document.documentElement.dir === "rtl" && document.body.classList.contains("rtl") && document.querySelector(".welcome h2").textContent === "ماذا نبني اليوم؟" && document.querySelector(".examples button").dataset.prompt === "قلعة من الحمم بمنصات متحركة"`), await evalJS(`({ dir: document.documentElement.dir, prompt: document.querySelector(".examples button").dataset.prompt })`));
+  check("the choice is remembered", await evalJS(`localStorage.getItem("playlab.lang")`) === "ar");
+  await waitFor(`S.costs && S.costs.edit_2d`);   // the price list arrives in the background; the chips' tags need it
+  await evalJS(`I18N.set("en"); true`);
+  check("English again, left-to-right, the chips re-labelled with their cost", await evalJS(`document.documentElement.dir === "ltr" && document.querySelector(".welcome h2").textContent === "What are we building today?" && document.querySelector("#chips .chip").dataset.label === "Make it harder" && document.querySelector("#chips .chip .cost") !== null && document.querySelector(".examples button").dataset.prompt === "A lava castle with moving platforms"`));
+  check("the account menu has the switch with English on", await evalJS(`[...document.querySelectorAll("#userPop [data-lang]")].map((b) => b.dataset.lang + (b.classList.contains("on") ? "*" : "")).join()`) === "en*,fr,ar");
+
   // 1. first text message: project auto-created, reply streamed, both messages saved
   await type("A lava castle with moving platforms"); await sendMsg();
   check("user bubble appears", !!(await waitFor(`document.querySelector(".msg.user .bubble")`)));

@@ -38,6 +38,7 @@ It has 500 credits (about 40 games); if it runs dry, the admin panel tops it up 
 - **Live edit by redrawing.** Add a bridge on the paper, erase a spike: the phone notices, re-scans, and the new things pop into the running game while the player keeps their spot.
 - **Two engines from one chat.** Platformers (Phaser 3, with a one-click 3D view) and arena shooters (three.js, first / third person / top-down) — the chat builds the kind of game you asked for, never a platformer when you said "shooter".
 - **Phones with no app and no account**: controllers (up to four players), camera, live scanner — WebRTC with a Supabase Realtime fallback.
+- **Speaks your language.** The interface in English, French and Arabic (right-to-left), switchable from the account menu, and the chat answers in whatever language you write.
 - **A real product around it**: accounts and a waitlist, credits with prices per model, a shared daily budget, publishing with link previews, likes, reports, remixes, and an admin panel.
 
 ## Meta models in PlayLab

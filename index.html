@@ -137,16 +137,16 @@
   <div class="top">
     <a class="brand" href="index.html"><img src="assets/mark-256.webp" alt="">Sakanfar Productions</a>
     <div class="title">PlayLab <span class="badge">HACKATHON</span></div>
-    <nav><a href="#how">How it works</a><a href="explore.html">Explore</a><a href="#discover">Play</a><a href="#waitlist" id="navWaitlist">Waitlist</a><a href="login.html" id="navLogin">Log in</a></nav>
+    <nav><a href="#how" data-i18n="nav.how">How it works</a><a href="explore.html" data-i18n="nav.explore">Explore</a><a href="#discover" data-i18n="nav.play">Play</a><a href="#waitlist" id="navWaitlist" data-i18n="nav.waitlist">Waitlist</a><a href="login.html" id="navLogin" data-i18n="nav.login">Log in</a><span class="langs"><a href="#" data-lang="en">EN</a><a href="#" data-lang="fr">FR</a><a href="#" data-lang="ar">AR</a></span></nav>
   </div>
   <div class="hero-center">
     <img class="hero-logo" src="assets/logo.webp" alt="Sakanfar PlayLab" width="720" height="594">
-    <h1 class="tag">Draw a level on paper, or just describe it. Play it in seconds.</h1>
+    <h1 class="tag" data-i18n="hero.tag">Draw a level on paper, or just describe it. Play it in seconds.</h1>
     <div class="cta-row">
-      <a class="start" id="startBtn" href="studio.html">START CREATING</a>
-      <a class="start ghost" href="game.html?level=levels/sample.json">PLAY A DEMO</a>
+      <a class="start" id="startBtn" href="studio.html" data-i18n="hero.start">START CREATING</a>
+      <a class="start ghost" href="game.html?level=levels/sample.json" data-i18n="hero.demo">PLAY A DEMO</a>
     </div>
-    <p class="beta-note" id="betaNote">Private beta. No invite yet? <a href="#waitlist">Join the waitlist</a></p>
+    <p class="beta-note" id="betaNote" data-i18n="hero.beta">Private beta. No invite yet? <a href="#waitlist">Join the waitlist</a></p>
   </div>
   <div class="scroll-hint">&#9660;</div>
 </header>
@@ -154,8 +154,8 @@
 <!-- ============ MANIFESTO ============ -->
 <section class="block lines" id="how">
   <div class="wrap">
-    <h2 class="big">IF YOU CAN DRAW IT,<br>YOU CAN PLAY IT.</h2>
-    <p class="lead">Introducing Sakanfar PlayLab, an experimental game lab where a pen, a sheet of paper and a chat are the level editor. Sketch it, say it, play it. No coding, no symbols to learn.</p>
+    <h2 class="big" data-i18n="manifesto.title">IF YOU CAN DRAW IT,<br>YOU CAN PLAY IT.</h2>
+    <p class="lead" data-i18n="manifesto.lead">Introducing Sakanfar PlayLab, an experimental game lab where a pen, a sheet of paper and a chat are the level editor. Sketch it, say it, play it. No coding, no symbols to learn.</p>
   </div>
 </section>
 
@@ -256,6 +256,7 @@
   <div class="bottom"><span>META HACKATHON 2026</span><span>MUSE SPARK</span><span>PHASER 3</span></div>
 </footer>
 
+<script src="shared/i18n.js"></script>
 <script src="shared/auth.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);

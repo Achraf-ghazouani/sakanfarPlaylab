@@ -1,0 +1,142 @@
+// shared/i18n.js — the interface in English, French and Arabic (window.I18N). The language comes from localStorage
+// (playlab.lang), else the browser; Arabic turns the page right-to-left. Static text carries data-i18n="key" (innerHTML),
+// data-i18n-attr="placeholder|title|data-prompt" for attributes; pages call I18N.t(key, vars) for the rest.
+// The chat itself answers in whatever language the person writes in (lib/agent.mjs); this file is the chrome around it.
+(function (root) {
+  const LANGS = ["en", "fr", "ar"];
+  const NAMES = { en: "English", fr: "Français", ar: "العربية" };
+  const DICT = {
+    en: {
+      "studio.newGame": "&#10010; New game", "studio.myGames": "My games",
+      "studio.sideFoot": 'Games are saved as you chat. <a href="index.html">Home</a> &middot; <a href="explore.html">Explore</a> &middot; <a href="game.html?screen=1">Big screen</a>',
+      "studio.undo": "Undo", "studio.history": "History", "studio.noVersions": "No versions yet", "studio.phone": "Play with phone", "studio.publish": "Publish",
+      "studio.profile": "Profile and credits", "studio.admin": "Admin panel", "studio.logout": "Log out", "studio.language": "Language",
+      "studio.chat": "Chat", "studio.chatSub": "ask for changes, or redraw",
+      "studio.placeholder": "Describe your game, or paste / drop a drawing...", "studio.placeholderChange": "Ask for a change...",
+      "chip.harder": "Make it harder", "chip.coins": "Add more coins", "chip.theme": "Change theme", "chip.playtest": "Playtest it",
+      "welcome.title": "What are we building today?", "welcome.sub": "Describe a game in the box below, or start from a drawing. It appears right here.",
+      "start.sketch": "Sketch it", "start.sketchSub": "Draw a level here", "start.upload": "Upload a drawing", "start.uploadSub": "A photo of your paper",
+      "start.camera": "Use the camera", "start.cameraSub": "Point your phone at it", "start.player": "Add your character", "start.playerSub": "A picture becomes the player",
+      "ex.lava": "&#127969; A lava castle with moving platforms", "ex.lavaPrompt": "A lava castle with moving platforms",
+      "ex.space": "&#128640; A space level with floating platforms", "ex.spacePrompt": "A space level with floating platforms and lots of coins",
+      "ex.jungle": "&#127796; A jungle level for kids, easy", "ex.junglePrompt": "A jungle level for kids, easy",
+      "ex.fps": "&#129503; First-person shooter, zombie waves", "ex.fpsPrompt": "A first-person shooter with 5 waves of zombies",
+      "welcome.continue": "Continue", "building.title": "Building your game...", "building.sub": "Muse Spark is placing platforms, coins and enemies", "preview.none": "no game yet",
+      "pub.title": "&#128640; Publish your game", "pub.close": "Close", "pub.name": "Title", "pub.desc": "Description (optional)", "pub.cover": "Cover picture", "pub.who": "Who can see it",
+      "pub.public": "Public: in Explore, for everyone", "pub.unlisted": "Unlisted: only people with the link", "pub.go": "Publish", "pub.unpublish": "Unpublish",
+      "review.title": "&#128194; Review your files", "review.cancel": "Cancel", "review.apply": "Apply all",
+      "credits.title": "Not enough credits", "credits.left": "credits left", "credits.more": "Get more credits", "credits.ok": "OK",
+      "detected": "Detected", "gameIs": "Game is {d}.",
+      "send.line": "Send · {n} {credits} ({what}) · you have {balance}", "send.newGame": "new game", "send.changeGame": "change the game", "send.new3d": "new 3D game", "send.change3d": "change the 3D game",
+      "credit.one": "credit", "credit.many": "credits",
+      "pad.restart": "&#8635; Restart", "pad.pause": "❚❚ Pause", "pad.resume": "▶ Resume", "pad.sound": "🔊 Sound", "pad.muted": "🔇 Muted", "pad.noLevel": "no level yet",
+      "pad.room": "Room", "pad.keepOpen": "Keep the game open on the computer.", "pad.jump": "JUMP", "pad.move": "MOVE", "pad.aim": "AIM", "pad.fire": "FIRE", "pad.rotate": "Rotate your phone",
+      "nav.how": "How it works", "nav.explore": "Explore", "nav.play": "Play", "nav.waitlist": "Waitlist", "nav.login": "Log in",
+      "hero.tag": "Draw a level on paper, or just describe it. Play it in seconds.", "hero.start": "START CREATING", "hero.demo": "PLAY A DEMO",
+      "hero.beta": 'Private beta. No invite yet? <a href="#waitlist">Join the waitlist</a>',
+      "manifesto.title": "IF YOU CAN DRAW IT,<br>YOU CAN PLAY IT.",
+      "manifesto.lead": "Introducing Sakanfar PlayLab, an experimental game lab where a pen, a sheet of paper and a chat are the level editor. Sketch it, say it, play it. No coding, no symbols to learn.",
+    },
+    fr: {
+      "studio.newGame": "&#10010; Nouveau jeu", "studio.myGames": "Mes jeux",
+      "studio.sideFoot": 'Les jeux sont enregistrés au fil du chat. <a href="index.html">Accueil</a> &middot; <a href="explore.html">Explorer</a> &middot; <a href="game.html?screen=1">Grand écran</a>',
+      "studio.undo": "Annuler", "studio.history": "Historique", "studio.noVersions": "Pas encore de version", "studio.phone": "Jouer au téléphone", "studio.publish": "Publier",
+      "studio.profile": "Profil et crédits", "studio.admin": "Panneau admin", "studio.logout": "Se déconnecter", "studio.language": "Langue",
+      "studio.chat": "Chat", "studio.chatSub": "demandez des changements, ou redessinez",
+      "studio.placeholder": "Décrivez votre jeu, ou collez / déposez un dessin...", "studio.placeholderChange": "Demandez un changement...",
+      "chip.harder": "Plus difficile", "chip.coins": "Plus de pièces", "chip.theme": "Changer le thème", "chip.playtest": "Tester le niveau",
+      "welcome.title": "Qu'est-ce qu'on construit aujourd'hui ?", "welcome.sub": "Décrivez un jeu dans la boîte ci-dessous, ou partez d'un dessin. Il apparaît ici même.",
+      "start.sketch": "Dessiner", "start.sketchSub": "Un niveau, ici", "start.upload": "Envoyer un dessin", "start.uploadSub": "Une photo de votre feuille",
+      "start.camera": "Utiliser la caméra", "start.cameraSub": "Visez la feuille avec le téléphone", "start.player": "Ajouter votre personnage", "start.playerSub": "Une image devient le joueur",
+      "ex.lava": "&#127969; Un château de lave avec des plateformes mobiles", "ex.lavaPrompt": "Un château de lave avec des plateformes mobiles",
+      "ex.space": "&#128640; Un niveau spatial avec des plateformes flottantes", "ex.spacePrompt": "Un niveau spatial avec des plateformes flottantes et plein de pièces",
+      "ex.jungle": "&#127796; Un niveau jungle pour enfants, facile", "ex.junglePrompt": "Un niveau jungle pour enfants, facile",
+      "ex.fps": "&#129503; Shooter à la première personne, vagues de zombies", "ex.fpsPrompt": "Un shooter à la première personne avec 5 vagues de zombies",
+      "welcome.continue": "Continuer", "building.title": "Construction de votre jeu...", "building.sub": "Muse Spark place les plateformes, les pièces et les ennemis", "preview.none": "pas encore de jeu",
+      "pub.title": "&#128640; Publier votre jeu", "pub.close": "Fermer", "pub.name": "Titre", "pub.desc": "Description (facultatif)", "pub.cover": "Image de couverture", "pub.who": "Qui peut le voir",
+      "pub.public": "Public : dans Explorer, pour tous", "pub.unlisted": "Non répertorié : seulement avec le lien", "pub.go": "Publier", "pub.unpublish": "Dépublier",
+      "review.title": "&#128194; Vérifiez vos fichiers", "review.cancel": "Annuler", "review.apply": "Tout appliquer",
+      "credits.title": "Pas assez de crédits", "credits.left": "crédits restants", "credits.more": "Obtenir des crédits", "credits.ok": "OK",
+      "detected": "Détecté", "gameIs": "Le jeu est en {d}.",
+      "send.line": "Envoyer · {n} {credits} ({what}) · il vous reste {balance}", "send.newGame": "nouveau jeu", "send.changeGame": "modifier le jeu", "send.new3d": "nouveau jeu 3D", "send.change3d": "modifier le jeu 3D",
+      "credit.one": "crédit", "credit.many": "crédits",
+      "pad.restart": "&#8635; Recommencer", "pad.pause": "❚❚ Pause", "pad.resume": "▶ Reprendre", "pad.sound": "🔊 Son", "pad.muted": "🔇 Coupé", "pad.noLevel": "pas encore de niveau",
+      "pad.room": "Salle", "pad.keepOpen": "Gardez le jeu ouvert sur l'ordinateur.", "pad.jump": "SAUT", "pad.move": "BOUGER", "pad.aim": "VISER", "pad.fire": "TIRER", "pad.rotate": "Tournez votre téléphone",
+      "nav.how": "Comment ça marche", "nav.explore": "Explorer", "nav.play": "Jouer", "nav.waitlist": "Liste d'attente", "nav.login": "Connexion",
+      "hero.tag": "Dessinez un niveau sur papier, ou décrivez-le. Jouez-y en quelques secondes.", "hero.start": "COMMENCER À CRÉER", "hero.demo": "JOUER UNE DÉMO",
+      "hero.beta": 'Bêta privée. Pas encore d\'invitation ? <a href="#waitlist">Rejoignez la liste d\'attente</a>',
+      "manifesto.title": "SI VOUS POUVEZ LE DESSINER,<br>VOUS POUVEZ Y JOUER.",
+      "manifesto.lead": "Voici Sakanfar PlayLab, un laboratoire de jeu expérimental où un stylo, une feuille de papier et un chat sont l'éditeur de niveaux. Dessinez-le, dites-le, jouez-y. Pas de code, pas de symboles à apprendre.",
+    },
+    ar: {
+      "studio.newGame": "&#10010; لعبة جديدة", "studio.myGames": "ألعابي",
+      "studio.sideFoot": 'تُحفظ الألعاب أثناء الدردشة. <a href="index.html">الرئيسية</a> &middot; <a href="explore.html">استكشف</a> &middot; <a href="game.html?screen=1">الشاشة الكبيرة</a>',
+      "studio.undo": "تراجع", "studio.history": "السجل", "studio.noVersions": "لا توجد نسخ بعد", "studio.phone": "العب بالهاتف", "studio.publish": "انشر",
+      "studio.profile": "الملف الشخصي والرصيد", "studio.admin": "لوحة الإدارة", "studio.logout": "تسجيل الخروج", "studio.language": "اللغة",
+      "studio.chat": "الدردشة", "studio.chatSub": "اطلب تغييرات، أو أعد الرسم",
+      "studio.placeholder": "صِف لعبتك، أو الصق / أسقط رسمة...", "studio.placeholderChange": "اطلب تغييرًا...",
+      "chip.harder": "اجعلها أصعب", "chip.coins": "المزيد من العملات", "chip.theme": "غيّر الموضوع", "chip.playtest": "اختبر المستوى",
+      "welcome.title": "ماذا نبني اليوم؟", "welcome.sub": "صِف لعبة في المربع أدناه، أو ابدأ من رسمة. ستظهر هنا مباشرة.",
+      "start.sketch": "ارسمها", "start.sketchSub": "ارسم مستوى هنا", "start.upload": "ارفع رسمة", "start.uploadSub": "صورة لورقتك",
+      "start.camera": "استخدم الكاميرا", "start.cameraSub": "وجّه هاتفك نحو الورقة", "start.player": "أضف شخصيتك", "start.playerSub": "صورة تصبح اللاعب",
+      "ex.lava": "&#127969; قلعة من الحمم بمنصات متحركة", "ex.lavaPrompt": "قلعة من الحمم بمنصات متحركة",
+      "ex.space": "&#128640; مستوى فضائي بمنصات عائمة", "ex.spacePrompt": "مستوى فضائي بمنصات عائمة والكثير من العملات",
+      "ex.jungle": "&#127796; مستوى في الغابة للأطفال، سهل", "ex.junglePrompt": "مستوى في الغابة للأطفال، سهل",
+      "ex.fps": "&#129503; لعبة إطلاق نار بمنظور الشخص الأول، موجات زومبي", "ex.fpsPrompt": "لعبة إطلاق نار بمنظور الشخص الأول مع 5 موجات من الزومبي",
+      "welcome.continue": "متابعة", "building.title": "جارٍ بناء لعبتك...", "building.sub": "Muse Spark يضع المنصات والعملات والأعداء", "preview.none": "لا توجد لعبة بعد",
+      "pub.title": "&#128640; انشر لعبتك", "pub.close": "إغلاق", "pub.name": "العنوان", "pub.desc": "الوصف (اختياري)", "pub.cover": "صورة الغلاف", "pub.who": "من يمكنه رؤيتها",
+      "pub.public": "عامة: في استكشف، للجميع", "pub.unlisted": "غير مدرجة: فقط لمن لديه الرابط", "pub.go": "انشر", "pub.unpublish": "إلغاء النشر",
+      "review.title": "&#128194; راجع ملفاتك", "review.cancel": "إلغاء", "review.apply": "تطبيق الكل",
+      "credits.title": "الرصيد غير كافٍ", "credits.left": "رصيد متبقٍ", "credits.more": "احصل على رصيد", "credits.ok": "حسنًا",
+      "detected": "تم التعرف", "gameIs": "اللعبة {d}.",
+      "send.line": "إرسال · {n} {credits} ({what}) · لديك {balance}", "send.newGame": "لعبة جديدة", "send.changeGame": "تعديل اللعبة", "send.new3d": "لعبة ثلاثية الأبعاد جديدة", "send.change3d": "تعديل اللعبة ثلاثية الأبعاد",
+      "credit.one": "رصيد", "credit.many": "رصيد",
+      "pad.restart": "&#8635; إعادة", "pad.pause": "❚❚ إيقاف مؤقت", "pad.resume": "▶ استئناف", "pad.sound": "🔊 الصوت", "pad.muted": "🔇 صامت", "pad.noLevel": "لا يوجد مستوى بعد",
+      "pad.room": "الغرفة", "pad.keepOpen": "أبقِ اللعبة مفتوحة على الحاسوب.", "pad.jump": "اقفز", "pad.move": "تحرك", "pad.aim": "صوّب", "pad.fire": "أطلق", "pad.rotate": "أدر هاتفك",
+      "nav.how": "كيف يعمل", "nav.explore": "استكشف", "nav.play": "العب", "nav.waitlist": "قائمة الانتظار", "nav.login": "تسجيل الدخول",
+      "hero.tag": "ارسم مستوى على الورق، أو صِفه فقط. العبه خلال ثوانٍ.", "hero.start": "ابدأ الإبداع", "hero.demo": "جرّب عرضًا",
+      "hero.beta": 'نسخة تجريبية خاصة. لا دعوة بعد؟ <a href="#waitlist">انضم إلى قائمة الانتظار</a>',
+      "manifesto.title": "إن استطعت رسمها،<br>استطعت لعبها.",
+      "manifesto.lead": "نقدّم Sakanfar PlayLab، مختبر ألعاب تجريبي حيث القلم والورقة والدردشة هي محرر المستويات. ارسمها، قلها، العبها. لا برمجة، ولا رموز لتتعلمها.",
+    },
+  };
+  let lang = detect();
+  function detect() {
+    try { const s = localStorage.getItem("playlab.lang"); if (LANGS.includes(s)) return s; } catch {}
+    const n = String((typeof navigator !== "undefined" && (navigator.language || (navigator.languages || [])[0])) || "en").toLowerCase();
+    return n.startsWith("fr") ? "fr" : n.startsWith("ar") ? "ar" : "en";
+  }
+  /** A translated string; {vars} are filled in; a missing key falls back to English, then to the key itself. */
+  function t(key, vars) {
+    let s = (DICT[lang] && DICT[lang][key]) ?? DICT.en[key] ?? key;
+    if (vars) for (const [k, v] of Object.entries(vars)) s = s.split("{" + k + "}").join(String(v));
+    return s;
+  }
+  const ATTRS = ["placeholder", "title", "aria-label", "data-prompt"];
+  /** Translates every data-i18n element under root and sets the page's language and direction. */
+  function apply(scope) {
+    const doc = typeof document !== "undefined" ? document : null;
+    if (!doc) return;
+    const r = scope || doc;
+    r.querySelectorAll("[data-i18n]").forEach((el) => { el.innerHTML = t(el.dataset.i18n); });
+    for (const a of ATTRS) r.querySelectorAll(`[data-i18n-${a}]`).forEach((el) => { el.setAttribute(a, t(el.getAttribute(`data-i18n-${a}`))); });
+    doc.documentElement.lang = lang;
+    doc.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+    doc.body?.classList.toggle("rtl", lang === "ar");
+    r.querySelectorAll("[data-lang]").forEach((b) => b.classList.toggle("on", b.dataset.lang === lang));
+  }
+  function set(l) {
+    if (!LANGS.includes(l) || l === lang) return;
+    lang = l;
+    try { localStorage.setItem("playlab.lang", l); } catch {}
+    apply();
+    if (typeof document !== "undefined") document.dispatchEvent(new CustomEvent("playlab:lang", { detail: l }));
+  }
+  const api = { t, apply, set, get lang() { return lang; }, LANGS, NAMES, DICT };
+  root.I18N = api;
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => apply());
+    else apply();
+    document.addEventListener("click", (e) => { const b = e.target.closest?.("[data-lang]"); if (b) { e.preventDefault(); set(b.dataset.lang); } });
+  }
+})(typeof window !== "undefined" ? window : globalThis);

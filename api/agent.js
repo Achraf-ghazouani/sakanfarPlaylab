@@ -8,12 +8,15 @@
 //   -> the same stream; done carries the next token and the attempt number
 //   POST { task: "look", token, plan, prompt, snapshot }                                           the vision check (free, token-bound)
 //   -> 200 { match, looksLike, problems, suggestion, model, ms }
+//   POST { task: "voice", audio, lang? }                                                          speech to text for the chat box (free, rate limited)
+//   -> 200 { text, durationMs, ms, model }   audio = a base64 WAV (mono 16-bit PCM, 16 kHz) recorded by the Studio
 // Credits: a build costs code_create_2d / code_create_3d (code_edit with previous_html), charged before the stream starts and
 // refunded when the model fails. Plans are free; fixes and looks are free but need the token a paid build handed out (20 minutes,
 // at most MAX_FIXES fixes). Muse Spark plans and looks, Muse Wonder writes and repairs (lib/code.mjs). Keys stay in env vars.
 
 import { charge, refund } from "../lib/credits.mjs";
 import { requireUser, rateLimit } from "../lib/auth.mjs";
+import { transcribe } from "../lib/ai.mjs";
 import { planGame, generateGame, changeGame, repairGame, lookAtGame, normalizePlan, actionFor, cleanReport, makeFixToken, readFixToken, MAX_FIXES, CODE_MODEL, MAX_HTML, MIN_HTML } from "../lib/code.mjs";
 
 export default async function handler(req, res) {
@@ -27,7 +30,8 @@ export default async function handler(req, res) {
   if (task === "code") return code(res, user, body);
   if (task === "fix") return fix(res, user, body);
   if (task === "look") return look(res, user, body);
-  return res.status(400).json({ error: "Unknown task: every game is written as code now (plan, code, fix or look)." });
+  if (task === "voice") return voice(res, user, body);
+  return res.status(400).json({ error: "Unknown task: every game is written as code now (plan, code, fix, look or voice)." });
 }
 
 /** The last turns of the chat, cleaned for the planner. */
@@ -119,6 +123,21 @@ async function look(res, user, body) {
     return res.status(200).json(out);
   } catch (err) {
     console.error("look failed:", err.message);
+    return res.status(err.status === 401 || err.status === 403 ? 500 : 502).json({ error: friendly(err) });
+  }
+}
+
+/** "Say a game.": Muse Voice Transcribe (Meta) writes down what the person said; the Studio puts it in the chat box. Free, rate limited. */
+const VOICE_LANGS = { fr: ["French", "English"], ar: ["Arabic", "English"] };   // a hint only; English and anything else: detected
+const VOICE_WORDS = ["PlayLab", "2D", "3D", "platformer", "power-up", "boss", "level", "Phaser"];
+async function voice(res, user, body) {
+  if (!(await rateLimit("voice:" + user.uid, 30, 600))) return res.status(429).json({ error: "Too many recordings in a row. Try again in a few minutes." });
+  const wav = Buffer.from(String(body.audio || ""), "base64");
+  if (wav.length < 2000 || wav.length > 2_400_000 || wav.toString("ascii", 0, 4) !== "RIFF" || wav.toString("ascii", 8, 12) !== "WAVE") return res.status(400).json({ error: "A WAV recording of at most a minute is required." });
+  try {
+    return res.status(200).json(await transcribe(wav, { languages: VOICE_LANGS[body.lang] || null, keywords: VOICE_WORDS }));
+  } catch (err) {
+    console.error("voice failed:", err.message);
     return res.status(err.status === 401 || err.status === 403 ? 500 : 502).json({ error: friendly(err) });
   }
 }

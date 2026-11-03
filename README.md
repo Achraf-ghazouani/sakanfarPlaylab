@@ -7,7 +7,7 @@
 
 **Live:** https://sakanfarplaylab.vercel.app · **Demo video:** _[2-minute walkthrough — link coming]_ · **Code:** https://github.com/Achraf-ghazouani/sakanfarPlaylab
 
-Built solo for the Meta hackathon (Oct 30 – Nov 4, 2026) on the Meta Model API: **Muse Spark** plans the game and looks at the result, **Muse Wonder** writes the whole game as code and fixes its own bugs, **Muse Image** draws sprites, **SAM 3.1** cuts your pictures out. Plain HTML/JS, no build step, no npm dependencies.
+Built solo for the Meta hackathon (Oct 30 – Nov 4, 2026) on the Meta Model API: **Muse Spark** plans the game and looks at the result, **Muse Wonder** writes the whole game as code and fixes its own bugs, **Muse Image** draws sprites, **SAM 3.1** cuts your pictures out, **Muse Voice Transcribe** lets you say the game out loud. Plain HTML/JS, no build step, no npm dependencies.
 
 ## Judges: a ready account
 
@@ -47,6 +47,7 @@ It has 500 credits (about 20 games and many changes); if it runs dry, the admin 
 | --- | --- | --- |
 | **Muse Wonder 1.0** | `POST /v1/chat/completions` (streamed) | Writes the whole game as one HTML file on top of the PlayLab SDK; changes and fixes as search / replace patches |
 | **Muse Spark 1.3** | `POST /v1/chat/completions` (structured output, vision) | The plan (from words, a sketch or a photo), the vision check of a running game's screenshot, telling a character from an object or a UI piece in a picture |
+| **Muse Voice Transcribe 1.0** | `POST /v1/asr/transcribe` (multipart, 16 kHz WAV) | The mic in the chat box: what you say is written into the box (English, French, Arabic and more), you read it and send |
 | **Muse Image 1.0** | `POST /v1/images/edits` | Redraws the character or object in your picture as a clean game sprite |
 | **SAM 3.1** | `POST /v1/responses` (`sam-3.1`) | Finds the subject of a picture and returns the pixel mask the page cuts it out with (decoded with Meta's `@meta-sam/parser`) |
 

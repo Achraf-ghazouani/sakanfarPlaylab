@@ -3,24 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1b1535">
+<meta name="theme-color" content="#ffffff">
 <title>Demo games · Sakanfar PlayLab</title>
 <meta name="description" content="Three games written as code the PlayLab way, running in the same sandbox as every AI-made game. No account needed.">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/ui.css">
 <link rel="stylesheet" href="shared/play.css">
-<style>
-  .pick { display:flex; gap:8px; flex-wrap:wrap; padding:10px 16px; }
-  .pick button.on { color:#fff; background:var(--purple); border-color:var(--purple); }
-  .note { margin:0; padding:0 16px 14px; color:var(--muted); font-size:14px; }
-</style>
 </head>
 <body>
 <!-- demo.html — the landing page's "Play a demo": the three example games every Muse Wonder build is shown (shared/code-examples.mjs),
      running in the same sandbox as AI-made games (shared/coderun.mjs), with Restart and Pause like the play page. -->
 <header class="top">
-  <a class="brand" href="index.html"><img src="assets/mark-256.webp" alt="">PlayLab</a>
+  <a class="brand" href="index.html">PlayLab</a>
   <span class="spacer"></span>
   <button class="tb" id="restartBtn">&#8635; <span class="lbl">Restart</span></button>
   <button class="tb" id="pauseBtn">&#10074;&#10074; Pause</button>

@@ -8,14 +8,15 @@
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/ui.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js"></script>
 <script src="shared/joystick.js"></script>
 <script src="shared/phonelink.js"></script>
 <script src="shared/paper.js"></script>
 <style>
-  :root { --bg:#fbfaff; --lav:#efeaff; --lav-2:#e2d9ff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --player:#22c55e; --green:#22c55e; }
+  :root { --bg:#ffffff; --lav:#f4f4f5; --lav-2:#e4e4e7; --purple:#2b3bff; --purple-deep:#000000; --ink:#000000; --muted:#6b6b70; --player:#22c55e; --green:#0a7d3c; }
   * { box-sizing:border-box; }
   html, body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--ink); font-family:system-ui, -apple-system, "Segoe UI", sans-serif; touch-action:none; overscroll-behavior:none; -webkit-user-select:none; user-select:none; }
   body { background-image: radial-gradient(600px 300px at 0% 0%, #ebe3ff 0%, transparent 65%), radial-gradient(500px 300px at 100% 100%, #ffe6f4 0%, transparent 60%); }
@@ -112,6 +113,34 @@
   #join.show { display:flex; }
   #join input { font-size:28px; letter-spacing:.3em; text-transform:uppercase; width:200px; text-align:center; border:2px solid var(--lav-2); border-radius:12px; padding:10px; font-family:"Fredoka", monospace; }
   #join button { border:0; background:var(--purple); color:#fff; font-size:18px; font-weight:700; border-radius:14px; padding:12px 22px; }
+
+  /* ---- minimal: paper, ink, hairlines; the player's own colour on A and the chip ---- */
+  body { background-image:none; font-family:var(--font); }
+  .brand { font-family:var(--font); font-weight:600; color:#000; }
+  .pill, button.small, .menu button { border-width:1px; border-color:var(--lav-2); border-radius:var(--r); font-weight:500; color:#000; }
+  .pill.player { border-color:transparent; color:#fff; }
+  button.small.primary { background:#000; border-color:#000; color:#fff; }
+  button.small.go { background:var(--purple); border-color:var(--purple); font-family:var(--font); border-radius:999px; }
+  .menu button.on { background:#000; border-color:#000; color:#fff; }
+  .btn { border-width:1px; border-color:var(--lav-2); box-shadow:none; background:#fff; color:#000; font-family:var(--font); font-weight:500; }
+  .btn.pressed { background:#000; border-color:#000; color:#fff; }
+  #jump, #btnA { font-family:var(--font); font-weight:600; border-width:2px; }
+  #btnB { font-family:var(--font); font-weight:600; }
+  #dpad .btn { border-radius:var(--r); }
+  #tapPad { border:1px dashed var(--lav-2); background:#fff; border-radius:var(--r); }
+  #pad .stick { background:var(--lav); border-color:var(--lav-2); }
+  #pad .stick.on { background:#ececee; }
+  #pad .stick .jk { background:#000; box-shadow:none; }
+  #pad .stick .lbl { color:var(--muted); font-weight:500; }
+  #pad .hold { box-shadow:none; }
+  .hint b { font-family:var(--font); font-weight:500; }
+  #camStatus { border-radius:var(--r); font-weight:500; color:#000; }
+  #captureBtn { border-width:2px; border-color:#fff; box-shadow:none; }
+  #captureBtn::after { background:var(--purple); }
+  #cam, #camCanvas { background:#000; }
+  #rotate { background:#000; font-weight:500; }
+  #join input { border-width:1px; border-radius:var(--r); font-family:var(--font); }
+  #join button { border-radius:999px; background:var(--purple); font-weight:500; }
 </style>
 <script src="shared/i18n.js"></script>
 </head>
@@ -526,7 +555,7 @@ function showCodeState(s) {
   if (h.laps !== undefined) parts.push("lap " + h.laps);
   if (h.timer !== undefined) { const t = Math.max(0, Math.round(Number(h.timer) || 0)); parts.push(Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0")); }
   parts.push({ play: "playing", paused: "paused", over: "game over: press " + (CODE_LAYOUTS[s.layout]?.a || "A") + " to play again" }[s.state] || s.state || "");
-  $("gameState").textContent = parts.join(" \u00B7 ");
+  $("gameState").textContent = parts.join(", ");
   $("hint").style.display = "";
   $("mPause").innerHTML = I18N.t(s.state === "paused" ? "pad.resume" : "pad.pause");
   $("mPause").classList.toggle("on", s.state === "paused");

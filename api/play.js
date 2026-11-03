@@ -106,7 +106,7 @@ function page(res, card, req) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1b1535">
+<meta name="theme-color" content="#ffffff">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(desc)}">
 <meta property="og:type" content="website">
@@ -123,7 +123,8 @@ function page(res, card, req) {
 <link rel="canonical" href="${esc(url)}">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/ui.css">
 <link rel="stylesheet" href="/shared/play.css">
 <script>window.PLAY = ${JSON.stringify(data)};</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" defer></script>
@@ -137,7 +138,7 @@ function page(res, card, req) {
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="/"><img src="/assets/mark-256.webp" alt="">PlayLab</a>
+  <a class="brand" href="/">PlayLab</a>
   <div class="who"><b id="title">${esc(card ? card.title : "Game not found")}</b><small id="author">${card ? "by " + esc(card.author) + " · " + esc(KIND_NAME[card.kind] || "game") : ""}</small></div>
   <span class="spacer"></span>
   <button class="tb" id="likeBtn" title="Like"><span id="likeIcon">&#9825;</span> <span id="likes">0</span></button>

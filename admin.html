@@ -3,19 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#fbfaff">
+<meta name="theme-color" content="#ffffff">
 <meta name="robots" content="noindex">
-<title>Admin · Sakanfar PlayLab</title>
+<title>Admin, PlayLab</title>
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/ui.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js"></script>
 <script src="shared/auth.js"></script>
 <style>
-  :root { --bg:#fbfaff; --lav:#efeaff; --lav-2:#e2d9ff; --purple:#7c3aed; --purple-deep:#5b21b6; --ink:#1b1535; --muted:#6b6480; --line:#ebe6f7; --green:#15803d; --red:#b91c1c; --amber:#92400e; }
+  :root { --bg:#ffffff; --lav:#f4f4f5; --lav-2:#e4e4e7; --purple:#2b3bff; --purple-deep:#000000; --ink:#000000; --muted:#6b6b70; --line:#e4e4e7; --green:#0a7d3c; --red:#c4112f; --amber:#8a5a00; }
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
   body { margin:0; background:var(--bg); color:var(--ink); font-family:Inter, system-ui, sans-serif; font-size:14px; }
@@ -117,11 +118,47 @@
   #toast.err { background:var(--red); }
   .gate { max-width:440px; margin:80px auto; text-align:center; }
   @media (max-width: 860px) { .grid2 { grid-template-columns:1fr; } .form { grid-template-columns:1fr; } nav.tabs { top:55px; } }
+
+  /* minimal layer */
+  input, select, textarea, button, .tb { font-family:var(--font); }
+  body { font-family:var(--font); background:var(--paper); }
+  header { padding:0 var(--s4); min-height:56px; }
+  .tb { border-color:var(--hair); color:var(--ink); border-radius:var(--r); font-weight:500; }
+  .tb:hover { background:var(--paper); border-color:var(--ink); }
+  .tb.primary { background:var(--signal); border-color:var(--signal); color:var(--signal-ink); border-radius:var(--r-pill); }
+  .tb.primary:hover { background:var(--signal); filter:brightness(1.12); }
+  .tb.danger { color:var(--danger); border-color:var(--hair); }
+  .tb.danger:hover { background:var(--paper); border-color:var(--danger); }
+  .card { box-shadow:none; border-radius:var(--r); }
+  h2 { font-family:var(--font); font-weight:500; letter-spacing:-0.02em; }
+  input, select, textarea { border-radius:var(--r) !important; }
+  input:focus, select:focus, textarea:focus { border-color:var(--ink) !important; box-shadow:none !important; }
+  #toast { background:var(--ink); border-radius:var(--r); }
+  .pill, .badge { border-radius:4px; font-weight:500; }
+  nav.tabs { padding:0 var(--s4); top:56px; }
+  nav.tabs button { font-weight:500; padding:var(--s3) var(--s2); }
+  nav.tabs button.on { color:var(--ink); box-shadow:inset 0 -1px 0 var(--ink); }
+  nav.tabs .count { background:var(--ink); }
+  .stat { border-radius:var(--r); }
+  .stat .n { font:500 28px var(--font); letter-spacing:-0.03em; }
+  .chart .col i { background:var(--ink); border-radius:2px 2px 0 0; }
+  .chart .col:hover i { background:var(--signal); }
+  .rank .meter i, .meter i { background:var(--ink); }
+  #tip { background:var(--ink); border-radius:var(--r); }
+  table.t tr.clickable:hover td { background:var(--mist); }
+  td.plus, td.minus { font-weight:500; }
+  .drawer { box-shadow:none; border-left:1px solid var(--hair); }
+  .drawer .head b { font:500 18px var(--font); }
+  .drawer h3 { color:var(--ink); font-weight:500; }
+  .form label { font-weight:400; }
+  .pill.admin, .pill.demo, .pill.off { background:var(--mist); color:var(--ink); }
+  .scrim { background:rgba(0,0,0,.4); }
+  .gate p { margin:var(--s3) 0 var(--s5); }
 </style>
 </head>
 <body>
 <header>
-  <a class="brand" href="index.html"><span class="logo"><img src="assets/mark-256.webp" alt=""></span>PlayLab <small>Admin</small></a>
+  <a class="wordmark" href="index.html">PlayLab<span class="caret" aria-hidden="true"></span></a><span class="muted">Admin</span>
   <span class="spacer"></span>
   <span class="muted" id="whoami"></span>
   <a class="tb" href="studio.html">Studio</a>

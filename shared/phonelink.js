@@ -146,7 +146,7 @@ window.PhoneLink = (() => {
         let whole; try { whole = JSON.parse(c.parts.join("")); } catch { return; }
         return this.onData(p, whole);
       }
-      if (msg.t === "input") { p.input = { l: msg.l ? 1 : 0, r: msg.r ? 1 : 0 }; this.h.onInput?.(p, p.input); }
+      if (msg.t === "input") { p.input = { l: msg.l ? 1 : 0, r: msg.r ? 1 : 0, u: msg.u ? 1 : 0, d: msg.d ? 1 : 0 }; this.h.onInput?.(p, p.input); }
       else if (msg.t === "jump") this.h.onJump?.(p, !!msg.down);
       else if (msg.t === "ping") { if (p.conn.open) p.conn.send({ t: "pong" }); }
       else if (msg.t === "mode") { p.mode = msg.mode === "camera" ? "camera" : "pad"; this.h.onMode?.(p, p.mode); }
@@ -181,7 +181,7 @@ window.PhoneLink = (() => {
     constructor(code, handlers = {}, opts = {}) {
       this.code = String(code || "").toUpperCase(); this.h = handlers; this.opts = opts;   // opts: { relay: {url,key}, forceRelay, peerHost }
       this.peer = null; this.conn = null; this.status = "idle"; this.stopped = false; this.transport = "webrtc";
-      this.input = { l: 0, r: 0 }; this.hb = null; this.retryTimer = null; this.attempts = 0; this.startedAt = 0;
+      this.input = { l: 0, r: 0, u: 0, d: 0 }; this.hb = null; this.retryTimer = null; this.attempts = 0; this.startedAt = 0;
       this.stream = null; this.call = null;
       this.sb = null; this.relay = null; this.relayId = null; this.helloTimer = null;
     }
@@ -304,8 +304,8 @@ window.PhoneLink = (() => {
     }
     get canStreamVideo() { return this.transport === "webrtc"; }
     sendInput(state, force) {
-      const next = { l: state.l ? 1 : 0, r: state.r ? 1 : 0 };
-      if (!force && next.l === this.input.l && next.r === this.input.r) return;
+      const next = { l: state.l ? 1 : 0, r: state.r ? 1 : 0, u: state.u ? 1 : 0, d: state.d ? 1 : 0 };   // up and down for the d-pad of generated games
+      if (!force && next.l === this.input.l && next.r === this.input.r && next.u === this.input.u && next.d === this.input.d) return;
       this.input = next;
       if (this.conn?.open) this.conn.send({ t: "input", ...next });
     }

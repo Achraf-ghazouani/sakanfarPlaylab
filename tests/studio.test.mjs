@@ -480,6 +480,17 @@ try {
   check("the vision check: a screenshot went to Muse Spark (mocked) and the verdict is in the panel", /Looks like the game asked for \(90%\): a green snake/.test(built.steps) && (await evalJS(`/^data:image\\/jpeg/.test(window.__lookBody.snapshot) && window.__lookBody.token === "mock-token" && window.__lookBody.plan.title === "Lap Dash"`)), built.steps);
   check("the reply says what was built, that it failed once and was fixed, and what the look saw", /Steer the snake/.test(built.lastAssistant) && /failed once at first \(it crashed: .*\) and I fixed it/.test(built.lastAssistant) && /A look at the screen: a green snake/.test(built.lastAssistant) && /Wrote .* KB of canvas/.test(built.steps) && /Scanned for forbidden APIs: clean/.test(built.steps), built.lastAssistant);
   check("the page cannot read into the sandboxed game", await evalJS(`(() => { try { return document.getElementById("preview").contentDocument === null; } catch { return true; } })()`));
+  // step 4: the bar over a generated game, and a phone's messages through the same route as the engines
+  check("the code bar (restart, pause, sound) shows over a generated game; the layout the game asked for reached the Studio", await evalJS(`!document.getElementById("codeBar").hidden && document.querySelectorAll("#codeBar button").length === 3 && S.codeRun.layout === "dpad+jump"`), await evalJS(`JSON.stringify({ hidden: document.getElementById("codeBar").hidden, layout: S.codeRun && S.codeRun.layout })`));
+  await evalJS(`document.querySelector('#codeBar [data-act="restart"]').click(); true`);   // the snake may have run into a wall by now: a fresh round first
+  check("Restart on the bar starts a fresh round", !!(await waitFor(`S.codeRun.lastState === "play"`, { timeout: 5000 })));
+  await evalJS(`document.getElementById("codePause").click(); true`);
+  check("Pause on the bar pauses the game in the sandbox and the button says Resume", !!(await waitFor(`S.codeRun.lastState === "paused" && /Resume/.test(document.getElementById("codePause").textContent)`, { timeout: 5000 })));
+  await evalJS(`phoneToGame({ slot: 1 }, { t: "menu", action: "toggle-pause" }); true`);
+  check("a phone's menu message goes through the route into the sandbox: playing again", !!(await waitFor(`S.codeRun.lastState === "play" && /Pause/.test(document.getElementById("codePause").textContent)`, { timeout: 5000 })));
+  await evalJS(`document.getElementById("codeMute").click(); true`);
+  check("Sound on the bar mutes the game (the SDK reports muted)", !!(await waitFor(`/Muted/.test(document.getElementById("codeMute").textContent)`, { timeout: 5000 })));
+  await evalJS(`document.getElementById("codeMute").click(); true`);
   const savedCode = await api(`api/projects?id=${await evalJS(`S.project.id`)}`);
   check("the saved project carries the code level (html, plan, notes, engine) and nothing else was lost", savedCode.project?.level?.genre === "code" && savedCode.project.level.html.length > 1000 && savedCode.project.level.plan?.title === "Lap Dash" && savedCode.project.level.notes?.built.length > 5 && savedCode.versions?.length === 1, Object.keys(savedCode.project?.level || {}));
   await type("make the apples blue");
@@ -487,7 +498,7 @@ try {
   await sendMsg(); await idle();
   check("a change rewrites the code with the current file (code_edit flow) as version v2, still sandboxed", await evalJS(`S.level?.genre === "code" && S.versions.length === 2 && S.versions[0].note === "blue apples" && window.__lastBuildBody.change === "make the apples blue" && typeof window.__lastBuildBody.previous_html === "string" && window.__lastBuildBody.previous_html.length > 1000 && document.getElementById("preview").getAttribute("sandbox") === "allow-scripts allow-pointer-lock"`), await evalJS(`JSON.stringify({ versions: S.versions.map((v) => v.note), calls: window.__buildCalls })`));
   await click("#newGameBtn");
-  check("a new game puts the preview back on game.html without the sandbox, the switch off", await evalJS(`!document.getElementById("preview").getAttribute("sandbox") && /game\\.html/.test(document.getElementById("preview").getAttribute("src") || "") && !document.getElementById("codeBtn").classList.contains("on") && !S.pendingPlan && !S.code`));
+  check("a new game puts the preview back on game.html without the sandbox, the switch off, the code bar hidden", await evalJS(`!document.getElementById("preview").getAttribute("sandbox") && /game\\.html/.test(document.getElementById("preview").getAttribute("src") || "") && !document.getElementById("codeBtn").classList.contains("on") && !S.pendingPlan && !S.code && document.getElementById("codeBar").hidden`));
   check("the engines' preview says ready again after the sandbox", !!(await waitFor(`S.previewReady`, { timeout: 15_000 })));
 
   // 9. another owner cannot see the project through the API

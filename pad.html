@@ -43,6 +43,27 @@
   body.layout-arena #left, body.layout-arena #right, body.layout-arena #jump { display:none !important; }
   body.layout-arena #stickMove, body.layout-arena #stickAim, body.layout-arena #fire { display:block; }
   body.layout-arena #fire { display:flex; }
+  /* generated games (PlayLab.controller): a 4-way d-pad, a stick, steering, A and B, a tap pad; .code hides the engines' own pad */
+  #dpad, #btnA, #btnB, #tapPad { display:none; }
+  body.code #left, body.code #right, body.code #jump, body.code #stickMove, body.code #stickAim, body.code #fire { display:none !important; }
+  body.code.pad-dpad #dpad { display:block; }
+  body.code.pad-stick #stickMove, body.code.pad-twin #stickMove, body.code.pad-twin #stickAim { display:block !important; }
+  body.code.pad-twin #fire { display:flex !important; }
+  body.code.pad-steer #left, body.code.pad-steer #right { display:flex !important; }
+  body.code.has-a #btnA, body.code.has-b #btnB { display:flex; }
+  body.code.pad-tap #tapPad { display:block; }
+  body.code.pad-tap #hint { display:none; }
+  #dpad { position:absolute; left:max(16px, env(safe-area-inset-left)); bottom:max(14px, env(safe-area-inset-bottom)); width:min(52vh, 230px); height:min(52vh, 230px); }
+  #dpad .btn { position:absolute; width:34%; height:34%; border-radius:16px; font-size:22px; }
+  #dUp { left:33%; top:0; bottom:auto; } #dDown { left:33%; bottom:0; } #dLeft { left:0; top:33%; bottom:auto; } #dRight { right:0; top:33%; bottom:auto; }
+  #btnA { right:max(18px, env(safe-area-inset-right)); width:min(32vh, 140px); height:min(32vh, 140px); font-size:20px; font-family:"Fredoka", system-ui, sans-serif; font-weight:700; border-color:var(--player); color:var(--player); }
+  #btnA.pressed { background:var(--player); color:#fff; }
+  #btnB { right:calc(max(18px, env(safe-area-inset-right)) + min(32vh, 140px) + 14px); bottom:calc(max(18px, env(safe-area-inset-bottom)) + 26px); width:min(24vh, 104px); height:min(24vh, 104px); font-size:17px; font-family:"Fredoka", system-ui, sans-serif; font-weight:700; }
+  body.code.has-b:not(.has-a) #btnB { right:max(18px, env(safe-area-inset-right)); bottom:max(18px, env(safe-area-inset-bottom)); width:min(32vh, 140px); height:min(32vh, 140px); }
+  #tapPad { position:absolute; left:max(14px, env(safe-area-inset-left)); right:max(14px, env(safe-area-inset-right)); top:56px; bottom:max(14px, env(safe-area-inset-bottom)); border:3px dashed var(--lav-2); border-radius:22px; background:rgba(255,255,255,.55); touch-action:none; }
+  #tapPad span { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); font-weight:700; pointer-events:none; }
+  #tapPad i { position:absolute; width:46px; height:46px; margin:-23px 0 0 -23px; border-radius:50%; background:var(--player); opacity:.55; pointer-events:none; animation:tapfade .45s ease-out forwards; }
+  @keyframes tapfade { to { transform:scale(1.8); opacity:0; } }
   /* the pad is light: purple sticks and dark labels */
   #pad .stick { background:rgba(124,58,237,.10); border-color:rgba(124,58,237,.45); }
   #pad .stick.on { background:rgba(124,58,237,.18); }
@@ -123,6 +144,11 @@
   <div class="stick" id="stickMove"><span class="lbl" data-i18n="pad.move">MOVE</span></div>
   <div class="stick" id="stickAim"><span class="lbl" data-i18n="pad.aim">AIM</span></div>
   <div class="hold" id="fire" data-i18n="pad.fire">FIRE</div>
+  <!-- generated games: the layout the game asked for with PlayLab.controller() -->
+  <div id="dpad"><div class="btn" id="dUp">&#9650;</div><div class="btn" id="dLeft">&#9664;</div><div class="btn" id="dRight">&#9654;</div><div class="btn" id="dDown">&#9660;</div></div>
+  <div class="btn" id="btnB">B</div>
+  <div class="btn" id="btnA">A</div>
+  <div id="tapPad"><span data-i18n="pad.tapHere">Tap here: the game sees where</span></div>
 </div>
 
 <div id="rotate"><div><span class="icon">&#128241;</span><span data-i18n="pad.rotate">Rotate your phone</span></div></div>
@@ -139,7 +165,7 @@ const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 let client = null;
 let mode = "pad";
-const state = { l: 0, r: 0 };
+const state = { l: 0, r: 0, u: 0, d: 0 };
 
 function setStatus(status, detail) {
   const pill = $("status");
@@ -150,7 +176,7 @@ function setStatus(status, detail) {
   window.__padTransport = client?.transport;
 }
 function buzz(pattern) { try { navigator.vibrate?.(pattern); } catch {} }
-const EVENT_BUZZ = { jump: 15, coin: 30, hit: [60, 40, 90], goal: [80, 50, 80, 50, 200], level: [30, 30, 30] };
+const EVENT_BUZZ = { jump: 15, coin: 30, hit: [60, 40, 90], goal: [80, 50, 80, 50, 200], level: [30, 30, 30], win: [80, 50, 80, 50, 260], lose: [220], explode: [40, 30, 120] };
 
 // Public config (Supabase relay) from the server; the page works without it, just without the fallback.
 const configReady = Promise.race([
@@ -439,6 +465,35 @@ Joystick.button($("fire"), () => { window.__padFire = true; client?.send({ t: "f
 bind("left", () => { state.l = 1; sendInput(); }, () => { state.l = 0; sendInput(); });
 bind("right", () => { state.r = 1; sendInput(); }, () => { state.r = 0; sendInput(); });
 bind("jump", () => { window.__padPressAt = performance.now(); client?.sendJump(true); buzz(10); }, () => client?.sendJump(false));
+// generated games: the d-pad sends input with up and down, A travels as jump and B as fire (the host turns them into A and B)
+bind("dUp", () => { state.u = 1; sendInput(); buzz(6); }, () => { state.u = 0; sendInput(); });
+bind("dDown", () => { state.d = 1; sendInput(); buzz(6); }, () => { state.d = 0; sendInput(); });
+bind("dLeft", () => { state.l = 1; sendInput(); buzz(6); }, () => { state.l = 0; sendInput(); });
+bind("dRight", () => { state.r = 1; sendInput(); buzz(6); }, () => { state.r = 0; sendInput(); });
+bind("btnA", () => { window.__padPressAt = performance.now(); client?.sendJump(true); buzz(10); }, () => client?.sendJump(false));
+bind("btnB", () => { client?.send({ t: "fire", down: true }); buzz(8); }, () => client?.send({ t: "fire", down: false }));
+$("tapPad").addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  const r = $("tapPad").getBoundingClientRect(), nx = (e.clientX - r.left) / r.width, ny = (e.clientY - r.top) / r.height;
+  client?.send({ t: "tap", nx: +Math.max(0, Math.min(1, nx)).toFixed(3), ny: +Math.max(0, Math.min(1, ny)).toFixed(3) }); buzz(8);
+  const dot = document.createElement("i"); dot.style.left = e.clientX - r.left + "px"; dot.style.top = e.clientY - r.top + "px"; $("tapPad").appendChild(dot); setTimeout(() => dot.remove(), 500);
+});
+/** The layouts a generated game can ask for (shared/padroute.mjs CODE_LAYOUTS, copied here: this page loads no modules). */
+const CODE_LAYOUTS = { "dpad+jump": { pad: "dpad", a: "JUMP", b: null }, "dpad+2buttons": { pad: "dpad", a: "A", b: "B" }, "stick+2buttons": { pad: "stick", a: "A", b: "B" }, "stick+fire": { pad: "twin", a: null, b: "FIRE" }, "steering+gas+brake": { pad: "steer", a: "GAS", b: "BRAKE" }, "tap": { pad: "tap", a: null, b: null } };
+let codePad = null;
+function setCodeLayout(name) {
+  const L = CODE_LAYOUTS[name] || null, key = L ? name : null;
+  if (key === codePad) return;
+  codePad = key; window.__padLayout = key;
+  const b = document.body.classList;
+  b.toggle("code", !!L);
+  for (const p of ["dpad", "stick", "twin", "steer", "tap"]) b.toggle("pad-" + p, !!L && L.pad === p);
+  b.toggle("has-a", !!L?.a); b.toggle("has-b", !!L?.b && L.pad !== "twin");   // twin sticks: FIRE is the hold button, not B
+  if (L?.a) $("btnA").textContent = L.a;
+  if (L?.b) { $("btnB").textContent = L.b; $("fire").textContent = L.b; } else $("fire").textContent = I18N.t("pad.fire");
+  // nothing stays pressed across a layout change
+  state.l = state.r = state.u = state.d = 0; sendInput(); client?.sendJump(false); client?.send({ t: "fire", down: false });
+}
 
 // Menu buttons: the game answers with a state message (level, coins, paused, who plays).
 const menu = (action) => { buzz(15); client?.send({ t: "menu", action }); };
@@ -447,6 +502,8 @@ $("mPause").addEventListener("click", () => menu("toggle-pause"));
 $("mMute").addEventListener("click", () => menu("mute"));
 function showState(s) {
   window.__padState = s;
+  setCodeLayout(s.layout);
+  if (codePad) { showCodeState(s); return; }
   const arena = s.layout === "arena";
   document.body.classList.toggle("layout-arena", arena);
   $("hint").style.display = arena ? "none" : "";
@@ -460,6 +517,21 @@ function showState(s) {
   $("mMute").classList.toggle("on", !!s.muted);
   if (s.kit !== undefined) applyKit(s.kit);
 }
+/** A generated game's state (the PlayLab SDK): its title, score, lives, laps, timer and whether it plays, is paused or over. */
+function showCodeState(s) {
+  const h = s.hud || {}, parts = [s.level || "game"];
+  if (h.score !== undefined) parts.push("score " + h.score);
+  if (h.lives !== undefined) parts.push("\u2764 " + h.lives);
+  if (h.laps !== undefined) parts.push("lap " + h.laps);
+  if (h.timer !== undefined) { const t = Math.max(0, Math.round(Number(h.timer) || 0)); parts.push(Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0")); }
+  parts.push({ play: "playing", paused: "paused", over: "game over: press " + (CODE_LAYOUTS[s.layout]?.a || "A") + " to play again" }[s.state] || s.state || "");
+  $("gameState").textContent = parts.join(" \u00B7 ");
+  $("hint").style.display = "";
+  $("mPause").innerHTML = I18N.t(s.state === "paused" ? "pad.resume" : "pad.pause");
+  $("mPause").classList.toggle("on", s.state === "paused");
+  $("mMute").innerHTML = I18N.t(s.muted ? "pad.muted" : "pad.sound");
+  $("mMute").classList.toggle("on", !!s.muted);
+}
 /** The game's UI kit on the pad: the uploaded button as the buttons' face, its colour for the rest. */
 function applyKit(kit) {
   const on = !!(kit && typeof kit.button === "string" && /^data:image\//.test(kit.button));
@@ -470,9 +542,11 @@ function applyKit(kit) {
 }
 
 // Keyboard too (handy on a laptop for testing)
-const KEYS = { ArrowLeft: "l", KeyA: "l", ArrowRight: "r", KeyD: "r" };
-window.addEventListener("keydown", (e) => { if (e.repeat || mode !== "pad") return; if (KEYS[e.code]) { state[KEYS[e.code]] = 1; sendInput(); } if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") client?.sendJump(true); });
-window.addEventListener("keyup", (e) => { if (mode !== "pad") return; if (KEYS[e.code]) { state[KEYS[e.code]] = 0; sendInput(); } if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") client?.sendJump(false); });
+const KEYS = { ArrowLeft: "l", KeyA: "l", ArrowRight: "r", KeyD: "r" }, CODE_KEYS = { ArrowUp: "u", KeyW: "u", ArrowDown: "d", KeyS: "d" };
+const jumpKey = (code) => code === "Space" || (!codePad && (code === "ArrowUp" || code === "KeyW"));
+const fireKey = (code) => codePad && (code === "KeyX" || code === "ShiftLeft");
+window.addEventListener("keydown", (e) => { if (e.repeat || mode !== "pad") return; if (KEYS[e.code]) { state[KEYS[e.code]] = 1; sendInput(); } if (codePad && CODE_KEYS[e.code]) { state[CODE_KEYS[e.code]] = 1; sendInput(); } if (jumpKey(e.code)) client?.sendJump(true); if (fireKey(e.code)) client?.send({ t: "fire", down: true }); });
+window.addEventListener("keyup", (e) => { if (mode !== "pad") return; if (KEYS[e.code]) { state[KEYS[e.code]] = 0; sendInput(); } if (codePad && CODE_KEYS[e.code]) { state[CODE_KEYS[e.code]] = 0; sendInput(); } if (jumpKey(e.code)) client?.sendJump(false); if (fireKey(e.code)) client?.send({ t: "fire", down: false }); });
 
 // Full screen + landscape lock, keep the screen awake
 $("fsBtn").addEventListener("click", async () => {
@@ -483,7 +557,7 @@ let wakeLock = null;
 async function keepAwake() { try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {} }
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") { keepAwake(); if (client && !client.connected) client.retry(); }
-  else { state.l = state.r = 0; sendInput(); client?.sendJump(false); sticks.m = [0, 0]; sticks.a = [0, 0]; queueSticks(true); client?.send({ t: "fire", down: false }); }
+  else { state.l = state.r = state.u = state.d = 0; sendInput(); client?.sendJump(false); sticks.m = [0, 0]; sticks.a = [0, 0]; queueSticks(true); client?.send({ t: "fire", down: false }); }
 });
 keepAwake();
 

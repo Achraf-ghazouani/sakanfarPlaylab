@@ -149,8 +149,9 @@
     touchPad.style.cssText = "position:fixed;inset:0;z-index:8999;pointer-events:none;font:700 20px system-ui,sans-serif;user-select:none;-webkit-user-select:none;";
     const btn = (label, left, right, bottom, size, on, off) => { const b = document.createElement("div"); b.textContent = label; b.style.cssText = `position:absolute;${left !== null ? "left:" + left + "px" : "right:" + right + "px"};bottom:${bottom}px;width:${size}px;height:${size}px;border-radius:50%;background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.6);color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;`; b.addEventListener("pointerdown", (e) => { e.preventDefault(); b.setPointerCapture(e.pointerId); on(); }); b.addEventListener("pointerup", off); b.addEventListener("pointercancel", off); touchPad.appendChild(b); return b; };
     const tx = (v) => { P[1].tx = v; }, ty = (v) => { P[1].ty = v; };
-    if (type === "dpad+jump" || type === "dpad+2buttons") {
-      btn("◀", 18, null, 18, 64, () => tx(-1), () => tx(0)); btn("▶", 96, null, 18, 64, () => tx(1), () => tx(0));
+    if (type === "dpad+jump" || type === "dpad+2buttons") {   // a 4-way cross on the left
+      btn("◀", 14, null, 62, 56, () => tx(-1), () => tx(0)); btn("▶", 122, null, 62, 56, () => tx(1), () => tx(0));
+      btn("▲", 68, null, 112, 56, () => ty(-1), () => ty(0)); btn("▼", 68, null, 12, 56, () => ty(1), () => ty(0));
       if (type === "dpad+2buttons") { btn("B", null, 96, 18, 64, () => hold(1, "B", true), () => hold(1, "B", false)); btn("A", null, 18, 40, 72, () => hold(1, "A", true), () => hold(1, "A", false)); }
       else btn("▲", null, 18, 18, 72, () => hold(1, "A", true), () => hold(1, "A", false));
     } else if (type === "steering+gas+brake") {
@@ -162,10 +163,22 @@
       zone.addEventListener("pointerdown", (e) => { c0 = [e.clientX, e.clientY]; zone.setPointerCapture(e.pointerId); });
       zone.addEventListener("pointermove", (e) => { if (!c0) return; tx(clamp((e.clientX - c0[0]) / 50)); ty(clamp((e.clientY - c0[1]) / 50)); });
       const end = () => { c0 = null; tx(0); ty(0); }; zone.addEventListener("pointerup", end); zone.addEventListener("pointercancel", end); touchPad.appendChild(zone);
-      btn(type === "stick+fire" ? "FIRE" : "A", null, 18, 40, 72, () => hold(1, "A", true), () => hold(1, "A", false));
+      if (type === "stick+fire") btn("FIRE", null, 18, 40, 72, () => hold(1, "B", true), () => hold(1, "B", false));   // fire is B, as on the phones
+      else btn("A", null, 18, 40, 72, () => hold(1, "A", true), () => hold(1, "A", false));
       if (type !== "stick+fire") btn("B", null, 100, 18, 56, () => hold(1, "B", true), () => hold(1, "B", false));
     }
     mount();
+  }
+
+  // ---- sounds for PlayLab.event (Web Audio, no files): a short synthesised blip, never when muted ----
+  let actx = null;
+  const SOUND = { coin: [[880, 0.06], [1320, 0.08]], jump: [[440, 0.05], [660, 0.07]], hit: [[180, 0.12, "sawtooth"]], explode: [[90, 0.25, "sawtooth"]], goal: [[660, 0.08], [880, 0.08], [1100, 0.14]], win: [[523, 0.1], [659, 0.1], [784, 0.1], [1046, 0.2]], lose: [[392, 0.15], [330, 0.15], [262, 0.3]] };
+  const unlock = () => { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); } catch {} };
+  window.addEventListener("pointerdown", unlock, { capture: true }); window.addEventListener("keydown", unlock, { capture: true });
+  function blip(kind) {
+    const notes = SOUND[kind]; if (!notes || muted || !actx || actx.state !== "running") return;
+    let at = actx.currentTime;
+    for (const [f, d, wave] of notes) { const o = actx.createOscillator(), g = actx.createGain(); o.type = wave || "square"; o.frequency.value = f; g.gain.setValueAtTime(0.08, at); g.gain.exponentialRampToValueAtTime(0.0001, at + d); o.connect(g).connect(actx.destination); o.start(at); o.stop(at + d + 0.02); at += d * 0.9; }
   }
 
   // ---- the API ----
@@ -180,10 +193,11 @@
     input, env, assets: { get: (role) => assets[role] || null, list: () => ({ ...assets }) },
     players: () => [...present].sort(),
     onStart: (f) => flow.start.push(f), onPause: (f) => flow.pause.push(f), onResume: (f) => flow.resume.push(f), onRestart: (f) => flow.restart.push(f), onMute: (f) => flow.mute.push(f),
-    gameOver({ win = false, score: s } = {}) { state = "over"; if (s !== undefined) score = Number(s) || 0; post({ type: "playlab:event", kind: win ? "win" : "lose", name: win ? "win" : "lose", score }); publish(true); },
+    gameOver({ win = false, score: s } = {}) { state = "over"; if (s !== undefined) score = Number(s) || 0; blip(win ? "win" : "lose"); post({ type: "playlab:event", kind: win ? "win" : "lose", name: win ? "win" : "lose", score }); publish(true); },
     start() { state = "play"; publish(true); },
     controller({ type = "dpad+jump" } = {}) { layout = String(type); buildTouch(layout); post({ type: "playlab:controller", layout }); publish(true); },
-    event(kind, extra) { post({ type: "playlab:event", kind: String(kind), name: String(kind), ...(extra && typeof extra === "object" ? extra : {}) }); },
+    event(kind, extra) { const x = extra && typeof extra === "object" ? extra : {}; if (x.sound !== false) blip(String(kind)); post({ type: "playlab:event", kind: String(kind), name: String(kind), ...x }); },
+    get layout() { return layout; },
     hud: { set(fields) { Object.assign(hud, fields || {}); if (fields && fields.score !== undefined) score = Number(fields.score) || 0; hudRender(); publish(false); }, hide() { hudEl.style.display = "none"; }, show() { hudEl.style.display = ""; }, clear() { hud = {}; hudRender(); } },
     setLevel(name) { level = String(name || level); publish(false); },
     ready, screenshot, state: () => snapshotState(),

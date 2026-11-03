@@ -54,6 +54,7 @@
 <script src="shared/model3d.js"></script>
 <script type="module" src="shared/coderun.mjs"></script>
 <script type="module" src="shared/codekinds.mjs"></script>
+<script type="module" src="shared/padroute.mjs"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.min.js" defer></script>
@@ -244,6 +245,10 @@
   .box .code { align-self:center; flex:none; border:1px solid var(--lav-2); background:var(--lav); color:var(--purple-deep); border-radius:999px; padding:6px 10px; font-size:12px; font-weight:800; letter-spacing:.02em; margin-right:2px; }
   .box .code.on { background:var(--purple); border-color:var(--purple); color:#fff; box-shadow:0 2px 6px rgba(124,58,237,.35); }
   .box .code:disabled { opacity:.85; }
+  #codeBar { position:absolute; top:10px; right:12px; z-index:2; display:flex; gap:6px; }
+  #codeBar[hidden] { display:none; }
+  #codeBar button { border:0; background:rgba(27,21,53,.72); color:#fff; border-radius:999px; padding:6px 12px; font-size:12px; font-weight:700; backdrop-filter:blur(4px); }
+  #codeBar button.on { background:var(--purple); }
   #sendBtn { background:var(--purple); color:#fff; }
   #sendBtn:hover { background:var(--purple-deep); }
   #sendBtn:disabled { background:var(--lav-2); color:#fff; cursor:default; }
@@ -415,6 +420,7 @@
       </section>
       <section class="preview">
         <iframe id="preview" src="game.html?embed=1" title="Game preview" allow="autoplay; pointer-lock"></iframe>
+        <div id="codeBar" hidden><button data-act="restart" data-i18n="code.restart">Restart</button><button data-act="toggle-pause" id="codePause" data-i18n="code.pause">Pause</button><button data-act="mute" id="codeMute" data-i18n="code.sound">Sound</button></div>
         <div id="previewStatus" data-i18n="preview.none">no game yet</div>
         <!-- first screen: the welcome sits on the stage, the chat box floats at the bottom center -->
         <div class="welcome" id="emptyState">
@@ -843,6 +849,8 @@ function openPhoneLink(mode = "camera") {
 }
 const openCamLink = () => openPhoneLink("camera");
 const toPreview = (msg) => { if (S.previewReady) preview().postMessage(msg, "*"); };
+/** A phone's message to the game in the preview (shared/padroute.mjs): the same route for the engines and generated games. */
+const phoneToGame = (p, msg) => { for (const m of PadRoute.toGame(p.slot, msg)) toPreview(m); };
 function syncPlayers() {
   const all = Cam.host ? [...Cam.host.players.values()] : [];
   const pads = all.filter((p) => p.mode === "pad").map(({ slot, color, name }) => ({ slot, color, name }));
@@ -879,8 +887,8 @@ function startCamHost() {
       else if (p === Cam.player) { Cam.player = null; Cam.stream = null; $("camVideo").srcObject = null; $("camPip").classList.remove("show"); $("cameraBtn").classList.remove("live"); $("camTag").textContent = `${p.name} phone is now a controller`; }
       syncPlayers();
     },
-    onInput: (p, input) => toPreview({ type: "playlab:input", slot: p.slot, l: input.l, r: input.r }),
-    onJump: (p, down) => toPreview({ type: "playlab:jump", slot: p.slot, down }),
+    onInput: (p, input) => phoneToGame(p, { t: "input", ...input }),
+    onJump: (p, down) => phoneToGame(p, { t: "jump", down }),
     onStream: (p, stream) => {
       Cam.stream = stream; $("camVideo").srcObject = stream; $("camVideo").play?.().catch(() => {}); $("camTag").textContent = "live from your phone";
       if (!$("camModal").classList.contains("show")) { $("camPipVideo").srcObject = stream; $("camPip").classList.add("show"); }
@@ -889,11 +897,10 @@ function startCamHost() {
     onLeave: (p) => {
       if (p === Cam.player) { Cam.player = null; Cam.stream = null; $("camVideo").srcObject = null; $("camPip").classList.remove("show"); $("cameraBtn").classList.remove("live"); $("camTag").textContent = "phone disconnected, scan again"; camStatus("phone disconnected", ""); }
       else camStatus(`${p.name} phone left`, "");
-      toPreview({ type: "playlab:input", slot: p.slot, l: 0, r: 0 }); toPreview({ type: "playlab:jump", slot: p.slot, down: false });
-      toPreview({ type: "playlab:stick", slot: p.slot, m: [0, 0], a: [0, 0] }); toPreview({ type: "playlab:fire", slot: p.slot, down: false });
+      for (const m of PadRoute.releaseAll(p.slot)) toPreview(m);
       syncPlayers();
     },
-    onMessage: (p, msg) => { if (msg.t === "ink") onCamInk(msg); else if (msg.t === "scan") runPhoneScan(p, msg); else if (msg.t === "menu") toPreview({ type: "playlab:menu", action: msg.action }); else if (msg.t === "stick") toPreview({ type: "playlab:stick", slot: p.slot, m: msg.m, a: msg.a }); else if (msg.t === "fire") toPreview({ type: "playlab:fire", slot: p.slot, down: !!msg.down }); },
+    onMessage: (p, msg) => { if (msg.t === "ink") onCamInk(msg); else if (msg.t === "scan") runPhoneScan(p, msg); else phoneToGame(p, msg); },   // menu, stick, fire, tap
   });
   camConfig.then(() => { if (Cam.relay && Cam.host) Cam.host.startRelay(Cam.relay); });
   Cam.host.start(sessionStorage.getItem("playlab.studio.room") || undefined);
@@ -1526,6 +1533,14 @@ async function routeWords(text, history) {
 function renderCodeMode() {
   const on = S.codeMode || !!S.pendingPlan || isCode(S.level), b = $("codeBtn");
   b.classList.toggle("on", on); b.setAttribute("aria-checked", on); b.disabled = isCode(S.level);
+  $("codeBar").hidden = !isCode(S.level);
+}
+/** The bar over a generated game: the same menu the phones have, through the SDK. */
+$("codeBar").addEventListener("click", (e) => { const b = e.target.closest("button[data-act]"); if (b && S.code) S.code.send({ type: "playlab:menu", action: b.dataset.act }); });
+function renderCodeBar(state) {
+  if (!state) return;
+  $("codePause").textContent = I18N.t(state.state === "paused" ? "code.resume" : "code.pause"); $("codePause").classList.toggle("on", state.state === "paused");
+  $("codeMute").textContent = I18N.t(state.muted ? "code.muted" : "code.sound"); $("codeMute").classList.toggle("on", !!state.muted);
 }
 $("codeBtn").addEventListener("click", () => {
   if (isCode(S.level)) return;
@@ -1621,7 +1636,7 @@ function onCodeMessage(m) {
   if (m.type === "playlab:ready") { S.previewReady = true; r.ready = true; r.readyAt = performance.now(); if (Cam.host) syncPlayers(); }
   else if (m.type === "playlab:error") { if (r.errors.length < 20) r.errors.push({ message: m.message, kind: m.kind, line: m.line, col: m.col, stack: m.stack }); }
   else if (m.type === "playlab:blank") { r.blank = m.why; r.blankInfo = m.info || null; }
-  else if (m.type === "playlab:state" && m.state) { r.lastState = m.state.state; Cam.host?.broadcast(m.state); }
+  else if (m.type === "playlab:state" && m.state) { r.lastState = m.state.state; r.layout = m.state.layout; renderCodeBar(m.state); Cam.host?.broadcast(m.state); }   // the phones switch to the layout the game asked for
   else if (m.type === "playlab:event") { if (m.kind === "win") toast("You won on the preview!"); Cam.host?.event(m.name || m.kind, m.slot); }
 }
 /** The person's pictures for PlayLab.assets.get(role) inside the game: the player, the object sprites, the asset list, the model. */

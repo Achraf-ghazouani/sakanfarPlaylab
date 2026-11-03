@@ -95,6 +95,14 @@ try {
   const pad2 = await evalJS(`(() => { __padShowState({ t: "state", level: "kit", state: "play", coins: 0, total: 2, muted: false, players: [], layout: "2d", kit: null }); return { kit: document.body.classList.contains("kit"), image: getComputedStyle(document.getElementById("jump")).backgroundImage, purple: getComputedStyle(document.documentElement).getPropertyValue("--purple").trim() }; })()`);
   check("without a kit the pad is back to its own look", !pad2.kit && pad2.image === "none" && pad2.purple === "#7c3aed", pad2);
 
+  // ---- the AI steps overlay on the game page (the big screen's corner card) ----
+  await send("Page.navigate", { url: `${BASE}/game.html` });   // the big screen itself needs a login; the overlay is the same page's
+  check("game.html (the demo player) is up", !!(await waitFor(`!!window.__aiSteps`)));
+  const steps = await evalJS(`(async () => { __aiSteps.start({ corner: true }); const i = __aiSteps.add("Reading the drawing from your phone", "Muse Spark 1.3"); __aiSteps.set(i, { state: "done" }); await __aiSteps.answered({ level: { objects: [1, 2, 3], fixes: ["a step"] }, meta: { model: "muse-spark-open", playtest: { before: { ok: false, problems: ["x"] }, fixes: ["a step"] } } }, i); const ov = document.getElementById("rescan"); return { shown: ov.classList.contains("show") && ov.classList.contains("corner"), lines: [...document.querySelectorAll("#rescanSteps li")].map((l) => l.textContent) }; })()`);
+  check("the corner card lists the steps with the Meta model that did each (the answer names the one that read it)", steps.shown && steps.lines.length === 6 && /Reading the drawing[^]*Muse Spark Open/.test(steps.lines[0]) && /Objects found: 3Muse Spark Open/.test(steps.lines[1]) && /Problems found: 1/.test(steps.lines[3]) && /Fixes applied: 1/.test(steps.lines[4]) && /Ready/.test(steps.lines[5]), steps);
+  await evalJS(`__aiSteps.finish(0); true`); await sleep(200);
+  check("the card goes away when finished", await evalJS(`!document.getElementById("rescan").classList.contains("show")`));
+
   // ---- 3D models: the main character in the 3D view and in the arena ----
   const LOAD_MODEL = `(async () => { const b = await (await fetch("tests/samples/cube.glb", { cache: "no-store" })).blob(); window.__M = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); }); return window.__M.length; })()`;
   await send("Page.navigate", { url: `${BASE}/game.html?embed=1` });

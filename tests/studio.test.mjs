@@ -186,8 +186,10 @@ try {
   check("level built from words", await evalJS(`S.level && S.level.objects.length`) === 6);
   check("version 1 created from the chat", await evalJS(`S.versions.length === 1 && S.versions[0].n === 1 && S.versions[0].note === "lava castle, one ledge"`), await evalJS(`S.versions.map((v) => v.n + ":" + v.note)`));
   check("create card rendered", /lava castle, one ledge/.test(await evalJS(`document.body.innerText`)));
+  const think1 = await evalJS(`(() => { const c = [...document.querySelectorAll(".card.think")].pop(); return c ? { title: c.querySelector(".th b").textContent, steps: [...c.querySelectorAll(".steps li")].map((l) => l.className + ":" + l.textContent) } : null; })()`);
+  check("the AI thinking panel: designing (Muse Spark), built, jumps checked, no problems, ready", !!think1 && /Designing/.test(think1.title) && think1.steps.length === 5 && /s-done:Designing[^]*Muse Spark 1\.3/.test(think1.steps[0]) && /Built: 6 objects/.test(think1.steps[1]) && /Checking every jump/.test(think1.steps[2]) && /No problems/.test(think1.steps[3]) && /Ready/.test(think1.steps[4]), think1);
   let saved = await api(`api/projects?id=${pid}`);
-  check("messages saved to the database", saved.messages?.length === 3 && saved.messages.map((m) => m.role).join() === "user,tool,assistant", saved.messages?.map((m) => m.role));
+  check("messages saved to the database (the user's words, the AI steps, the level card, the reply)", saved.messages?.length === 4 && saved.messages.map((m) => m.role).join() === "user,tool,tool,assistant" && /Designing[^]*Ready/.test(saved.messages[1].content), saved.messages?.map((m) => m.role));
   const player = await waitFor(`(() => { try { const s = game.scene.getScene("play"); return s && s.player ? { x: Math.round(s.player.x), state: s.state } : null; } catch { return null; } })()`, { contextId: iframeCtx(), timeout: 15_000 });
   check("preview iframe is running the level", !!player && player.state === "play", player);
   check("game layout: chat on the left, the game in the center", await evalJS(`!document.body.classList.contains("building") && document.querySelector(".preview").getBoundingClientRect().left >= 300`));
@@ -208,6 +210,8 @@ try {
   check("version 3 created", await evalJS(`S.versions.length === 3 && S.versions[0].n === 3`), await evalJS(`S.versions.map((v) => v.n)`));
   check("preview status text", /7 objects/.test(await evalJS(`document.getElementById("previewStatus").textContent`)));
   check("change card rendered", /Level from your picture/.test(await evalJS(`document.body.innerText`)));
+  const think2 = await evalJS(`(() => { const c = [...document.querySelectorAll(".card.think")].pop(); return c ? [...c.querySelectorAll(".steps li")].map((l) => l.textContent) : null; })()`);
+  check("the panel for a scan continues the picture's: looked at, reading the drawing, objects found, jumps, ready", !!think2 && think2.some((l) => /It is a level/.test(l)) && think2.some((l) => /Reading the drawing/.test(l)) && think2.some((l) => /Objects found: 7/.test(l)) && think2.some((l) => /Checking every jump/.test(l)) && /Ready/.test(think2[think2.length - 1]), think2);
   saved = await api(`api/projects?id=${pid}`);
   check("level + photo saved on the project", saved.project?.level?.objects?.length === 7 && String(saved.project.photo || "").startsWith("data:image/jpeg"));
   check("sidebar thumbnail uses the photo", !!(await waitFor(`document.querySelector(".proj img") !== null`)));

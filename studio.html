@@ -177,6 +177,19 @@
   .card .choices { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
   .card .choices button { border:1px solid var(--lav-2); background:#fff; color:var(--purple-deep); border-radius:999px; padding:4px 10px; font-size:12px; font-weight:700; cursor:pointer; }
   .card .choices button:hover { background:var(--lav); }
+  /* the AI thinking panel: the steps of a call, live */
+  .card.think { flex-direction:column; align-items:stretch; gap:4px; border-left-color:#a78bfa; }
+  .card.think .th { display:flex; align-items:center; gap:8px; }
+  .card.think .th .el { margin-left:auto; color:var(--muted); font-size:11px; font-weight:500; }
+  .card.think .steps { list-style:none; margin:2px 0 0; padding:0; display:flex; flex-direction:column; gap:3px; font-size:12px; }
+  .card.think .steps li { display:flex; align-items:center; gap:8px; min-width:0; }
+  .card.think .steps .dot { width:9px; height:9px; border-radius:50%; background:var(--lav-2); flex:none; }
+  .card.think .steps .s-run .dot { background:var(--purple); animation:blink 1s infinite; }
+  .card.think .steps .s-done .dot { background:#22c55e; }
+  .card.think .steps .s-fail .dot { background:#ef4444; }
+  .card.think .steps .s-skip { opacity:.55; }
+  .card.think .steps .lbl { flex:1; min-width:0; }
+  .card.think .steps .who { color:var(--purple-deep); font-size:11px; white-space:nowrap; background:var(--lav); border-radius:999px; padding:1px 7px; }
   .attach .x { border:0; background:var(--lav); border-radius:50%; width:20px; height:20px; font-size:12px; line-height:1; }
   .box { display:flex; align-items:flex-end; gap:8px; border:1px solid var(--lav-2); border-radius:16px; padding:8px 8px 8px 12px; background:#fff; }
   .box:focus-within { border-color:var(--purple); box-shadow:0 0 0 3px rgba(124,58,237,.12); }
@@ -608,6 +621,46 @@ function appendMessage(m, scroll = true) {
 }
 function showTyping() { const box = $("messages"); const el = document.createElement("div"); el.className = "msg assistant"; el.id = "typing"; el.innerHTML = `<div class="av">&#9998;</div><div class="bubble"><span class="typing"><i></i><i></i><i></i></span></div>`; box.appendChild(el); box.scrollTop = box.scrollHeight; }
 function hideTyping() { $("typing")?.remove(); }
+
+// ---------------------------------------------------------------------------
+// The AI thinking panel: while a call runs, a card in the chat lists its steps as they happen, each with the Meta model
+// doing it (Muse Spark 1.3 / Open, Muse Image 1.0, SAM 3.1, the playtest agent); the steps after the call are filled in
+// from the answer (objects found, problems, fixes) and the card stays in the chat as the record of what the AI did.
+// ---------------------------------------------------------------------------
+const MODEL_LABEL = { "muse-spark-1.3": "Muse Spark 1.3", "muse-spark-1.2": "Muse Spark 1.2", "muse-spark-1.1": "Muse Spark 1.1", "muse-spark-open": "Muse Spark Open", baseten: "Muse Spark Open", meta: "Muse Spark 1.3", "muse-image-1.0": "Muse Image 1.0", "sam-3.1": "SAM 3.1", mock: "mock" };
+const modelName = (id) => MODEL_LABEL[id] || (id ? String(id) : "Muse Spark 1.3");
+const REVEAL_MS = 180;   // the steps after an answer appear one by one
+function startThinking(title) {
+  const box = $("messages"), el = document.createElement("div");
+  el.className = "card think";
+  el.innerHTML = `<div class="th"><span class="ic">&#129504;</span><b>${esc(title)}</b><span class="el">0.0 s</span></div><ol class="steps"></ol>`;
+  box.appendChild(el); box.scrollTop = box.scrollHeight;
+  const th = { el, title, steps: [], t0: performance.now(), open: true };
+  const list = el.querySelector(".steps"), elapsed = el.querySelector(".el");
+  th.timer = setInterval(() => { elapsed.textContent = ((performance.now() - th.t0) / 1000).toFixed(1) + " s"; }, 200);
+  const render = () => { list.innerHTML = th.steps.map((s) => `<li class="s-${s.state}"><span class="dot"></span><span class="lbl">${esc(s.label)}</span>${s.model ? `<span class="who">${esc(s.model)}</span>` : ""}</li>`).join(""); box.scrollTop = box.scrollHeight; };
+  /** Adds a step (running by default); returns its index. */
+  th.add = (label, model = "", state = "run") => { th.steps.push({ label, model, state }); render(); return th.steps.length - 1; };
+  th.set = (i, patch) => { if (th.steps[i]) { Object.assign(th.steps[i], patch); render(); } };
+  /** A finished step that appears after a short pause (the answer is in, the steps roll out). */
+  th.reveal = async (label, model = "", state = "done") => { await new Promise((r) => setTimeout(r, REVEAL_MS)); return th.add(label, model, state); };
+  th.finish = async (summary = "Ready") => {
+    if (!th.open) return; th.open = false;
+    for (const s of th.steps) if (s.state === "run") s.state = "done";
+    if (summary) th.steps.push({ label: summary, model: "", state: "done" });
+    render(); clearInterval(th.timer); elapsed.textContent = ((performance.now() - th.t0) / 1000).toFixed(1) + " s";
+    if (S.think === th) S.think = null;
+    try { await saveMessage("tool", th.steps.map((s) => s.label).join(" · "), { card: { icon: "&#129504;", title, text: th.steps.map((s) => s.label + (s.model ? ` (${s.model})` : "")).join(" · ") } }); } catch {}
+  };
+  th.fail = (why) => { if (!th.open) return; th.open = false; for (const s of th.steps) if (s.state === "run") s.state = "fail"; th.steps.push({ label: why || "failed", model: "", state: "fail" }); render(); clearInterval(th.timer); if (S.think === th) S.think = null; };
+  th.discard = () => { th.open = false; clearInterval(th.timer); el.remove(); if (S.think === th) S.think = null; };
+  S.think = th;
+  return th;
+}
+/** The open panel, or a new one: steps of one upload (look, draw, cut out, save) share a card. */
+const thinkOpen = (title) => (S.think && S.think.open ? S.think : startThinking(title));
+const thinkClose = (summary) => { if (S.think && S.think.open) return S.think.finish(summary); };
+S.think = null;
 /** Reveal the assistant reply word by word. */
 async function streamAssistant(text) {
   hideTyping();
@@ -979,14 +1032,16 @@ async function handlePicture(img, text) {
       if (plan.as !== "level") await addCard({ icon: "&#128269;", title: "Looked at your picture", text: `${planWords(plan)}: ${local.guess.why} (no credits)` });
     } else {
       showTyping();
+      const th = thinkOpen("Your picture"), looking = th.add("Looking at the picture" + (local ? " (with what the pixels say)" : ""), "Muse Spark 1.3");
       try {
         const c = await api("api/art", { method: "POST", body: { task: "classify", image: img.raw || img.art || img.upload, hint: text, facts: AssetCheck.describe(local) } });
         hideTyping();
+        th.set(looking, { state: "done", label: `It is ${/^(a|an|the|your) /i.test(c.name || "") ? c.name : "a " + (c.name || c.role)} (${Math.round((c.confidence || 0) * 100)}% sure)`, model: modelName(c.credits?.model) });
         const role = c.role || (c.kind === "character" ? "player" : c.kind === "object" ? SLOT_ROLE[c.role] || "decoration" : "level");
         plan = planFromRole(role, { name: c.name, hint: c.hint });
         if (c.confidence < 0.5 && plan.as !== "level" && !S.batch) { await askRole(img, text, plan, c); return true; }   // in a batch the best guess stands
         if (plan.as !== "level") await addCard({ icon: "&#128269;", title: "Looked at your picture", text: plan.as === "player" ? `a character (${c.name})` : plan.as === "object" ? `${c.name}: it will be the ${ROLE_LABEL[plan.role]}` : `${c.name}: ${planWords(plan)}` });
-      } catch (err) { hideTyping(); if (err.status === 402) return true; plan = { as: "level" }; }   // could not tell: treat it as a level drawing
+      } catch (err) { hideTyping(); th.set(looking, { state: "fail" }); if (err.status === 402) { th.fail("No credits"); return true; } plan = { as: "level" }; }   // could not tell: treat it as a level drawing
     }
   }
   return applyPicturePlan(img, plan, text);
@@ -996,7 +1051,8 @@ async function applyPicturePlan(img, plan, text) {
   if (plan.as === "level") return false;
   if (plan.as === "object" && !plan.role) plan.role = "decoration";
   if (plan.as === "player" || plan.as === "object") await makePictureSprite(img, plan, text);
-  else await saveAsset(img, plan);
+  else { thinkOpen("Your picture").add(`Saved as ${planWords(plan)}`, "", "done"); await saveAsset(img, plan); }
+  await thinkClose("Ready");
   if (S.batch) S.batch.plans.push(plan); else await detectedCard([plan]);
   return true;
 }
@@ -1190,12 +1246,15 @@ async function makePictureSprite(img, plan, text) {
   let src = img.art || img.upload, how = "original";
   if (!AS_IS.test(text)) {
     showTyping();
+    const th = thinkOpen("Your picture"), drawing = th.add(`Drawing ${kind === "character" ? "the character" : "it"} as a game sprite`, "Muse Image 1.0");
     try {
       const r = await api("api/art", { method: "POST", body: { task: "sprite", image: img.art || img.upload, kind, role: plan.role, name: plan.name || "", wish: text } });
       src = r.image; how = "muse";
+      th.set(drawing, { state: "done", model: modelName(r.credits?.model || "muse-image-1.0") });
     } catch (err) {
       hideTyping();
-      if (err.status === 402) return;                       // the no-credits dialog is already up
+      th.set(drawing, { state: "fail", label: "Muse Image could not draw it: your picture is used instead" });
+      if (err.status === 402) { th.fail("No credits"); return; }   // the no-credits dialog is already up
       toast("Muse Image could not draw it, so I used your picture: " + err.message, 5000);
     }
   }
@@ -1203,6 +1262,7 @@ async function makePictureSprite(img, plan, text) {
   if (how === "muse") { try { cut = await Cutout.character(src); } catch {} }          // Muse's flat white: the free fill
   if (!cut?.keyed) cut = (await samCutout(src, plan)) || cut;                           // the person's own picture: SAM 3.1 finds the subject
   if (!cut) { try { cut = await Cutout.character(src); } catch { hideTyping(); await streamAssistant("I could not read that picture. Try a PNG or JPEG."); return; } }
+  thinkOpen("Your picture").add(cut.how === "sam" ? "Cut out along the mask" : cut.keyed ? "Background cut out" : "Kept as it is", cut.how === "sam" ? "SAM 3.1" : "free fill", "done");
   const drawn = how === "muse" ? "Muse Image drew it as a game sprite" : cut.how === "sam" ? "SAM 3.1 cut it out of your picture" : cut.keyed ? "I cut it out of your picture" : "I used your picture as it is";
   if (kind === "character") {
     await setPlayerArt(cut.src, S.level ? `${drawn}: it is the player now. Try it on the right!` : `${drawn}! Now describe a level or draw one, and they will play it.`);
@@ -1215,10 +1275,13 @@ async function makePictureSprite(img, plan, text) {
 async function samCutout(src, plan) {
   let prep; try { prep = await Cutout.prepare(src); } catch { return null; }
   showTyping();
+  const th = thinkOpen("Your picture"), cutting = th.add(plan.name ? `Finding the ${plan.name}` : "Finding the subject", "SAM 3.1");
   try {
     const r = await api("api/art", { method: "POST", body: { task: "cutout", image: prep.src, phrase: plan.name || "", width: prep.width, height: prep.height } });
+    th.set(cutting, { state: "done", label: `Found ${r.how === "phrase" ? "the " + (r.phrase || "subject") : "the subject in the middle"}${r.matches > 1 ? ` (${r.matches} matches, the biggest kept)` : ""}` });
     return await Cutout.character(prep.src, { sam: r });
   } catch (err) {
+    th.set(cutting, { state: "fail", label: "SAM 3.1 could not help: the plain cutout is used" });
     if (err.status !== 402) toast("SAM 3.1 could not cut it out, so I used the plain cutout: " + err.message, 4000);
     return null;
   }
@@ -1249,36 +1312,55 @@ async function setObjectSprite(role, src, reply) {
 /** A picture becomes a level through /api/scan (the same scanner as the phone flow). */
 async function runScan(img) {
   showTyping();
+  const what = img.sketch ? "sketch" : "picture";
+  const th = thinkOpen(`Building from your ${what}`), reading = th.add(S.level ? "Reading the drawing and comparing it with the last scan" : "Reading the drawing", "Muse Spark 1.3");
   try {
     const data = await api("api/scan", { method: "POST", body: { image: img.upload, previous: S.level ? strip(S.level) : undefined } });
     hideTyping();
-    const lvl = data.level, problems = data.meta?.playtest?.before?.problems || [];
-    const what = img.sketch ? "sketch" : "picture";
+    const lvl = data.level, pt = data.meta?.playtest, problems = pt?.before?.problems || [], model = modelName(data.meta?.model || data.meta?.provider);
+    th.set(reading, { state: "done", model });
+    await th.reveal(`Objects found: ${lvl.objects.length} (${lvl.theme})${lvl.diff?.short ? " · " + lvl.diff.short : ""}`, model);
+    await th.reveal("Checking every jump", "playtest agent");
+    await th.reveal(problems.length ? `Problems found: ${problems.length}` : "No problems: every platform, coin and goal is reachable", "playtest agent");
+    if (problems.length) await th.reveal(`Fixes applied: ${(pt?.fixes || lvl.fixes || []).length || problems.length}`, "instant fix");
+    await th.finish("Ready");
     await applyLevel(lvl, { note: `from ${what}`, thumb: img.art || img.thumb, toastText: `Built from your ${what}: ${lvl.objects.length} objects` });
     if (S.batch) S.batch.plans.push({ as: "level" });
     const d = lvl.diff?.short;
     await addCard({ icon: img.sketch ? "&#9998;" : "&#128444;", title: `Level from your ${what}`, text: `${lvl.objects.length} objects · ${lvl.theme}${d ? ` · ${d}` : ""}${problems.length ? ` · quick-fixed ${problems.length} impossible part${problems.length > 1 ? "s" : ""}` : " · every jump reachable"}` });
     await streamAssistant(`Done. I found ${lvl.objects.length} things (${lvl.theme}). It is playable on the right${problems.length ? ", and I fixed what was impossible" : ""}.`);
     await saveMessage("assistant", `Built ${lvl.objects.length} objects from the picture.`);
-  } catch (err) { hideTyping(); await streamAssistant("I could not read that picture: " + err.message); }
+  } catch (err) { hideTyping(); th.fail("Could not read the picture: " + err.message); await streamAssistant("I could not read that picture: " + err.message); }
 }
 
 /** The game agent (Muse Spark): words in, a reply and maybe a new level or an action out. */
 async function askAgent(text, history) {
   showTyping();
+  const th = startThinking(S.level ? "Changing your game" : "Designing your game"), t0 = performance.now();
+  const thinking = th.add(S.level ? "Reading your game and your message" : (S.mode === "3d" ? "Designing a 3D game from your words" : "Designing a game from your words"), "Muse Spark 1.3");
   let res;
   try {
     res = await api("api/agent", { method: "POST", body: { project_id: S.project?.id, mode: S.mode, message: text, level: S.level ? strip(S.level) : null, history } });
-  } catch (err) { hideTyping(); await streamAssistant("The agent could not answer: " + err.message); return; }
+  } catch (err) { hideTyping(); th.fail("The agent could not answer: " + err.message); await streamAssistant("The agent could not answer: " + err.message); return; }
   hideTyping();
+  const model = modelName(res.credits?.model || res.meta?.model);
+  if (!res.level && !res.credits && performance.now() - t0 < 1500) th.discard();   // a quick answer without the model: nothing to show
+  else th.set(thinking, { state: "done", model });
   if (res.level && Array.isArray(res.level.objects)) {
     const isEdit = res.kind === "edit";
     const note = res.note || (isEdit ? "edited" : "new level");
+    await th.reveal(`${isEdit ? "Changed" : "Built"}: ${res.level.objects.length} objects (${res.level.theme})${res.diff ? " · " + res.diff : ""}`, model);
+    await th.reveal(isArena(res.level) ? "Checking every gate and pickup can reach the player" : "Checking every jump", "playtest agent");
+    const fixedN = res.playtest?.fixed || 0;
+    await th.reveal(fixedN ? `Problems found: ${fixedN}` : (res.playtest?.ok === false ? "Some spots are still tricky" : "No problems: everything is reachable"), "playtest agent");
+    if (fixedN) await th.reveal(`Fixes applied: ${(res.playtest?.fixes || []).length || fixedN}`, "instant fix");
+    await th.finish("Ready");
     await applyLevel(res.level, { note, keepPlayer: isEdit, toastText: note });
     const fixed = res.playtest?.fixed || 0;
     const kindText = isArena(res.level) ? ` · ${VIEW_NAME[res.level.view] || res.level.view} shooter · ${res.level.waves} waves` : "";
     await addCard({ icon: isArena(res.level) ? "&#127919;" : isEdit ? "&#9998;" : "&#10024;", title: note, text: `${res.level.objects.length} objects · ${res.level.theme}${kindText}${res.diff ? ` · ${res.diff}` : ""}${fixed ? ` · patched ${fixed} ${isArena(res.level) ? "walled-off" : "impossible"} spot${fixed > 1 ? "s" : ""}` : ""}` });
   }
+  if (th.open) await th.finish((res.actions || []).some((a) => a.type === "playtest") ? "Running the playtest agent next" : "Answered");
   await streamAssistant(res.reply || "...");
   await saveMessage("assistant", res.reply || "", res.level ? { level: true, note: res.note || null } : null);
   for (const action of res.actions || []) await runAction(action);
@@ -1297,9 +1379,20 @@ async function runAction(action) {
   if (action.type === "playtest") {
     if (!S.level) return;
     showTyping();
+    const th = startThinking("Playtest"), checking = th.add("Checking every jump, coin and goal", "playtest agent");
     try {
-      const { level, report } = await api("api/fix", { method: "POST", body: { level: strip(S.level) } });
+      const { level, report, credits } = await api("api/fix", { method: "POST", body: { level: strip(S.level) } });
       hideTyping();
+      th.set(checking, { state: "done" });
+      if (report.before.ok) await th.reveal("No problems: every platform, coin and goal is reachable", "playtest agent");
+      else {
+        await th.reveal(`Problems found: ${report.before.problems.length}`, "playtest agent");
+        if (report.fixedBy === "ai" || report.fixedBy === "ai+auto") await th.reveal(`Repaired with minimal edits: ${(report.fixes || []).length} change${(report.fixes || []).length === 1 ? "" : "s"}`, modelName(credits?.model));
+        else await th.reveal(report.aiError ? "The model could not repair it: the instant fix took over" : `Fixes applied: ${(report.fixes || []).length}`, "instant fix");
+        await th.reveal("Checking again", "playtest agent");
+        await th.reveal(report.after?.ok ? "Everything is reachable now" : "A few spots are still tricky", "playtest agent", report.after?.ok ? "done" : "skip");
+      }
+      await th.finish("Ready");
       if (report.before.ok) { await addCard({ icon: "&#9989;", title: "Playtest", text: "every platform, coin and goal is reachable" }); await streamAssistant("All good: every platform, coin and goal is reachable."); }
       else {
         await applyLevel(level, { note: "playtest fix", keepPlayer: true, toastText: "Playtest agent fixed the level" });
@@ -1307,7 +1400,7 @@ async function runAction(action) {
         await streamAssistant(`I found ${report.before.problems.length} impossible part${report.before.problems.length > 1 ? "s" : ""} and fixed ${report.fixedBy === "ai" ? "them with the AI" : "them"}. ${report.after.ok ? "Everything is reachable now." : "A few spots are still tricky."}`);
       }
       await saveMessage("assistant", "Playtest done.");
-    } catch (err) { hideTyping(); await streamAssistant("Playtest failed: " + err.message); }
+    } catch (err) { hideTyping(); th.fail("Playtest failed: " + err.message); await streamAssistant("Playtest failed: " + err.message); }
   }
 }
 const strip = (l) => ({ ...(l.genre === "arena" ? { genre: "arena", view: l.view, waves: l.waves } : {}), theme: l.theme, aspect: l.aspect, objects: l.objects.map(({ type, label, x, y, w, h }) => ({ type, label, x, y, w, h })) });

@@ -127,6 +127,15 @@
   @keyframes rsweep { 0% { top:-30%; } 100% { top:104%; } }
   #rescan .rs { margin-top:12px; font-weight:700; font-size:17px; color:#4c1d95; display:flex; align-items:center; gap:10px; }
   #rescan .spin { width:18px; height:18px; border:3px solid #e2d9ff; border-top-color:#7c3aed; border-radius:50%; animation:rspin .8s linear infinite; flex:none; }
+  /* the AI steps: a list that fills in as the scan goes, each line with the Meta model doing it */
+  #rescan .steps { list-style:none; margin:12px 0 0; padding:0; display:flex; flex-direction:column; gap:5px; font-size:14px; font-weight:600; color:#1b1535; }
+  #rescan .steps li { display:flex; align-items:center; gap:8px; }
+  #rescan .steps .dot { width:10px; height:10px; border-radius:50%; background:#e2d9ff; flex:none; }
+  #rescan .steps .s-run .dot { background:#7c3aed; animation:rspin 1s linear infinite; border-radius:3px; }
+  #rescan .steps .s-done .dot { background:#22c55e; } #rescan .steps .s-fail .dot { background:#ef4444; }
+  #rescan .steps .who { margin-left:auto; font-size:11px; font-weight:700; color:#5b21b6; background:#efeaff; border-radius:999px; padding:2px 8px; white-space:nowrap; }
+  #rescan.corner { inset:auto 12px auto auto; top:54px; background:none; pointer-events:none; }
+  #rescan.corner .card { width:min(92vw, 340px); padding:10px 12px; } #rescan.corner .shot { display:none; } #rescan.corner .steps { margin-top:0; font-size:13px; }
   @keyframes rspin { to { transform:rotate(360deg); } }
 
   /* playtest agent toast */
@@ -210,7 +219,7 @@
 <div id="rotate"><div><span class="icon">&#128241;</span>Rotate your phone<br><small style="font-weight:400;font-size:16px">the level is wider than it is tall</small></div></div>
 <div id="msg"><div id="msgText"></div></div>
 <div id="toast"></div>
-<div id="rescan"><div class="card"><div class="shot"><img id="rescanPreview" alt=""><div class="rbeam"></div></div><div class="rs"><div class="spin"></div><span id="rescanText">Reading your changes...</span></div></div></div>
+<div id="rescan"><div class="card"><div class="shot"><img id="rescanPreview" alt=""><div class="rbeam"></div></div><ol class="steps" id="rescanSteps"></ol></div></div>
 <div id="stage" data-state="qr"><div class="st-card">
   <div class="st-brand">Sakanfar PlayLab &middot; big screen</div>
   <h2 class="st-title">Scan with your phone</h2>
@@ -1140,16 +1149,36 @@ function runLevel() {
 let pendingSpawn = null;   // { x: grid x, y: world feet y } of the player before the re-scan
 const stripLevel = (l) => ({ theme: l.theme, aspect: l.aspect, objects: l.objects.map(({ type, label, x, y, w, h }) => ({ type, label, x, y, w, h })) });
 
+/** The AI steps on this page (the Redraw button's overlay, or a corner card on the big screen while a phone's drawing is read). */
+const AISteps = {
+  items: [], hideTimer: null,
+  start({ corner = false } = {}) { clearTimeout(this.hideTimer); this.items = []; const ov = $("rescan"); ov.classList.toggle("corner", corner); ov.classList.add("show"); this.render(); },
+  add(label, who = "", state = "run") { this.items.push({ label, who, state }); this.render(); return this.items.length - 1; },
+  set(i, patch) { if (this.items[i]) { Object.assign(this.items[i], patch); this.render(); } },
+  reveal(label, who = "", state = "done") { return new Promise((r) => setTimeout(() => r(this.add(label, who, state)), 200)); },
+  render() { $("rescanSteps").innerHTML = this.items.map((s) => `<li class="s-${s.state}"><span class="dot"></span><span>${esc(s.label)}</span>${s.who ? `<span class="who">${esc(s.who)}</span>` : ""}</li>`).join(""); },
+  finish(ms = 2500) { for (const s of this.items) if (s.state === "run") s.state = "done"; this.render(); clearTimeout(this.hideTimer); this.hideTimer = setTimeout(() => $("rescan").classList.remove("show"), ms); },
+  fail(why) { for (const s of this.items) if (s.state === "run") s.state = "fail"; this.add(why, "", "fail"); clearTimeout(this.hideTimer); this.hideTimer = setTimeout(() => $("rescan").classList.remove("show"), 4000); },
+  /** The steps after a scan answered: objects, jumps, problems, fixes, ready. */
+  async answered(data, reading) {
+    const lvl = data.level, pt = data.meta?.playtest, problems = pt?.before?.problems || [], model = MODEL_LABEL[data.meta?.model] || MODEL_LABEL[data.meta?.provider] || "Muse Spark 1.3";
+    this.set(reading, { state: "done", who: model });
+    await this.reveal(`Objects found: ${lvl.objects.length}${lvl.diff?.short ? " · " + lvl.diff.short : ""}`, model);
+    await this.reveal("Checking every jump", "playtest agent");
+    await this.reveal(problems.length ? `Problems found: ${problems.length}` : "Every jump is reachable", "playtest agent");
+    if (problems.length) await this.reveal(`Fixes applied: ${(pt?.fixes || lvl.fixes || []).length || problems.length}`, "instant fix");
+    await this.reveal("Ready", "");
+  },
+};
+const MODEL_LABEL = { "muse-spark-1.3": "Muse Spark 1.3", "muse-spark-1.2": "Muse Spark 1.2", "muse-spark-1.1": "Muse Spark 1.1", "muse-spark-open": "Muse Spark Open", baseten: "Muse Spark Open", meta: "Muse Spark 1.3", mock: "mock" };
+window.__aiSteps = AISteps;   // tests
 async function rescan(file) {
   if (!currentLevel || !window.PhotoUtil) return;
   const scene = playScene();
-  const ov = $("rescan"), text = $("rescanText");
-  const msgs = ["Reading your changes...", "Comparing with the last scan...", "Updating platforms...", "Checking every jump..."];
-  let i = 0;
-  text.textContent = msgs[0];
-  const timer = setInterval(() => { i = (i + 1) % msgs.length; text.textContent = msgs[i]; }, 1500);
+  const ov = $("rescan");
   $("rescanPreview").removeAttribute("src");
-  ov.classList.add("show");
+  AISteps.start();
+  const reading = AISteps.add("Reading your changes against the last scan", "Muse Spark 1.3");
   try {
     const img = await PhotoUtil.loadImage(file);
     const upload = PhotoUtil.toJpeg(img, PhotoUtil.UPLOAD_SIDE, 0.85);
@@ -1160,6 +1189,7 @@ async function rescan(file) {
     const r = await PlayAuth.api("api/scan", { method: "POST", body: { image: upload, previous: stripLevel(currentLevel) } });   // needs a login
     const data = await r.json().catch(() => ({}));
     if (!r.ok || !data.level) throw new Error(data.error || `Server error ${r.status}`);
+    await AISteps.answered(data, reading);
 
     try { localStorage.setItem("playlab.photo", thumb); } catch {}
     pendingSpawn = spawn;
@@ -1172,11 +1202,11 @@ async function rescan(file) {
     const d = data.level.diff;
     const fixes = data.level.fixes?.length ? ` &middot; agent: ${data.level.fixes.map(esc).join(", ")}` : "";
     showToast(`<b>&#9998; Redrawn:</b> ${esc(d?.summary || "level updated")}${fixes}`, 8000);
+    AISteps.finish(1800);
   } catch (err) {
+    AISteps.fail(err.name === "TimeoutError" ? "The AI took too long" : err.message);
     showToast(`<b>Could not update the level.</b> ${esc(err.name === "TimeoutError" ? "The AI took too long." : err.message)}`, 6000);
   }
-  clearInterval(timer);
-  ov.classList.remove("show");
 }
 
 // ---------------------------------------------------------------------------
@@ -1260,14 +1290,18 @@ let screenScanChain = Promise.resolve();
 function runScreenScan(p, msg) {
   const reply = (o) => { try { if (p.conn.open) p.conn.send({ t: "scan-result", seq: msg.seq, ...o }); } catch {} };
   screenScanChain = screenScanChain.then(async () => {
+    const prev = currentLevel ? stripLevel(currentLevel) : undefined;
+    AISteps.start({ corner: true });
+    const reading = AISteps.add(prev ? "Reading your changes" : "Reading the drawing from your phone", prev ? "Muse Spark Open" : "Muse Spark 1.3");
     try {
-      const prev = currentLevel ? stripLevel(currentLevel) : undefined;
       const r = await PlayAuth.api("api/scan", { method: "POST", body: { image: msg.image, previous: prev, provider: prev ? "baseten" : "meta" } });
       const data = await r.json().catch(() => ({}));
       if (!r.ok || !data.level) throw new Error(data.error || `Server error ${r.status}`);
       reply({ ok: true, level: data.level });
       onPhoneLevel(p, { seq: msg.seq, level: data.level, thumb: msg.thumb });
-    } catch (err) { reply({ ok: false, error: err.message }); if (isScreen && !currentLevel) stageStatus("scan failed: " + err.message, "error"); }
+      await AISteps.answered(data, reading);
+      AISteps.finish(3000);
+    } catch (err) { AISteps.fail(err.message); reply({ ok: false, error: err.message }); if (isScreen && !currentLevel) stageStatus("scan failed: " + err.message, "error"); }
   });
 }
 function onPhoneLevel(p, msg) {

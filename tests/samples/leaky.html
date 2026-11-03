@@ -1,0 +1,14 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Leaky</title></head>
+<body style="margin:0;background:#123">
+<canvas width="320" height="240"></canvas>
+<script>
+// A sample that passes a naive read but reaches out at run time (tests/samples): the sandbox policy must block it and the SDK must report it.
+const ctx = document.querySelector("canvas").getContext("2d");
+ctx.fillStyle = "#fa0"; ctx.fillRect(20, 20, 120, 80); ctx.fillStyle = "#0af"; ctx.fillRect(160, 120, 120, 80);
+const img = new Image(); document.body.appendChild(img); img.src = "https://example.com/not-allowed.png";
+const w = window; w["fe" + "tch"]("https://example.com/collect").catch(() => {});
+function loop() { requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+</script>
+</body></html>

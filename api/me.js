@@ -1,5 +1,6 @@
 // api/me.js — the logged-in account.
-//   GET   /api/me             -> { profile }                        (403 { blocked } when the account may not be used)
+//   GET   /api/me             -> { profile, cap }                   (403 { blocked } when the account may not be used;
+//                                                                     cap: the shared daily budget { cap, spent_today, reached, resets_at })
 //   GET   /api/me?ledger=1    -> { profile, ledger: [...] }          (credit history, newest first)
 //   PATCH /api/me { username?, display_name?, avatar_url? } -> { profile }
 
@@ -13,6 +14,7 @@ export default async function handler(req, res) {
   try {
     if (req.method === "GET") {
       const out = { profile: ctx.profile };
+      try { out.cap = await rpc("cap_status", {}, ctx.token); } catch (err) { console.warn("cap_status:", err.message); }   // absent until db/010 runs
       if (req.query?.ledger) out.ledger = await rest(`/credit_ledger?select=id,amount,balance_after,reason,action,model,game_id,created_at&order=id.desc&limit=100`, { token: ctx.token });
       return res.status(200).json(out);
     }

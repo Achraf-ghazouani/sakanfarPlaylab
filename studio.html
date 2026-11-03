@@ -242,6 +242,7 @@
   .cost.free { background:#dcfce7; color:#15803d; }
   .cost.soon { background:#f3f4f6; color:#6b7280; }
   #sendCost { font-size:11px; color:var(--muted); margin-top:6px; min-height:15px; }
+  #capNote { font-size:12px; line-height:1.4; color:#92400e; background:#fef3c7; border:1px solid #fde68a; border-radius:10px; padding:8px 10px; margin-top:8px; }
   #noCredits .sheet { width:min(420px, 96vw); text-align:center; padding:24px; }
   #noCredits .big { font:700 44px Fredoka, sans-serif; color:var(--purple-deep); }
   .demo-badge { background:#fef3c7; color:#92400e; border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700; }
@@ -321,6 +322,7 @@
             <textarea id="composer" rows="1" placeholder="Describe your game, or paste / drop a drawing..."></textarea>
             <button class="ib" id="sendBtn" title="Send (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
           </div>
+          <div id="capNote" hidden></div>
           <div id="sendCost"></div>
           <div class="chips" id="chips">
             <button class="chip">Make it harder</button><button class="chip">Add more coins</button><button class="chip">Change theme</button><button class="chip">Playtest it</button>
@@ -407,10 +409,10 @@
 </div>
 <div class="modal" id="noCredits"><div class="sheet">
   <div style="font-size:42px">&#129689;</div>
-  <h2 style="font-family:Fredoka,sans-serif;margin:6px 0">Not enough credits</h2>
+  <h2 style="font-family:Fredoka,sans-serif;margin:6px 0" id="noCreditsTitle">Not enough credits</h2>
   <p class="hint" id="noCreditsText" style="font-size:14px"></p>
-  <div class="big" id="noCreditsBal">0</div><p class="hint">credits left</p>
-  <div style="display:flex;gap:8px;justify-content:center;margin-top:14px"><a class="tb primary" href="profile.html#credits" style="text-decoration:none">Get more credits</a><button class="tb" id="noCreditsClose">OK</button></div>
+  <div id="noCreditsBalWrap"><div class="big" id="noCreditsBal">0</div><p class="hint">credits left</p></div>
+  <div style="display:flex;gap:8px;justify-content:center;margin-top:14px"><a class="tb primary" href="profile.html#credits" style="text-decoration:none" id="noCreditsBuy">Get more credits</a><button class="tb" id="noCreditsClose">OK</button></div>
 </div></div>
 <div id="camPip" title="Phone camera (click to open)"><video id="camPipVideo" autoplay playsinline muted></video></div>
 
@@ -1148,10 +1150,21 @@ function setBalance(n) {
   updateCosts();
 }
 function showNoCredits(data) {
-  const c = data?.credits || {};
+  const c = data?.credits || {}, capped = c.error === "global_cap";   // everyone's budget for today (db/010), not this account's
+  $("noCreditsTitle").textContent = capped ? "Today's shared budget is used up" : "Not enough credits";
   $("noCreditsText").textContent = data?.error || "This action costs more credits than you have.";
   $("noCreditsBal").textContent = typeof c.balance === "number" ? c.balance : (S.me?.balance ?? 0);
+  $("noCreditsBalWrap").hidden = capped; $("noCreditsBuy").hidden = capped;
+  if (capped) showCapNote({ reached: true, resets_at: c.resets_at });
   $("noCredits").classList.add("show");
+}
+/** The note above the chat box while the shared daily budget is used up (api/me cap, or a refused charge). */
+function showCapNote(cap) {
+  const el = $("capNote");
+  if (!cap?.reached) { el.hidden = true; return; }
+  const at = cap.resets_at ? new Date(cap.resets_at) : null, when = at && !Number.isNaN(at.getTime()) ? ` (${at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} your time)` : "";
+  el.textContent = `PlayLab's shared budget for today is used up, so AI actions pause until midnight UTC${when}. Playing, drawing, phones and your saved games still work.`;
+  el.hidden = false;
 }
 $("noCreditsClose").addEventListener("click", () => $("noCredits").classList.remove("show"));
 
@@ -1205,6 +1218,7 @@ $("logoutBtn").addEventListener("click", async (e) => { e.preventDefault(); try 
 // ---------------------------------------------------------------------------
 (async () => {
   S.me = await PlayAuth.requireLogin();   // not logged in or blocked -> login page
+  showCapNote(S.me.cap);
   renderUser();
   // Games made before accounts existed were keyed by a browser id: on the first login they move to this account.
   try {

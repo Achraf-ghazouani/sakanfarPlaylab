@@ -155,7 +155,7 @@ PlayLab is invite-only. Visitors can join the waitlist on the landing page and p
 - **Phones need no account**: in the Studio and on the big screen the phone sends its picture to the logged-in computer, which runs the scan and sends the result back.
 - **Server key**: a few server-only database functions (waitlist inserts, rate limits, admin sync, test accounts) require `PLAYLAB_SERVER_KEY`; the database stores only its SHA-256. It never reaches a page.
 
-**Credits** (`lib/credits.mjs`, `db/004_credits.sql`): every AI call costs credits, charged in one database transaction before the call (`public.charge`: price × model multiplier, rounded up; balance; optional daily limit; ledger row) and refunded automatically when the AI call fails.
+**Credits** (`lib/credits.mjs`, `db/004_credits.sql`): every AI call costs credits, charged in one database transaction before the call (`public.charge`: price × model multiplier, rounded up; balance; optional daily limit; ledger row) and refunded automatically when the AI call fails. **Shared daily cap** (`db/010_cap.sql`): in Admin → Overview the admin sets how many credits everyone together may use per UTC day (0 = no cap); when it is reached, regular users' AI actions are refused with a friendly message and nothing is charged (`global_cap`), the Studio shows a note above the chat box until midnight UTC, free actions keep working, and admins are never blocked. `GET /api/me` carries the state as `cap`.
 
 | Action | Credits | When |
 | --- | --- | --- |
@@ -218,7 +218,7 @@ Other commands:
 | `npm run playtest` | Headless Chrome drives the game through 36 checks (needs `npm run dev` running) |
 | `npm run test:auth` | Waitlist, approval gate, logins, roles, blocked accounts and row-level security against the real Supabase project (needs `npm run dev`) |
 | `npm run test:db` | Round trip against the real Supabase tables as two throwaway accounts |
-| `node tests/credits.test.mjs` | Prices, multipliers, the atomic charge, refunds, daily limits, parallel charges, admin grants and one real AI call (needs `npm run dev`) |
+| `node tests/credits.test.mjs` | Prices, multipliers, the atomic charge, refunds, daily limits, the shared daily cap, parallel charges, admin grants and one real AI call (needs `npm run dev`) |
 | `npm run test:arena` | Headless Chrome drives `arena.html`: waves, walking, shooting, the three views, death, restart, a level file (needs `npm run dev`) |
 | `npm run test:publish` | Publish, the play page and its Open Graph tags, plays, likes, reports, explore, unlisted, remix with its charge, admin feature / unpublish / delete, against the real project with throwaway accounts (needs `npm run dev`) |
 | `npm run test:admin` | The admin API against the real Supabase project with a throwaway admin and user: access, credits, limits, suspend, passwords, accounts, waitlist, prices, models, activity (needs `npm run dev`) |

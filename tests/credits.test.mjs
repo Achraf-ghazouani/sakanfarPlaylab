@@ -100,6 +100,36 @@ try {
   check("the grant is in the ledger with its reason", vl.amount === 50 && vl.reason === "beta bonus", vl);
   check("a grant needs a reason", (await rpc("admin_grant_credits", { p_users: [v.id], p_amount: 5, p_reason: "" }, adm.token)).status >= 400);
 
+  // the global daily cap (db/010): everyone together, admins never blocked, nothing charged when refused
+  const st = await api("api/admin?action=settings", { token: adm.token });
+  check("admin reads the settings: the cap and everyone's usage today", st.status === 200 && typeof st.data.settings?.global_daily_cap === "number" && typeof st.data.settings?.spent_today_all === "number", st.data);
+  const capBefore = st.data.settings.global_daily_cap, usedAll = st.data.settings.spent_today_all;
+  check("users cannot read or change the settings", (await api("api/admin?action=settings", { token: u.token })).status === 403 && (await api("api/admin", { method: "POST", token: u.token, body: { action: "setting_set", key: "global_daily_cap", value: 1 } })).status === 403);
+  try {
+    // room for exactly one more create_2d (10): reaching the cap is allowed, passing it is not
+    const set = await api("api/admin", { method: "POST", token: adm.token, body: { action: "setting_set", key: "global_daily_cap", value: usedAll + 10 } });
+    check("admin sets the cap", set.status === 200 && set.data.settings.global_daily_cap === usedAll + 10, set.data);
+    await srv("srv_set_profile", { p_user: u.id, p_balance: 100 });
+    const c1 = await rpc("charge", { p_action: "create_2d" }, u.token);
+    check("a charge under the cap passes", c1.data.ok === true, c1.data);
+    const c2 = await rpc("charge", { p_action: "create_2d" }, u.token);
+    check("the next one is refused: global_cap, with the numbers", c2.data.ok === false && c2.data.error === "global_cap" && c2.data.cap === usedAll + 10 && c2.data.spent_today_all >= usedAll + 10 && !!c2.data.resets_at, c2.data);
+    check("nothing was charged", (await balance(u)) === 90);
+    check("the Studio sees the budget as reached", (await api("api/me", { token: u.token })).data.cap?.reached === true);
+    const r = await api("api/agent", { method: "POST", token: u.token, body: { message: "a desert level" } });
+    check("api/agent answers 402 with the friendly message, without calling the AI", r.status === 402 && r.data.credits?.error === "global_cap" && /shared budget/.test(r.data.error) && /midnight UTC/.test(r.data.error), r.data);
+    await srv("srv_set_profile", { p_user: adm.id, p_balance: 50 });
+    const ca = await rpc("charge", { p_action: "create_2d" }, adm.token);
+    check("an admin is never blocked by the cap", ca.data.ok === true, ca.data);
+    check("admins see reached=false", (await api("api/me", { token: adm.token })).data.cap?.reached === false);
+    check("a free action still works at the cap", (await rpc("charge", { p_action: "publish" }, u.token)).data.ok === true);
+    check("the cap cannot be negative", (await api("api/admin", { method: "POST", token: adm.token, body: { action: "setting_set", key: "global_daily_cap", value: -5 } })).status === 400);
+  } finally {
+    const back = await api("api/admin", { method: "POST", token: adm.token, body: { action: "setting_set", key: "global_daily_cap", value: capBefore } });
+    check("the cap is put back", back.status === 200 && back.data.settings.global_daily_cap === capBefore);
+  }
+  check("charges work again without the cap", (await rpc("charge", { p_action: "create_2d" }, u.token)).data.ok === true || capBefore > 0);
+
   // one real AI call: the agent charges create_2d and reports the new balance
   if (process.env.MODEL_API_KEY) {
     const w = await account(30);

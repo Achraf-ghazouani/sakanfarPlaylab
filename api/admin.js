@@ -7,6 +7,8 @@
 //   GET  /api/admin?action=activity&offset=                      -> { activity }
 //   GET  /api/admin?action=games&filter=published|featured|reported|all -> { games }
 //   GET  /api/admin?action=reports&status=open|closed            -> { reports }
+//   GET  /api/admin?action=settings                              -> { settings: { global_daily_cap, spent_today_all, resets_at } }
+//   POST /api/admin { action: "setting_set", key: "global_daily_cap", value }   -> { settings }
 //   POST /api/admin { action: "waitlist_set", ids, status, credits }
 //                   { action: "waitlist_invited", ids }
 //                   { action: "user_create", email?, username?, password, display_name?, credits?, role?, is_demo?, tag?, note?, expires_at?, daily_limit? }
@@ -53,6 +55,7 @@ export default async function handler(req, res) {
         case "activity": return res.status(200).json({ activity: await call("admin_list_activity", { p_limit: 100, p_offset: offset }) });
         case "games": return res.status(200).json({ games: await call("admin_list_games", { p_filter: ["published", "featured", "reported", "all"].includes(q.filter) ? q.filter : "published", p_limit: 200, p_offset: offset }) });
         case "reports": return res.status(200).json({ reports: await call("admin_list_reports", { p_status: q.status === "closed" ? "closed" : q.status === "all" ? null : "open", p_limit: 200 }) });
+        case "settings": return res.status(200).json({ settings: await call("admin_get_settings") });
         default: return bad(res, "Unknown action.");
       }
     }
@@ -132,6 +135,11 @@ export default async function handler(req, res) {
           const rid = int(b.id); if (!rid || Number.isNaN(rid)) return bad(res, "Unknown report.");
           await call("admin_close_report", { p_id: rid });
           return res.status(200).json({ ok: true });
+        }
+        case "setting_set": {
+          if (b.key !== "global_daily_cap") return bad(res, "Unknown setting.");
+          const value = int(b.value); if (value === null || Number.isNaN(value) || value < 0) return bad(res, "Give a number of credits (0 for no cap).");
+          return res.status(200).json({ settings: await call("admin_set_setting", { p_key: b.key, p_value: String(value) }) });
         }
         case "model_set": {
           const mult = b.multiplier === undefined || b.multiplier === "" ? null : Number(b.multiplier);

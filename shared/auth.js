@@ -68,7 +68,7 @@ window.PlayAuth = (() => {
     const r = await api("api/me");
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error || "Could not load your account.");
-    return (profile = data.profile);
+    return (profile = Object.assign(data.profile, { cap: data.cap }));   // cap: the shared daily budget (db/010), for the Studio's note
   }
 
   /** Pages that need an account call this first. Resolves with the profile, or navigates to the login page. */

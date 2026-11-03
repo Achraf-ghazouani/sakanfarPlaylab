@@ -102,6 +102,10 @@ try {
   const def = pr.data.models.find((m) => m.is_default);
   check("the default model cannot be switched off", (await post(A.token, { action: "model_set", id: def.id, enabled: false })).status === 400);
   check("a regular user cannot change prices", (await post(U.token, { action: "cost_set", key: "playtest", credits: 0 })).status === 403);
+  const st = await admin(A.token, { action: "settings" });
+  check("settings: the global daily cap and everyone's usage today", st.status === 200 && typeof st.data.settings?.global_daily_cap === "number" && typeof st.data.settings?.spent_today_all === "number", st.data);
+  check("an unknown setting is refused", (await post(A.token, { action: "setting_set", key: "evil", value: 1 })).status === 400);
+  check("a regular user cannot read the settings", (await admin(U.token, { action: "settings" })).status === 403);
 
   // activity
   const actv = await admin(A.token, { action: "activity" });

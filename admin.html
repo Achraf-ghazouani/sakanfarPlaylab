@@ -143,6 +143,15 @@
   <!-- OVERVIEW -->
   <div data-pane="overview" hidden>
     <div class="stats" id="stats"></div>
+    <div class="card" id="capCard">
+      <h2>Shared daily budget <small>everyone's AI calls together per UTC day; when it is reached, users see a friendly pause until midnight UTC and nothing is charged; admins are never blocked</small></h2>
+      <div class="bar">
+        <label class="sel">cap <input type="number" id="capInput" min="0" max="100000000" step="100" style="width:130px"> credits (0 = no cap)</label>
+        <button class="tb primary" id="capSave">Save</button>
+        <span class="muted" id="capInfo"></span>
+      </div>
+      <div class="meter" id="capMeter"><i style="width:0%"></i></div>
+    </div>
     <div class="card">
       <h2>Credits used per day <small>last 14 days, AI calls only (admin grants not counted)</small></h2>
       <div class="chart" id="dailyChart"></div>
@@ -316,7 +325,22 @@ async function loadOverview() {
   $("byAction").innerHTML = rank(o.by_action, "action", (r) => esc(r.action));
   $("byModel").innerHTML = rank(o.by_model, "model", (r) => esc(r.model));
   $("topUsers").innerHTML = rank(o.top_users, "id", (r) => `<a href="#" data-ledger="${r.id}" data-label="${esc(r.username || r.email)}">${esc(r.username ? "@" + r.username : r.email)}</a>`);
+  loadCap();
 }
+/** The shared daily budget (db/010): the cap, how much everyone has used today, and whether users are paused. */
+async function loadCap() {
+  let s; try { ({ settings: s } = await api({ action: "settings" })); } catch (err) { $("capInfo").textContent = err.message; return; }
+  if (document.activeElement !== $("capInput")) $("capInput").value = s.global_daily_cap;
+  const reached = s.global_daily_cap > 0 && s.spent_today_all >= s.global_daily_cap;
+  $("capMeter").querySelector("i").style.width = (s.global_daily_cap ? Math.min(100, (s.spent_today_all / s.global_daily_cap) * 100) : 0) + "%";
+  $("capMeter").style.background = reached ? "#fee2e2" : "";
+  $("capInfo").textContent = s.global_daily_cap ? `${fmt(s.spent_today_all)} of ${fmt(s.global_daily_cap)} used today${reached ? " · reached: users are paused until midnight UTC" : ""}` : `${fmt(s.spent_today_all)} used today · no cap`;
+}
+$("capSave").addEventListener("click", () => {
+  const n = Number($("capInput").value);
+  if (!(n >= 0)) return toast("Give a number of credits (0 for no cap).", true);
+  act({ action: "setting_set", key: "global_daily_cap", value: n }, (d) => d.settings.global_daily_cap ? `Cap saved: ${fmt(d.settings.global_daily_cap)} credits a day for everyone.` : "No cap: unlimited.", loadCap);
+});
 // tooltip for chart columns
 document.addEventListener("mousemove", (e) => {
   const c = e.target.closest?.("[data-tip]"), tip = $("tip");

@@ -92,6 +92,21 @@ try {
   check("Pause pauses the game; the button says Resume", !!(await waitFor(`window.__playState.state === "paused" && /Resume/.test(document.getElementById("codePause").textContent)`, 5000)));
   await evalJS(`for (const m of PadRoute.toGame(1, { t: "menu", action: "toggle-pause" })) window.__play.toGame(m); true`);
   check("a phone's menu message through the shared route resumes it", !!(await waitFor(`window.__playState.state === "play"`, 5000)));
+  // full screen: a Play cover asks for one click (browsers need it), then the stage fills the screen; on a phone held upright the game turns sideways
+  check("a Play cover sits over the game", !!(await waitFor(`!document.getElementById("startCover").hidden && /Play full screen/.test(document.getElementById("startCover").textContent)`, 5000)));
+  const clickMid = async () => { const [x, y] = JSON.parse(await evalJS(`(() => { const r = document.getElementById("startCover").getBoundingClientRect(); return JSON.stringify([r.left + r.width / 2, r.top + r.height / 2]); })()`)); for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1 }); };
+  await clickMid();
+  check("one click opens the game full screen and starts a fresh round", !!(await waitFor(`document.body.classList.contains("full") && document.getElementById("startCover").hidden && getComputedStyle(document.getElementById("stage")).position === "fixed" && document.getElementById("game").clientWidth >= innerWidth - 2`, 5000)), await evalJS(`document.body.className + " " + !!document.fullscreenElement`));
+  await evalJS(`document.getElementById("fsExit").click(); true`);
+  check("the close button leaves full screen", !!(await waitFor(`!document.body.classList.contains("full") && !document.fullscreenElement`, 5000)));
+  await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+  await send("Page.reload");
+  check("on a phone the cover says Tap to play", !!(await waitFor(`window.__play && window.__play.ready() && !document.getElementById("startCover").hidden && /Tap to play/.test(document.getElementById("startCover").textContent)`)));
+  await clickMid();
+  check("on a phone held upright the game turns sideways: the game gets a wide screen", !!(await waitFor(`document.body.classList.contains("full") && (document.body.classList.contains("rot") || screen.orientation.type.startsWith("landscape")) && document.getElementById("game").clientWidth > document.getElementById("game").clientHeight`, 5000)), await evalJS(`(() => { const s = getComputedStyle(document.getElementById("stage")); return document.body.className + " " + document.getElementById("game").clientWidth + "x" + document.getElementById("game").clientHeight + " stage " + s.width + "x" + s.height + " left " + s.left + " pos " + s.position + " tf " + s.transform + " fs " + !!document.fullscreenElement + " vw " + innerWidth + "x" + innerHeight; })()`));
+  await evalJS(`window.__play.exitFull(); true`);
+  await send("Emulation.clearDeviceMetricsOverride"); await send("Emulation.setTouchEmulationEnabled", { enabled: false });
   // remix copies the code
   const rem = await api("api/play", { method: "POST", token: B.token, body: { action: "remix", id: share } });
   const rid = rem.data.project?.id || rem.data.id;

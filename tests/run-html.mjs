@@ -1,6 +1,6 @@
 // Runs one HTML game file (a generated game) through the sandbox harness in headless Chrome and reports what the SDK saw:
 // ready, the controller layout, the state, errors, a blank canvas, and whether the screen changes after a phone input.
-// Needs the dev server.   node tests/run-html.mjs <file.html> [baseUrl] [--seconds 8]
+// Needs the dev server.   node tests/run-html.mjs <file.html> [baseUrl] [--seconds 8] [--model file.glb|fbx] (the model as PlayLab.assets player)
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -15,6 +15,8 @@ const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application
 const PORT = 9346;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const html = fs.readFileSync(file, "utf8");
+const modelFile = args.includes("--model") ? args[args.indexOf("--model") + 1] : null;
+const assets = modelFile ? { player: { src: "data:application/octet-stream;base64," + fs.readFileSync(modelFile).toString("base64"), kind: "model", name: path.basename(modelFile) } } : null;
 
 const chrome = spawn(CHROME, ["--headless=new", "--disable-gpu", "--no-first-run", "--mute-audio", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", `--remote-debugging-port=${PORT}`, `--user-data-dir=${path.join(os.tmpdir(), "playlab-run-html")}`, "--window-size=900,600", "about:blank"], { stdio: "ignore" });
 let ws;
@@ -31,7 +33,7 @@ try {
   await send("Page.enable"); await send("Runtime.enable");
   await send("Page.navigate", { url: `${BASE}/tests/harness.html` });
   if (!(await waitFor(`typeof CodeRun === "object" && typeof __runHtml === "function"`, 10_000))) throw new Error("the harness did not load (is the dev server up?)");
-  out.scan = await evalJS(`JSON.stringify(__runHtml(${JSON.stringify(html)}))`).then(JSON.parse);
+  out.scan = await evalJS(`JSON.stringify(__runHtml(${JSON.stringify(html)}${assets ? ", " + JSON.stringify(assets) : ""}))`).then(JSON.parse);
   const t0 = Date.now();
   const ready = await waitFor(`!!__has("playlab:ready")`, 25_000);
   out.ready = !!ready; if (ready) out.readyMs = Date.now() - t0;

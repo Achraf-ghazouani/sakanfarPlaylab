@@ -126,7 +126,7 @@ const inject = `
       const b = JSON.parse(init.body);
       if (b.task === "plan") { (window.__planBodies = window.__planBodies || []).push(b); window.__lastPlanBody = b; return json({ plan: { ...(b.plan || PLAN), engine: b.mode === "3d" ? "three" : (b.plan || PLAN).engine, picture: b.image ? "a hand-drawn oval track with a start line" : "" }, meta: { model: "mock", ms: 1 } }); }
       if (b.task === "fix") { (window.__fixBodies = window.__fixBodies || []).push(b); return stream(sse(b, window.__breakFixes ? BROKEN : SNAKE, { attempt: window.__fixBodies.length, patch: { mode: "patch", count: 1, added: 2, removed: 1 } })); }
-      if (b.task === "look") { window.__lookBody = b; return json({ match: 0.9, looksLike: "a green snake on a dark grid with a score", problems: [], suggestion: "", model: "mock", ms: 1 }); }
+      if (b.task === "look") { window.__lookBody = b; (window.__lookBodies = window.__lookBodies || []).push(b); const m = (window.__lookQueue || []).shift() ?? 0.9; return json({ match: m, looksLike: "a green snake on a dark grid with a score", problems: m < 0.8 ? ["no obstacles on the track"] : [], suggestion: m < 0.8 ? "add obstacles that come towards the player" : "", model: "mock", ms: 1 }); }
     }
     if (/api\\/art$/.test(u)) {
       const b = JSON.parse(init.body); (window.__artCalls = window.__artCalls || []).push(b.task);
@@ -290,6 +290,19 @@ try {
   check("a change that still crashes after 3 fixes is not saved; the working code is mounted again; the reply says so; a chip to try again", await evalJS(`S.versions.length === ${before} && S.codeRun && S.codeRun.html === S.level.html && S.codeRun.errors.length === 0 && /I did not save it/.test([...document.querySelectorAll(".msg.assistant .bubble")].slice(-1)[0].textContent) && [...document.querySelectorAll(".card .choices button")].some((b) => b.textContent === "Try that change again")`));
   await evalJS(`window.__breakFixes = false; document.querySelectorAll(".card .choices").forEach((r) => r.remove()); true`);
 
+  // 10b. the look's improvement round: under 80% Muse Wonder improves the game with what the look saw; the improved version is
+  // looked at again and kept only when it scores at least as high
+  await evalJS(`window.__lookQueue = [0.6, 0.85]; window.__fixBodies = []; true`);
+  await type("make the snake a bit faster"); await sendMsg(); await busyDone();
+  const better = await steps();
+  check("a 60% look gets an improvement round with what the look saw, and a better second look keeps it", /Improving it/.test(better) && /looks 85% like the game asked for \(was 60%\)/.test(better) && (await evalJS(`(window.__fixBodies || []).some((b) => /match 60%/.test(b.report?.feedback || ""))`)), better.slice(-280));
+  await evalJS(`window.__lookQueue = [0.7, 0.4]; true`);
+  await type("make the snake a bit slower"); await sendMsg(); await busyDone();
+  const worse = await steps();
+  check("an improvement that scores lower is dropped: the first version keeps running", /scored lower \(40%, was 70%\): keeping the first one/.test(worse) && (await evalJS(`S.codeRun && S.codeRun.html === S.level.html && S.codeRun.errors.length === 0`)), worse.slice(-400));
+  await evalJS(`window.__lookQueue = []; true`);
+  const afterImprove = await evalJS(`S.versions.length`);
+
   // 11. publish opens on a game written as code
   await evalJS(`document.getElementById("publishBtn").click(); true`);
   check("Publish opens its dialog", !!(await waitFor(`document.getElementById("publishModal").classList.contains("show")`, { timeout: 5000 })));
@@ -298,7 +311,7 @@ try {
   // 12. reload: the game reopens in the sandbox with its versions and messages
   await send("Page.reload");
   await waitFor(`typeof S === "object" && S.project && S.project.id === ${JSON.stringify(pid)}`, { timeout: 15_000 });
-  check("reload reopens the code game in the sandbox with its versions", !!(await waitFor(`S.level && S.level.genre === "code" && S.codeRun && S.codeRun.ready && S.versions.length === ${before}`, { timeout: 20_000 })));
+  check("reload reopens the code game in the sandbox with its versions", !!(await waitFor(`S.level && S.level.genre === "code" && S.codeRun && S.codeRun.ready && S.versions.length === ${afterImprove}`, { timeout: 20_000 })));
   check("messages restored", (await evalJS(`document.querySelectorAll(".msg, .card").length`)) >= 15);
 
   // 13. a new 3D game: the sketch pad says it is for 2D, the plan asks for 3D, a GLB becomes the player of the 3D game

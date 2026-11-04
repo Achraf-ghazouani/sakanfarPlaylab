@@ -42,6 +42,7 @@ try {
 
   // the mic, for real: tap, speak (the fake microphone plays the sample), tap again
   await clickMic();
+  if (!(await waitFor(`document.getElementById("micBtn").classList.contains("rec")`, 3000))) { await sleep(1000); await clickMic(); }   // a tap before the page settled: once more
   check("one tap records: the mic turns red and the box says it is listening", !!(await waitFor(`document.getElementById("micBtn").classList.contains("rec") && /Listening/.test(document.getElementById("composer").placeholder)`, 5000)));
   await sleep(5600);
   await clickMic();

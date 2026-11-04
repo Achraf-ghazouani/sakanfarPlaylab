@@ -1788,7 +1788,10 @@ async function buildCode(pending, { change = null } = {}) {
     build.fixes.push(report.why);
     html = fixed.html; notes = fixed.notes || notes; engine = fixed.engine || engine; scan = fixed.scan; token = fixed.fix || null;
   }
-  // the vision check: a screenshot after a few seconds, Muse Spark says whether it looks like the game asked for; one improvement round
+  // the vision check: a screenshot after a few seconds, Muse Spark says whether it looks like the game asked for. Under IMPROVE_BELOW
+  // Muse Wonder gets one improvement round with what the look saw; the improved version is looked at too and kept only when it runs
+  // and scores at least as high (a patch that makes things worse is dropped, the first version keeps running).
+  const IMPROVE_BELOW = 0.8;
   if (build.ok && token) {
     const looking = th.add("Looking at a screenshot of it", "Muse Spark 1.3");
     try {
@@ -1798,7 +1801,7 @@ async function buildCode(pending, { change = null } = {}) {
       build.look = look;
       const pct = Math.round(look.match * 100);
       th.set(looking, { state: look.match >= 0.5 ? "done" : "skip", label: `Looks ${look.match >= 0.8 ? "like" : look.match >= 0.5 ? "mostly like" : "unlike"} the game asked for (${pct}%): ${look.looksLike}`, model: modelName(look.model) });
-      if (look.match < 0.5 && build.attempts < MAX_FIXES && (look.suggestion || look.problems?.length)) {
+      if (look.match < IMPROVE_BELOW && build.attempts < MAX_FIXES && (look.suggestion || look.problems?.length)) {
         build.attempts++;
         const improving = th.add(`Improving it: ${look.suggestion || look.problems[0]}`, "Muse Wonder 1.0");
         const feedback = `match ${pct}%: ${look.looksLike}. Problems: ${(look.problems || []).join("; ") || "none named"}. Suggestion: ${look.suggestion || ""}`;
@@ -1809,8 +1812,20 @@ async function buildCode(pending, { change = null } = {}) {
             const testing = th.add("Smoke test of the improved version", "smoke test");
             mountCode(better.html);
             const again = await smokeTest();
-            if (again.ok) { html = better.html; notes = better.notes || notes; engine = better.engine || engine; token = better.fix || null; build.improved = true; th.set(testing, { state: "done", label: "The improved version runs" }); }
-            else { th.set(testing, { state: "skip", label: `The improved version failed (${again.why}): keeping the first one` }); th.set(improving, { state: "skip" }); mountCode(html); await smokeTest(); }
+            let look2 = null;
+            if (again.ok) {
+              th.set(testing, { label: "The improved version runs: looking at it again" });
+              try { const shot2 = await askSnapshot(); if (shot2) look2 = await api("api/agent", { method: "POST", body: { task: "look", token: better.fix || token, plan, prompt, snapshot: shot2 } }); } catch { /* no second look: keep the improvement */ }
+            }
+            const pct2 = look2 ? Math.round(look2.match * 100) : null;
+            if (again.ok && (!look2 || look2.match >= look.match)) {
+              html = better.html; notes = better.notes || notes; engine = better.engine || engine; token = better.fix || null; build.improved = true;
+              if (look2) build.look = look2;
+              th.set(testing, { state: "done", label: look2 ? `The improved version runs and looks ${pct2}% like the game asked for (was ${pct}%)` : "The improved version runs" });
+            } else if (again.ok) {
+              token = better.fix || token;
+              th.set(testing, { state: "skip", label: `The improved version scored lower (${pct2}%, was ${pct}%): keeping the first one` }); th.set(improving, { state: "skip" }); mountCode(html); await smokeTest();
+            } else { th.set(testing, { state: "skip", label: `The improved version failed (${again.why}): keeping the first one` }); th.set(improving, { state: "skip" }); mountCode(html); await smokeTest(); }
           }
         } catch (err) { th.set(improving, { state: "skip", label: `Could not improve it: ${err.message}` }); }
       }

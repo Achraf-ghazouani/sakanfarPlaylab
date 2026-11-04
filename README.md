@@ -72,3 +72,7 @@ Run the `db/*.sql` files once, in order, in the Supabase SQL editor. To deploy, 
 - Everything was written during the hackathon, solo. Libraries come from CDNs or services: Phaser 3 and three.js for the generated games, PeerJS, Supabase, and Meta's `@meta-sam/parser`. Nothing is bundled or copied in.
 - `.env` is never committed, and the Meta key is only used inside `api/` functions.
 - Meta models only, as documented at dev.meta.ai. No other AI provider is used anywhere in the product.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Free to use, change and share, with the copyright notice kept.

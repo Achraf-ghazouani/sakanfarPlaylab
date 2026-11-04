@@ -132,7 +132,7 @@
   body.fresh #composer { font-size:16px; }
   body.fresh .preview { background:radial-gradient(1200px 600px at 50% 30%, #f3eeff, var(--bg)); }
   body.fresh .preview iframe, body.fresh #previewStatus { visibility:hidden; }
-  body.fresh .top #undoBtn, body.fresh .top #historyBtn, body.fresh .top #publishBtn { display:none; }
+  body.fresh .top #undoBtn, body.fresh .top #historyBtn, body.fresh .top #publishBtn, body.fresh .top #zipBtn { display:none; }
   #publishBtn.live { background:#15803d; border-color:#15803d; }
   /* publish modal */
   .covers { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
@@ -237,6 +237,7 @@
   body:not(.fresh) .box { flex-wrap:wrap; row-gap:4px; padding:8px; }
   body:not(.fresh) #composer { order:-1; flex-basis:100%; padding:4px 6px; }
   body:not(.fresh) #sendBtn { margin-inline-start:auto; }
+  body:not(.fresh) .box .code { display:none; }   /* AI code is always on: the label stays on the welcome screen, the side panel keeps one row */
   .dim { display:inline-flex; align-self:center; flex:none; border:1px solid var(--lav-2); border-radius:999px; padding:2px; background:var(--lav); margin-right:2px; }
   .dim button { border:0; background:transparent; border-radius:999px; padding:5px 10px; font-size:12px; font-weight:800; color:var(--purple-deep); letter-spacing:.02em; }
   .dim button.on { background:var(--purple); color:#fff; box-shadow:0 2px 6px rgba(124,58,237,.35); }
@@ -348,7 +349,7 @@
     .mini-brand { display:none; }
     .top .seg, .top .tb { flex:none; }
     .tb { padding:7px 9px; }
-    #undoBtn { display:none; }   /* History has restore; keeps the bar on one line */
+    #undoBtn, #zipBtn { display:none; }   /* History has restore; keeps the bar on one line */
     #title { flex:1; min-width:60px; max-width:none; }
     .split { grid-template-columns:1fr; }
     .preview { display:none; }
@@ -545,9 +546,10 @@
       <button class="tb" id="historyBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="lbl" data-i18n="studio.history">History</span>
         <div class="pop" id="historyPop"><div class="empty" data-i18n="studio.noVersions">No versions yet</div></div>
       </button>
+      <button class="tb" id="zipBtn" title="Download the project (.zip)" data-i18n-title="zip.title" aria-label="Download the project"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
       <button class="tb" id="phoneBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg><span class="lbl" data-i18n="studio.phone">Play with phone</span></button>
       <div class="user" id="userBox"><button class="tb" id="userBtn" title="Your account"><span class="av" id="userAv"></span><span class="lbl" id="userName">...</span><span class="credits" id="creditBadge" title="Credits">&#9679; <b id="creditNum">0</b></span></button>
-        <div class="pop" id="userPop"><a class="v" href="profile.html"><b data-i18n="studio.profile">Profile and credits</b></a><a class="v" href="admin.html" id="adminLink" hidden><b data-i18n="studio.admin">Admin panel</b></a><a class="v" href="#" id="logoutBtn"><b data-i18n="studio.logout">Log out</b></a><div class="langs"><b data-i18n="studio.language">Language</b><button type="button" data-lang="en">EN</button><button type="button" data-lang="fr">FR</button><button type="button" data-lang="ar">AR</button></div></div></div>
+        <div class="pop" id="userPop"><a class="v" href="#" id="zipLink"><b data-i18n="zip.menu">Download this game (.zip)</b></a><a class="v" href="profile.html"><b data-i18n="studio.profile">Profile and credits</b></a><a class="v" href="admin.html" id="adminLink" hidden><b data-i18n="studio.admin">Admin panel</b></a><a class="v" href="#" id="logoutBtn"><b data-i18n="studio.logout">Log out</b></a><div class="langs"><b data-i18n="studio.language">Language</b><button type="button" data-lang="en">EN</button><button type="button" data-lang="fr">FR</button><button type="button" data-lang="ar">AR</button></div></div></div>
       <button class="tb primary" id="publishBtn" title="Publish this game: a link anyone can play, no account needed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 15V3M8 7l4-4 4 4"/></svg><span class="lbl" data-i18n="studio.publish">Publish</span></button>
     </header>
 
@@ -1117,6 +1119,86 @@ $("composer").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.s
 $("composer").addEventListener("input", () => { const c = $("composer"); c.style.height = "auto"; c.style.height = Math.min(140, c.scrollHeight) + "px"; });
 $("sendBtn").addEventListener("click", send);
 $("micBtn").addEventListener("click", micToggle);
+$("zipBtn").addEventListener("click", downloadZip);
+$("zipLink").addEventListener("click", (e) => { e.preventDefault(); $("userPop").classList.remove("show"); downloadZip(); });
+
+// ---------------------------------------------------------------------------
+// Download the project as a ZIP, made in the page: index.html plays the game on its own (the SDK file next to it, the person's
+// pictures written in), game.html is the code as Muse Wonder wrote it, versions/ holds every saved version, assets/ the
+// pictures and models, project.json the prompt, the plan and the notes, README.txt how to play, edit and host it.
+async function buildZip() {
+  if (!S.level || !isCode(S.level) || !S.level.html) throw Object.assign(new Error(I18N.t("zip.none")), { none: true });
+  const title = ($("title").value || S.project?.title || S.level.title || "PlayLab game").trim();
+  const slug = title.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "playlab-game";
+  const dir = slug + "/", files = [];
+  const assets = codeAssets(), assetList = [];
+  files.push({ name: dir + "index.html", data: standaloneHtml(S.level.html, assets) });
+  files.push({ name: dir + "playlab-sdk.js", data: await (await fetch("shared/playlab-sdk.js")).text() });
+  files.push({ name: dir + "game.html", data: S.level.html });
+  for (const [role, a] of Object.entries(assets)) {
+    try { const f = await srcFile(a.src, a.name); const name = `assets/${role}.${f.ext}`; files.push({ name: dir + name, data: f.bytes }); assetList.push({ role, kind: a.kind, file: name }); } catch { /* a picture that cannot be read stays inside index.html */ }
+  }
+  const versions = [];
+  if (S.project?.id) for (const v of (S.versions || []).slice(0, 40)) {
+    try {
+      const r = await api(`api/projects?id=${encodeURIComponent(S.project.id)}&version=${v.n}`), h = r.version?.level?.html;
+      if (h) { files.push({ name: dir + `versions/v${v.n}.html`, data: h }); versions.push({ n: v.n, note: v.note || "", file: `versions/v${v.n}.html` }); }
+    } catch { /* an older version that cannot be read is left out */ }
+  }
+  const meta = { title, prompt: S.level.prompt || "", plan: S.level.plan || null, engine: S.level.engine || null, notes: S.level.notes || null,
+    version: S.versions?.[0]?.n ?? null, versions, assets: assetList, playLink: S.project?.share_id ? new URL("play/" + S.project.share_id, location.href).href : null,
+    madeWith: "PlayLab Studio: Muse Spark planned it, Muse Wonder wrote the code", exported: new Date().toISOString() };
+  files.push({ name: dir + "project.json", data: JSON.stringify(meta, null, 2) });
+  files.push({ name: dir + "README.txt", data: zipReadme(meta) });
+  return { blob: ZipWrite.make(files), name: slug + ".zip", files: files.map((f) => f.name) };
+}
+async function downloadZip() {
+  if (S.zipping) return;
+  S.zipping = true; toast(I18N.t("zip.making"), 10000);
+  try {
+    const { blob, name } = await buildZip();
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+    toast(I18N.t("zip.done"), 4000);
+  } catch (err) { toast(err.none ? err.message : I18N.t("zip.failed") + err.message, 5000); }
+  S.zipping = false;
+}
+/** The game as a page of its own: the policy line the sandbox adds is dropped, the pictures and the SDK come first. */
+function standaloneHtml(html, assets) {
+  let h = String(html || "").replace(/<meta[^>]+http-equiv=["']?Content-Security-Policy["']?[^>]*>/gi, "");
+  const list = Object.keys(assets).length ? `<script>window.__playlabAssets=${JSON.stringify(assets).replace(/</g, "\\u003c")}<\/script>` : "";
+  const head = `\n<!-- PlayLab: your pictures and the PlayLab SDK (keyboard, touch, game flow, HUD, sounds) -->\n${list}<script src="playlab-sdk.js"><\/script>\n`;
+  if (/<head[^>]*>/i.test(h)) h = h.replace(/<head[^>]*>/i, (m) => m + head);
+  else if (/<html[^>]*>/i.test(h)) h = h.replace(/<html[^>]*>/i, (m) => m + "<head>" + head + "</head>");
+  else h = "<!doctype html><html><head>" + head + "</head><body>" + h + "</body></html>";
+  return /^\s*<!doctype/i.test(h) ? h : "<!doctype html>\n" + h;
+}
+const EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "model/gltf-binary": "glb", "model/gltf+json": "gltf", "model/fbx": "fbx" };
+async function srcFile(src, name = "") {
+  const byName = (String(name).split(".").pop() || "").toLowerCase();
+  if (/^data:/.test(src)) {
+    const [head, body] = src.split(","), type = (/^data:([^;,]+)/.exec(head) || [])[1] || "";
+    const bin = /;base64/.test(head) ? atob(body) : decodeURIComponent(body), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return { bytes, ext: EXT[type] || (/^(glb|gltf|fbx|png|jpg|webp)$/.test(byName) ? byName : "bin") };
+  }
+  const r = await fetch(src); if (!r.ok) throw new Error("HTTP " + r.status);
+  return { bytes: new Uint8Array(await r.arrayBuffer()), ext: EXT[(r.headers.get("content-type") || "").split(";")[0]] || byName || "bin" };
+}
+function zipReadme(m) {
+  const p = m.plan || {}, lines = [m.title, "=".repeat(Math.min(60, m.title.length)), "",
+    "Made with PlayLab (" + location.origin + "): Muse Spark planned it, Muse Wonder wrote the code.",
+    m.prompt ? "The idea: " + m.prompt : "", m.playLink ? "Play it online: " + m.playLink : "", "",
+    "PLAY", "Open index.html in Chrome, Edge, Firefox or Safari. The game engine (Phaser 3 or three.js) loads from a CDN,",
+    "so the computer needs the internet the first time.", p.controls ? "Controls: " + p.controls : "", p.goal ? "Goal: " + p.goal : "",
+    "Keys: P pauses, R restarts, M mutes.", "",
+    "WHAT IS INSIDE", "index.html       the game, ready to play (your pictures are written inside it). Edit this file to change the game.",
+    "game.html        the code exactly as Muse Wonder wrote it", "playlab-sdk.js   the PlayLab runtime the game uses: keyboard, touch, game flow, HUD, sounds",
+    m.assets.length ? "assets/          your pictures and 3D models" : "", m.versions.length ? "versions/        every saved version of the code (v1 is the first)" : "",
+    "project.json     the prompt, the plan and the notes", "",
+    "PUT IT ONLINE", "Upload the folder to any static host (GitHub Pages, Netlify, Vercel, or itch.io as an HTML game). index.html is the page.", ""];
+  return lines.filter((l, i) => l !== "" || lines[i - 1] !== "").join("\r\n");
+}
 
 // ---------------------------------------------------------------------------
 // Voice: "Say a game." The mic records the person (Web Audio, mono), the page packs a 16 kHz WAV, Muse Voice Transcribe (Meta,
@@ -1788,7 +1870,10 @@ async function buildCode(pending, { change = null } = {}) {
     build.fixes.push(report.why);
     html = fixed.html; notes = fixed.notes || notes; engine = fixed.engine || engine; scan = fixed.scan; token = fixed.fix || null;
   }
-  // the vision check: a screenshot after a few seconds, Muse Spark says whether it looks like the game asked for; one improvement round
+  // the vision check: a screenshot after a few seconds, Muse Spark says whether it looks like the game asked for. Under IMPROVE_BELOW
+  // Muse Wonder gets one improvement round with what the look saw; the improved version is looked at too and kept only when it runs
+  // and scores at least as high (a patch that makes things worse is dropped, the first version keeps running).
+  const IMPROVE_BELOW = 0.8;
   if (build.ok && token) {
     const looking = th.add("Looking at a screenshot of it", "Muse Spark 1.3");
     try {
@@ -1798,7 +1883,7 @@ async function buildCode(pending, { change = null } = {}) {
       build.look = look;
       const pct = Math.round(look.match * 100);
       th.set(looking, { state: look.match >= 0.5 ? "done" : "skip", label: `Looks ${look.match >= 0.8 ? "like" : look.match >= 0.5 ? "mostly like" : "unlike"} the game asked for (${pct}%): ${look.looksLike}`, model: modelName(look.model) });
-      if (look.match < 0.5 && build.attempts < MAX_FIXES && (look.suggestion || look.problems?.length)) {
+      if (look.match < IMPROVE_BELOW && build.attempts < MAX_FIXES && (look.suggestion || look.problems?.length)) {
         build.attempts++;
         const improving = th.add(`Improving it: ${look.suggestion || look.problems[0]}`, "Muse Wonder 1.0");
         const feedback = `match ${pct}%: ${look.looksLike}. Problems: ${(look.problems || []).join("; ") || "none named"}. Suggestion: ${look.suggestion || ""}`;
@@ -1809,8 +1894,20 @@ async function buildCode(pending, { change = null } = {}) {
             const testing = th.add("Smoke test of the improved version", "smoke test");
             mountCode(better.html);
             const again = await smokeTest();
-            if (again.ok) { html = better.html; notes = better.notes || notes; engine = better.engine || engine; token = better.fix || null; build.improved = true; th.set(testing, { state: "done", label: "The improved version runs" }); }
-            else { th.set(testing, { state: "skip", label: `The improved version failed (${again.why}): keeping the first one` }); th.set(improving, { state: "skip" }); mountCode(html); await smokeTest(); }
+            let look2 = null;
+            if (again.ok) {
+              th.set(testing, { label: "The improved version runs: looking at it again" });
+              try { const shot2 = await askSnapshot(); if (shot2) look2 = await api("api/agent", { method: "POST", body: { task: "look", token: better.fix || token, plan, prompt, snapshot: shot2 } }); } catch { /* no second look: keep the improvement */ }
+            }
+            const pct2 = look2 ? Math.round(look2.match * 100) : null;
+            if (again.ok && (!look2 || look2.match >= look.match)) {
+              html = better.html; notes = better.notes || notes; engine = better.engine || engine; token = better.fix || null; build.improved = true;
+              if (look2) build.look = look2;
+              th.set(testing, { state: "done", label: look2 ? `The improved version runs and looks ${pct2}% like the game asked for (was ${pct}%)` : "The improved version runs" });
+            } else if (again.ok) {
+              token = better.fix || token;
+              th.set(testing, { state: "skip", label: `The improved version scored lower (${pct2}%, was ${pct}%): keeping the first one` }); th.set(improving, { state: "skip" }); mountCode(html); await smokeTest();
+            } else { th.set(testing, { state: "skip", label: `The improved version failed (${again.why}): keeping the first one` }); th.set(improving, { state: "skip" }); mountCode(html); await smokeTest(); }
           }
         } catch (err) { th.set(improving, { state: "skip", label: `Could not improve it: ${err.message}` }); }
       }

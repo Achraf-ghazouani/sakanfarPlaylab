@@ -88,6 +88,11 @@ try {
   check("the person's player picture reached PlayLab.assets inside the published game", !!(await waitFor(`window.__playState && window.__playState.hud && window.__playState.hud.text === "player picture: yes"`)), await evalJS(`JSON.stringify(window.__playState)`));
   check("the loading line is gone and a play was counted", !!(await waitFor(`document.getElementById("loading").style.display === "none"`)) && !!(await waitFor(`Number(document.getElementById("plays").textContent) >= 1`, 8000)));
   check("restart and pause on the page", await evalJS(`!!document.getElementById("codeRestart") && !!document.getElementById("codePause")`));
+  // the Phones button: the QR code sends a phone to the controller at the site root (pad.html), not under /play/
+  await evalJS(`(() => { const q0 = window.qrcode; window.qrcode = (...a) => { const o = q0(...a), add = o.addData.bind(o); o.addData = (d) => { window.__qrData = d; add(d); }; return o; }; document.getElementById("phonesBtn").click(); return true; })()`);
+  const qrData = await waitFor(`window.__qrData`, 20000);
+  check("the Phones QR code opens pad.html at the site root", String(qrData || "").startsWith(BASE + "/pad.html?room=") && /room=[A-Z0-9]{4}$/.test(qrData || ""), qrData);
+  await evalJS(`document.querySelectorAll(".modal.show").forEach((m) => m.classList.remove("show")); true`);
   await evalJS(`document.getElementById("codePause").click(); true`);
   check("Pause pauses the game; the button says Resume", !!(await waitFor(`window.__playState.state === "paused" && /Resume/.test(document.getElementById("codePause").textContent)`, 5000)));
   await evalJS(`for (const m of PadRoute.toGame(1, { t: "menu", action: "toggle-pause" })) window.__play.toGame(m); true`);

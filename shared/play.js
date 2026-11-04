@@ -136,7 +136,7 @@
     if (host) return;
     if (!window.PhoneLink || !window.Peer || !window.qrcode) { setTimeout(startHost, 300); return; }
     host = new PhoneLink.Host({
-      onCode: (code) => { const u = host.url(); const qr = qrcode(0, "M"); qr.addData(u); qr.make(); $("phoneQr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }); $("phoneCode").textContent = code; },
+      onCode: (code) => { const u = host.url(location.origin + "/"); /* pad.html lives at the root, not under /play/ */ const qr = qrcode(0, "M"); qr.addData(u); qr.make(); $("phoneQr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }); $("phoneCode").textContent = code; },
       welcome: () => ({ mode: "pad" }),
       onJoin: syncPlayers, onMode: syncPlayers,
       onLeave: (p) => { for (const m of PadRoute.releaseAll(p.slot)) toGame(m); syncPlayers(); },

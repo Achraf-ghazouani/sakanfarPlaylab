@@ -24,6 +24,7 @@
     "run:html": "node tests/run-html.mjs",
     "test:pad": "node tests/pad.test.mjs http://localhost:3000",
     "test:publish-code": "node tests/publish-code.test.mjs http://localhost:3000",
-    "test:voice": "node tests/voice.test.mjs"
+    "test:voice": "node tests/voice.test.mjs",
+    "test:zip": "node tests/zip.test.mjs"
   }
 }

@@ -1,5 +1,5 @@
 // tests/guest.test.mjs — "Try it free, no account": the landing page links to login.html?guest=1, the server makes a guest
-// (a demo account, 500 credits, 48 hours), the page logs in with it and the Studio opens. The guest is deleted at the end.
+// (a demo account, 2,000 credits, two weeks), the page logs in with it and the Studio opens. The guest is deleted at the end.
 // Needs the dev server on 3000 and .env (Supabase keys). npm run test:guest
 import { spawn } from "node:child_process";
 import os from "node:os"; import path from "node:path";
@@ -24,11 +24,11 @@ try {
   await send("Page.navigate", { url: `${BASE}/login.html` });
   check("the login page has a Try it free button", !!(await waitFor(`/Try it free/.test(document.getElementById("guestBtn")?.textContent || "")`)));
   await send("Page.navigate", { url: `${BASE}/login.html?guest=1` });
-  const me = await waitFor(`/studio\\.html/.test(location.pathname) && typeof S === "object" && S.me && JSON.stringify({ id: S.me.id || S.me.profile?.id, name: S.me.display_name || S.me.profile?.display_name, credits: S.me.balance ?? S.me.profile?.balance ?? S.me.credits, demo: S.me.is_demo ?? S.me.profile?.is_demo, username: S.me.username || S.me.profile?.username })`, 40000);
+  const me = await waitFor(`/studio\\.html/.test(location.pathname) && typeof S === "object" && S.me && JSON.stringify({ id: S.me.id || S.me.profile?.id, name: S.me.display_name || S.me.profile?.display_name, credits: S.me.balance ?? S.me.profile?.balance ?? S.me.credits, demo: S.me.is_demo ?? S.me.profile?.is_demo, username: S.me.username || S.me.profile?.username, expires: S.me.expires_at ?? S.me.profile?.expires_at })`, 40000);
   const g = me ? JSON.parse(me) : {};
   uid = g.id || null;
   check("one link: a guest account is made, logged in, and the Studio opens", !!me && /^guest_[0-9a-f]{8}$/.test(g.username || ""), g);
-  check("the guest has 500 credits and is a demo account", g.credits === 500 && g.demo === true, g);
+  check("the guest has 2,000 credits, is a demo account and lasts two weeks", g.credits === 2000 && g.demo === true && Math.abs(new Date(g.expires).getTime() - Date.now() - 14 * 86400e3) < 3600e3, g);
 } catch (err) { console.log("ERROR", err.message); fails++; }
 finally {
   try { ws.close(); } catch {} chrome.kill();

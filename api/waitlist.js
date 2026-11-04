@@ -10,7 +10,7 @@ import { srv, serverConfigured } from "../lib/db.mjs";
 import { clientIp, readBody, rateLimit } from "../lib/auth.mjs";
 import { createHash, randomBytes } from "node:crypto";
 
-const GUEST_CREDITS = 500, GUEST_HOURS = 48, GUEST_PER_IP = 5, GUEST_PER_DAY = 300;
+const GUEST_CREDITS = 500, GUEST_HOURS = 48, GUEST_PER_IP = 20, GUEST_PER_DAY = 300;
 
 const EMAIL = /^[^\s@<>()[\]\\,;:"]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.[A-Za-z]{2,24}$/;
 

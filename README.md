@@ -10,7 +10,7 @@ Built solo for the Meta hackathon (October 30 to November 4, 2026), on the Meta 
 
 ## For judges
 
-No account needed. Open **https://sakanfarplaylab.vercel.app/login.html?guest=1** and the Studio opens with a guest account: 500 credits for 48 hours, enough to build and change several games. The landing page and the login page have the same **Try it free** link.
+No account needed. Open **https://sakanfarplaylab.vercel.app/login.html?guest=1** and the Studio opens with a guest account: 2,000 credits for two weeks, enough to build and change many games. The landing page and the login page have the same **Try it free** link.
 
 You can also play without the Studio: **Play a demo** on the landing page runs three example games, and **Explore** lists the games people have published.
 

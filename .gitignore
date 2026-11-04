@@ -16,3 +16,4 @@ levels/*.raw.txt
 
 # local HTTPS certificate for the dev server
 certs/
+demo-video/

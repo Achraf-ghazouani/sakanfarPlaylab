@@ -10,16 +10,13 @@ Built solo for the Meta hackathon (October 30 to November 4, 2026), on the Meta 
 
 ## For judges
 
-PlayLab is in a private beta, so you need an account to open the Studio.
+No account needed. Open **https://sakanfarplaylab.vercel.app/login.html?guest=1** and the Studio opens with a guest account: 500 credits for 48 hours, enough to build and change several games. The landing page and the login page have the same **Try it free** link.
 
-1. Open https://sakanfarplaylab.vercel.app/login.html and choose the **Username and password** tab.
-2. Log in with the judge account given in the hackathon submission form.
-
-Without logging in you can still play: **Play a demo** on the landing page runs three example games, and **Explore** lists the games people have published.
+You can also play without the Studio: **Play a demo** on the landing page runs three example games, and **Explore** lists the games people have published.
 
 ## Try it in 3 minutes
 
-1. **Say or type a game.** Tap the mic and say `a space game where a cat collects stars and dodges asteroids`, or type `a car race with 3 laps and 4 AI cars`, then send.
+1. **Say or type a game.** After **Try it free**, tap the mic and say `a space game where a cat collects stars and dodges asteroids`, or type `a car race with 3 laps and 4 AI cars`, then send.
 2. **Read the plan.** Muse Spark answers with a short plan: the goal, the controls, the levels. The plan is free, so change anything in words first.
 3. **Build it.** Click **Go, build it**. The thinking panel shows Muse Wonder writing the game, the automatic play test, any crash being fixed, and Muse Spark checking a screenshot. The game then runs in the middle of the page.
 4. **Change it.** Type `make the rivals faster` or `give the cat a rainbow trail`. Each change is a small patch of the code and a new version. **Undo** and **History** are in the top bar.

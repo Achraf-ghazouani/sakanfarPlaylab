@@ -31,6 +31,9 @@
   .btn { width:100%; min-height:44px; margin-top:var(--s3); }
   .btn:disabled { opacity:.5; cursor:default; }
   .or { color:var(--graphite); font-size:var(--t-s); margin:var(--s4) 0 0; text-align:center; }
+  .guest { margin-bottom:var(--s5); padding-bottom:var(--s5); border-bottom:1px solid var(--hair); }
+  .guest .btn { margin-top:0; }
+  .guest p { color:var(--graphite); font-size:var(--t-s); margin-top:var(--s2); }
   #googleBox .btn { margin-top:var(--s2); }
   #msg { display:none; padding:0 0 0 var(--s3); border-left:2px solid var(--ink); font-size:var(--t-s); margin-bottom:var(--s5); }
   #msg.show { display:block; }
@@ -48,6 +51,8 @@
   <h1>Log in</h1>
   <p class="sub">PlayLab is in private beta. Log in with the email you joined the waitlist with.</p>
   <div id="msg" role="status"></div>
+  <div class="guest"><button class="btn primary" id="guestBtn" type="button"><span class="spin"></span>Try it free, no account</button>
+    <p>500 credits for 48 hours: build and change a few games, play them on your phone, publish them.</p></div>
   <div class="tabs" role="tablist"><button class="on" data-tab="email" role="tab">Email link</button><button data-tab="password" role="tab">Username and password</button></div>
 
   <form id="emailForm" class="on" novalidate>
@@ -139,6 +144,22 @@ $("passwordForm").addEventListener("submit", async (e) => {
   busy($("passwordBtn"), false);
 });
 
+/** Try it free: the server makes a guest account (500 credits, 48 hours), this page logs in with it, the Studio opens. */
+async function startGuest() {
+  busy($("guestBtn"), true); show("Making your guest account...", "info");
+  try {
+    const r = await fetch("api/waitlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "guest" }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || "Could not make a guest account.");
+    const c = await PlayAuth.load();
+    const { error } = await c.auth.signInWithPassword({ email: PlayAuth.loginEmail(d.username), password: d.password });
+    if (error) throw error;
+    await finish();
+  } catch (err) { show(friendly(err), "err"); }
+  busy($("guestBtn"), false);
+}
+$("guestBtn").addEventListener("click", startGuest);
+
 $("googleBtn").addEventListener("click", async () => {
   try {
     const c = await PlayAuth.load();
@@ -160,6 +181,7 @@ $("googleBtn").addEventListener("click", async () => {
     fetch(c.supabaseUrl + "/auth/v1/settings", { headers: { apikey: c.supabaseKey } }).then((r) => r.json()).then((s) => { if (s?.external?.google) $("googleBox").style.display = ""; }).catch(() => {});
     c.auth.onAuthStateChange((event, session) => { if (event === "SIGNED_IN" && session && !params.get("blocked")) finish(); });
     if (!params.get("blocked") && !params.get("signedout") && (await PlayAuth.session())) finish();
+    else if (params.get("guest") === "1") startGuest();
   } catch (err) { show(err.message, "err"); }
 })();
 </script>
